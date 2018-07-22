@@ -25,7 +25,7 @@ pub struct Conn {
 impl Conn {
     pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, ConnError> {
         let conn = TcpStream::connect(&addr).map_err(ConnError::CannotConnect)?;
-        trace!("connected");
+        debug!("connected");
 
         let reader = {
             let conn = conn.try_clone().expect("to clone stream");
@@ -73,7 +73,7 @@ impl Proto for Conn {
             trace!("<-- {}", &line);
             Some(line)
         } else {
-            trace!("couldn't read line");
+            warn!("couldn't read line");
             None
         }
     }

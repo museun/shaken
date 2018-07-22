@@ -55,7 +55,7 @@ impl Bot {
                 match (&env, hn) {
                     (Some(ref env), Handler::Active(s, f)) => {
                         if env.data.starts_with(s) {
-                            trace!("running command: {}", s);
+                            debug!("running command: {}", s);
                             // make a clone because we're mutating it
                             let mut env = env.clone();
                             // trim the command
@@ -66,7 +66,7 @@ impl Bot {
                     (Some(ref env), Handler::Passive(f)) => f(&self, &env),
                     (None, Handler::Raw(cmd, f)) => {
                         if cmd == &msg.command {
-                            trace!("running server: {}", cmd);
+                            debug!("running server: {}", cmd);
                             f(&self, &msg)
                         }
                     }
@@ -131,7 +131,7 @@ impl State {
                 let dur = now.duration_since(prev);
                 let rem =
                     self.interval - (dur.as_secs() as f64 + f64::from(dur.subsec_nanos()) * 1e-9);
-                trace!("already spoke: {:.3}s remaining", rem);
+                debug!("already spoke: {:.3}s remaining", rem);
                 None?;
             }
         }
