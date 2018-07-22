@@ -4,3 +4,10 @@ version = "0.1.0"
 authors = ["museun <museun@outlook.com>"]
 
 [dependencies]
+log = "0.4.3"
+env_logger = "0.5.10"
+serde = "1.0.70"
+serde_derive = "1.0.70"
+toml = "0.4.6"
+curl = "0.4.12"
+rand = "0.5.4"

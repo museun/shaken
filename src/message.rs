@@ -1,12 +1,11 @@
 use std::fmt;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Message {
-    // this is a problem
     pub prefix: Option<Prefix>,
     pub command: String,
     pub args: Vec<String>,
-    pub data: Option<String>,
+    pub data: String,
 }
 
 impl Message {
@@ -25,10 +24,9 @@ impl Message {
         let command = args.remove(0);
 
         let data = if let Some(pos) = &input[1..].find(':') {
-            let data = input[*pos + 2..].into();
-            Some(data)
+            input[*pos + 2..].into()
         } else {
-            None
+            "".into()
         };
 
         Self {
@@ -40,7 +38,7 @@ impl Message {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub enum Prefix {
     User {
         nick: String,
@@ -133,7 +131,7 @@ mod test {
                 }),
                 command: "001".into(),
                 args: vec!["museun".into()],
-                data: Some("Welcome to the Internet Relay Network museun".into()),
+                data: "Welcome to the Internet Relay Network museun".into(),
             },
         );
 
@@ -149,7 +147,7 @@ mod test {
                 }),
                 command: "JOIN".into(),
                 args: vec![],
-                data: Some("#test".into()),
+                data: "#test".into(),
             },
         );
 
@@ -175,7 +173,7 @@ mod test {
                 ].iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>(),
-                data: Some("realname".into()),
+                data: "realname".into(),
             },
         );
 
@@ -187,7 +185,7 @@ mod test {
                 prefix: None,
                 command: "PING".into(),
                 args: vec![],
-                data: Some("1344275933".into()),
+                data: "1344275933".into(),
             },
         );
 
@@ -204,7 +202,7 @@ mod test {
                     .iter()
                     .map(|s| s.to_string())
                     .collect::<Vec<_>>(),
-                data: None,
+                data: "".into(),
             },
         );
     }
