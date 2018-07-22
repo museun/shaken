@@ -1,4 +1,4 @@
-use bot::Bot;
+use crate::bot::Bot;
 
 use std::fmt;
 

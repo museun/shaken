@@ -1,3 +1,4 @@
+#![feature(rust_2018_preview)]
 extern crate env_logger;
 #[macro_use]
 extern crate log;

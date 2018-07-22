@@ -1,3 +1,4 @@
+#![feature(rust_2018_preview)]
 #[macro_use]
 extern crate log;
 
@@ -10,12 +11,12 @@ extern crate curl;
 extern crate rand;
 
 mod bot;
-pub use bot::Bot;
+pub use crate::bot::Bot;
 
 mod config;
-pub use config::Config;
+pub use crate::config::Config;
 
 mod conn;
-pub use conn::{Conn, Proto};
+pub use crate::conn::{Conn, Proto};
 
 mod message;

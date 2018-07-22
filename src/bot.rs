@@ -1,6 +1,6 @@
-use config::Config;
-use conn::Proto;
-use message::{Envelope, Handler, Message};
+use crate::config::Config;
+use crate::conn::Proto;
+use crate::message::{Envelope, Handler, Message};
 
 use std::sync::Mutex;
 use std::time;
