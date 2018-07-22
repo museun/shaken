@@ -1,38 +1,31 @@
-#![allow(dead_code, unused_variables)] // go away
-
 use std::fmt;
 
-#[derive(Debug)]
-pub enum MessageError {}
-
-impl fmt::Display for MessageError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        Ok(())
-    }
-}
-
 #[derive(Debug, PartialEq)]
-pub struct Message<'a> {
-    pub prefix: Option<Prefix<'a>>,
-    pub command: &'a str,
-    pub args: Vec<&'a str>,
-    pub data: Option<&'a str>,
+pub struct Message {
+    // this is a problem
+    pub prefix: Option<Prefix>,
+    pub command: String,
+    pub args: Vec<String>,
+    pub data: Option<String>,
 }
 
-impl<'a> Message<'a> {
+impl Message {
     // should probably return a result
-    pub fn parse(input: &'a str) -> Message<'a> {
+    pub fn parse(input: &str) -> Message {
         let prefix = Prefix::parse(&input);
 
         let iter = input
             .split_whitespace()
             .skip(if prefix.is_some() { 1 } else { 0 });
 
-        let mut args = iter.take_while(|s| !s.starts_with(':')).collect::<Vec<_>>();
+        let mut args = iter
+            .take_while(|s| !s.starts_with(':'))
+            .map(|s| s.into())
+            .collect::<Vec<_>>();
         let command = args.remove(0);
 
         let data = if let Some(pos) = &input[1..].find(':') {
-            let data = &input[*pos + 2..];
+            let data = input[*pos + 2..].into();
             Some(data)
         } else {
             None
@@ -48,19 +41,19 @@ impl<'a> Message<'a> {
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Prefix<'a> {
+pub enum Prefix {
     User {
-        nick: &'a str,
-        user: &'a str,
-        host: &'a str,
+        nick: String,
+        user: String,
+        host: String,
     },
     Server {
-        host: &'a str,
+        host: String,
     },
 }
 
-impl<'a> Prefix<'a> {
-    pub fn parse(input: &'a str) -> Option<Self> {
+impl Prefix {
+    pub fn parse(input: &str) -> Option<Self> {
         if !input.starts_with(':') {
             None?;
         }
@@ -72,18 +65,26 @@ impl<'a> Prefix<'a> {
                 let at = s.find('@')?;
                 let user = &s[pos + 1..at];
                 let host = &s[at + 1..];
-                Some(Prefix::User { nick, user, host })
+                Some(Prefix::User {
+                    nick: nick.into(),
+                    user: user.into(),
+                    host: host.into(),
+                })
             }
-            None => Some(Prefix::Server { host: s }),
+            None => Some(Prefix::Server { host: s.into() }),
         }
     }
 }
 
-impl<'a> fmt::Display for Prefix<'a> {
+impl fmt::Display for Prefix {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Prefix::User { nick, user, host } => writeln!(f, "{}!{}@{}", nick, user, host),
-            Prefix::Server { host } => writeln!(f, "{}", host),
+            Prefix::User {
+                ref nick,
+                ref user,
+                ref host,
+            } => writeln!(f, "{}!{}@{}", nick, user, host),
+            Prefix::Server { ref host } => writeln!(f, "{}", host),
         }
     }
 }
@@ -100,9 +101,9 @@ mod test {
         assert_eq!(
             prefix,
             Prefix::User {
-                nick: "test",
-                user: "some",
-                host: "user.localhost"
+                nick: "test".into(),
+                user: "some".into(),
+                host: "user.localhost".into()
             },
         )
     }
@@ -115,7 +116,7 @@ mod test {
         assert_eq!(
             prefix,
             Prefix::Server {
-                host: "irc.localhost"
+                host: "irc.localhost".into()
             },
         )
     }
@@ -128,11 +129,11 @@ mod test {
             msg,
             Message {
                 prefix: Some(Prefix::Server {
-                    host: "test.localhost"
+                    host: "test.localhost".into()
                 }),
-                command: "001",
-                args: vec!["museun"],
-                data: Some("Welcome to the Internet Relay Network museun"),
+                command: "001".into(),
+                args: vec!["museun".into()],
+                data: Some("Welcome to the Internet Relay Network museun".into()),
             },
         );
 
@@ -142,13 +143,13 @@ mod test {
             msg,
             Message {
                 prefix: Some(Prefix::User {
-                    nick: "museun",
-                    user: "~museun",
-                    host: "test.localhost"
+                    nick: "museun".into(),
+                    user: "~museun".into(),
+                    host: "test.localhost".into()
                 }),
-                command: "JOIN",
+                command: "JOIN".into(),
                 args: vec![],
-                data: Some("#test"),
+                data: Some("#test".into()),
             },
         );
 
@@ -158,9 +159,9 @@ mod test {
             msg,
             Message {
                 prefix: Some(Prefix::Server {
-                    host: "test.localhost"
+                    host: "test.localhost".into()
                 }),
-                command: "354",
+                command: "354".into(),
                 args: vec![
                     "museun",
                     "152",
@@ -171,8 +172,10 @@ mod test {
                     "museun",
                     "H@",
                     "0",
-                ],
-                data: Some("realname"),
+                ].iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>(),
+                data: Some("realname".into()),
             },
         );
 
@@ -182,9 +185,9 @@ mod test {
             msg,
             Message {
                 prefix: None,
-                command: "PING",
+                command: "PING".into(),
                 args: vec![],
-                data: Some("1344275933"),
+                data: Some("1344275933".into()),
             },
         );
 
@@ -194,10 +197,13 @@ mod test {
             msg,
             Message {
                 prefix: Some(Prefix::Server {
-                    host: "test.localhost"
+                    host: "test.localhost".into()
                 }),
-                command: "329",
-                args: vec!["museun", "#test", "1532222059"],
+                command: "329".into(),
+                args: vec!["museun", "#test", "1532222059"]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect::<Vec<_>>(),
                 data: None,
             },
         );
