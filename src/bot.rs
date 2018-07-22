@@ -1,7 +1,6 @@
 use config::Config;
 use conn::{Conn, Proto};
-use handler::{Envelope, Handler};
-use message::Message;
+use message::{Envelope, Handler, Message};
 
 use std::sync::Mutex;
 use std::time;

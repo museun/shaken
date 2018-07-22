@@ -18,5 +18,4 @@ pub use config::Config;
 mod conn;
 pub use conn::{Conn, Proto};
 
-mod handler;
 mod message;

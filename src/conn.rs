@@ -59,8 +59,11 @@ impl Proto for Conn {
             if &part[..4] != "PASS" {
                 trace!("--> {}", &part[..part.len() - 2]); // trim the \r\n
             }
+
+            // XXX: should check to make sure its writing
             let _ = writer.write_all(part.as_bytes());
         }
+        // XXX: and that its flushing
         let _ = writer.flush();
     }
 
@@ -100,6 +103,7 @@ fn split(raw: &str) -> Vec<String> {
     }
 }
 
+// this is mostly useless for now
 pub trait Proto {
     fn privmsg(&self, target: &str, data: &str) {
         self.send(&format!("PRIVMSG {} :{}", target, data))
