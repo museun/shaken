@@ -1,5 +1,5 @@
 use config::Config;
-use conn::{Conn, Proto};
+use conn::Proto;
 use message::{Envelope, Handler, Message};
 
 use std::sync::Mutex;
@@ -8,42 +8,42 @@ use std::time;
 use curl::easy::Easy;
 use rand::prelude::*;
 
-pub struct Bot {
-    conn: Conn, // XXX: this should be a Proto
+pub struct Bot<'a> {
+    proto: Box<Proto + 'a>,
     state: Mutex<State>,
     channels: Vec<String>,
 }
 
-impl Bot {
-    pub fn new(conn: Conn, config: &Config) -> Self {
+impl<'a> Bot<'a> {
+    pub fn new(proto: impl Proto + 'a, config: &Config) -> Self {
         Self {
-            conn,
+            proto: Box::new(proto),
             state: Mutex::new(State::new(config.interval, config.chance)),
             channels: config.channels.to_vec(),
         }
     }
 
     pub fn run(&self, config: &Config) {
-        self.conn.send(&format!("PASS {}", &config.pass));
-        self.conn.send(&format!("NICK {}", &config.nick));
+        self.proto.send(&format!("PASS {}", &config.pass));
+        self.proto.send(&format!("NICK {}", &config.nick));
         // this is needed for real irc servers
-        self.conn
+        self.proto
             .send(&format!("USER {} * 8 :{}", &config.nick, &config.nick));
 
         let handlers = vec![
             Handler::Active("!speak", Bot::speak),
             Handler::Passive(Bot::auto_speak),
             Handler::Raw("PING", |bot, msg| {
-                bot.conn.send(&format!("PONG :{}", &msg.data))
+                bot.proto.send(&format!("PONG :{}", &msg.data))
             }),
             Handler::Raw("001", |bot, _msg| {
                 for ch in &bot.channels {
-                    bot.conn.join(&ch)
+                    bot.proto.join(&ch)
                 }
             }),
         ];
 
-        while let Some(line) = self.conn.read() {
+        while let Some(line) = self.proto.read() {
             let msg = Message::parse(&line);
             debug!("{}", msg);
 
@@ -82,7 +82,7 @@ impl Bot {
         trace!("trying to speak");
         if let Some(resp) = bot.state.lock().unwrap().generate() {
             trace!("speaking");
-            bot.conn.privmsg(&env.channel, &resp)
+            bot.proto.privmsg(&env.channel, &resp)
         }
     }
 
