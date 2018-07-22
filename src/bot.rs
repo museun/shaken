@@ -138,11 +138,14 @@ impl State {
             }
         }
 
-        let data = get("http://localhost:7878/markov/next");
-        trace!("generated a message");
-        self.previous = Some(now);
-        // has to be put in a string anyway
-        Some(prune(&data).to_string() + ".")
+        if let Some(data) = get("http://localhost:7878/markov/next") {
+            trace!("generated a message");
+            self.previous = Some(now);
+            // has to be put in a string anyway
+            Some(prune(&data).to_string() + ".")
+        } else {
+            None
+        }
     }
 }
 
@@ -157,17 +160,17 @@ fn prune(s: &str) -> &str {
     &s[..s.len() - pos]
 }
 
-fn get(url: &str) -> String {
+fn get(url: &str) -> Option<String> {
     let mut vec = Vec::new();
     let mut easy = Easy::new();
-    easy.url(url).unwrap();
+    easy.url(url).ok()?;
     {
         let mut transfer = easy.transfer();
         let _ = transfer.write_function(|data| {
             vec.extend_from_slice(data);
             Ok(data.len())
         });
-        transfer.perform().unwrap();
+        transfer.perform().ok()?;
     }
-    String::from_utf8(vec).unwrap()
+    String::from_utf8(vec).ok()
 }
