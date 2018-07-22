@@ -1,0 +1,6 @@
+[package]
+name = "shaken"
+version = "0.1.0"
+authors = ["museun <museun@outlook.com>"]
+
+[dependencies]
