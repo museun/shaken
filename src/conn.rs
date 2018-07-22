@@ -57,7 +57,8 @@ impl Proto for Conn {
         for part in split(&data) {
             // don't log the password
             if &part[..4] != "PASS" {
-                trace!("--> {}", &part[..part.len() - 2]); // trim the \r\n
+                let line = &part[..part.len() - 2];
+                trace!("--> {}", &line); // trim the \r\n
             }
 
             // XXX: should check to make sure its writing
@@ -106,6 +107,7 @@ fn split(raw: &str) -> Vec<String> {
 // this is mostly useless for now
 pub trait Proto {
     fn privmsg(&self, target: &str, data: &str) {
+        debug!("> [{}]: {}", target, data);
         self.send(&format!("PRIVMSG {} :{}", target, data))
     }
 

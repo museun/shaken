@@ -66,6 +66,27 @@ impl Message {
     }
 }
 
+impl fmt::Display for Message {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let prefix = match &self.prefix {
+            Some(Prefix::User { nick, .. }) => nick.trim(),
+            Some(Prefix::Server { host, .. }) => host.trim(),
+            None => "??",
+        };
+
+        let data = self.data.trim();
+
+        match self.command.as_ref() {
+            "PRIVMSG" => write!(f, "< [{}] <{}> {}", self.args[0], prefix, data),
+            _ => write!(
+                f,
+                "({}) <{}> {:?}: {}",
+                &self.command, prefix, self.args, data
+            ),
+        }
+    }
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub enum Prefix {
     User {
@@ -84,7 +105,7 @@ impl Prefix {
             None?;
         }
 
-        let s = &input[1..input.find(' ')?];
+        let s = input[1..input.find(' ')?].trim();
         match s.find('!') {
             Some(pos) => {
                 let nick = &s[..pos];

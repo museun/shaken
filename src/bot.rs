@@ -45,6 +45,8 @@ impl Bot {
 
         while let Some(line) = self.conn.read() {
             let msg = Message::parse(&line);
+            debug!("{}", msg);
+
             let env = if msg.command == "PRIVMSG" {
                 Some(Envelope::from_msg(&msg))
             } else {
