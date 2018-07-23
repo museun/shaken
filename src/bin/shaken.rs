@@ -3,6 +3,9 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 
+use std::thread;
+use std::time;
+
 extern crate shaken;
 use shaken::*;
 
@@ -12,13 +15,28 @@ fn main() {
         .init();
 
     let config = Config::load();
-    let bot = match Conn::new(&format!("{}:{}", &config.addr, &config.port)) {
-        Ok(conn) => Bot::new(conn, &config),
-        Err(err) => {
-            error!("error: {}", err);
-            ::std::process::exit(1);
-        }
-    };
+    let addr = format!("{}:{}", &config.addr, &config.port);
 
-    bot.run(&config);
+    let mut sleep = 0;
+    loop {
+        thread::sleep(time::Duration::from_secs(sleep));
+
+        info!("trying to connect to {}", addr);
+        let bot = match Conn::new(&addr) {
+            Ok(conn) => {
+                sleep = 0;
+                Bot::new(conn, &config)
+            }
+            Err(err) => {
+                error!("error: {}", err);
+                sleep += 5;
+                continue;
+            }
+        };
+
+        bot.run(&config); // this blocks
+        info!("disconnected");
+
+        sleep += 5;
+    }
 }

@@ -92,7 +92,7 @@ impl<'a> Bot<'a> {
     fn check_mentions(bot: &Bot, env: &Envelope) {
         let parts = env.data.split_whitespace();
         for part in parts {
-            if part.starts_with("@") && part[1..] == bot.nick {
+            if part.starts_with('@') && part[1..] == bot.nick {
                 Bot::speak(&bot, &env);
                 break;
             }
