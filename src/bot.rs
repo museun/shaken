@@ -34,6 +34,7 @@ impl<'a> Bot<'a> {
 
         let handlers = vec![
             Handler::Active("!speak", Bot::speak),
+            Handler::Active("!version", Bot::version),
             Handler::Passive(Bot::check_mentions),
             Handler::Passive(Bot::auto_speak),
             Handler::Raw("PING", |bot, msg| {
@@ -81,6 +82,18 @@ impl<'a> Bot<'a> {
         }
     }
 
+    fn version(bot: &Bot, env: &Envelope) {
+        // these are set by the build script
+        let rev = option_env!("SHAKEN_GIT_REV").unwrap();
+        let branch = option_env!("SHAKEN_GIT_BRANCH").unwrap();
+
+        let msg = format!(
+            "https://github.com/museun/shaken/commit/{} ('{}' branch)",
+            rev, branch
+        );
+
+        bot.proto.privmsg(&env.channel, &msg)
+    }
     fn speak(bot: &Bot, env: &Envelope) {
         trace!("trying to speak");
         if let Some(resp) = bot.state.lock().unwrap().generate() {
