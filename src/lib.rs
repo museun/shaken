@@ -20,3 +20,5 @@ mod conn;
 pub use crate::conn::{Conn, Proto};
 
 mod message;
+
+mod state;
