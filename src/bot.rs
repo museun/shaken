@@ -12,6 +12,7 @@ pub struct Bot<'a> {
     proto: Box<Proto + 'a>,
     state: Mutex<State>,
     channels: Vec<String>,
+    nick: String,
 }
 
 impl<'a> Bot<'a> {
@@ -20,6 +21,7 @@ impl<'a> Bot<'a> {
             proto: Box::new(proto),
             state: Mutex::new(State::new(config.interval, config.chance)),
             channels: config.channels.to_vec(),
+            nick: config.nick.to_owned(),
         }
     }
 
@@ -32,6 +34,7 @@ impl<'a> Bot<'a> {
 
         let handlers = vec![
             Handler::Active("!speak", Bot::speak),
+            Handler::Passive(Bot::check_mentions),
             Handler::Passive(Bot::auto_speak),
             Handler::Raw("PING", |bot, msg| {
                 bot.proto.send(&format!("PONG :{}", &msg.data))
@@ -83,6 +86,16 @@ impl<'a> Bot<'a> {
         if let Some(resp) = bot.state.lock().unwrap().generate() {
             trace!("speaking");
             bot.proto.privmsg(&env.channel, &resp)
+        }
+    }
+
+    fn check_mentions(bot: &Bot, env: &Envelope) {
+        let parts = env.data.split_whitespace();
+        for part in parts {
+            if part.starts_with("@") && part[1..] == bot.nick {
+                Bot::speak(&bot, &env);
+                break;
+            }
         }
     }
 
@@ -141,7 +154,6 @@ impl State {
         if let Some(data) = get("http://localhost:7878/markov/next") {
             trace!("generated a message");
             self.previous = Some(now);
-            // has to be put in a string anyway
             Some(prune(&data).to_string() + ".")
         } else {
             None
