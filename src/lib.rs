@@ -10,15 +10,15 @@ extern crate toml;
 extern crate curl;
 extern crate rand;
 
-mod bot;
-pub use crate::bot::Bot;
-
-mod config;
-pub use crate::config::Config;
-
-mod conn;
-pub use crate::conn::{Conn, Proto};
-
 mod message;
 
 mod state;
+
+mod bot;
+pub use crate::bot::Bot;
+mod config;
+pub use crate::config::Config;
+mod conn;
+pub use crate::conn::{Conn, Proto};
+
+mod humanize;
