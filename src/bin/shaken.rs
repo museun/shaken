@@ -26,6 +26,10 @@ impl Shaken {
 
         let mut sleep = 0;
         loop {
+            if sleep > 0 {
+                warn!("sleeping for {} seconds", sleep);
+            }
+
             thread::sleep(time::Duration::from_secs(sleep));
 
             info!("trying to connect to {}", addr);
