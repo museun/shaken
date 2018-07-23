@@ -12,16 +12,16 @@ pub struct Bot<'a> {
     proto: Box<Proto + 'a>,
     state: Mutex<State>,
     channels: Vec<String>,
-    nick: String,
+    nick: &'a str,
 }
 
 impl<'a> Bot<'a> {
-    pub fn new(proto: impl Proto + 'a, config: &Config) -> Self {
+    pub fn new(proto: impl Proto + 'a, config: &'a Config) -> Self {
         Self {
             proto: Box::new(proto),
             state: Mutex::new(State::new(config.interval, config.chance)),
             channels: config.channels.to_vec(),
-            nick: config.nick.to_owned(),
+            nick: &config.nick,
         }
     }
 
@@ -32,6 +32,7 @@ impl<'a> Bot<'a> {
         self.proto
             .send(&format!("USER {} * 8 :{}", &config.nick, &config.nick));
 
+        // TODO: move this out of this function
         let handlers = vec![
             Handler::Active("!speak", Bot::speak),
             Handler::Active("!version", Bot::version),
@@ -105,7 +106,7 @@ impl<'a> Bot<'a> {
     fn check_mentions(bot: &Bot, env: &Envelope) {
         let parts = env.data.split_whitespace();
         for part in parts {
-            if part.starts_with('@') && part[1..] == bot.nick {
+            if part.starts_with('@') && &part[1..] == bot.nick {
                 Bot::speak(&bot, &env);
                 break;
             }
