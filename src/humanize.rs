@@ -1,3 +1,5 @@
+use std::fmt::Write;
+
 pub trait CommaSeparated {
     fn comma_separate(&self) -> String;
 }
