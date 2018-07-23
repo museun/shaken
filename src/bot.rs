@@ -50,7 +50,10 @@ impl<'a> Bot<'a> {
 
         while let Some(line) = self.proto.read() {
             let msg = Message::parse(&line);
-            debug!("{}", msg);
+            // hide the ping spam
+            if msg.command != "PING" {
+                debug!("{}", msg);
+            }
 
             let env = if msg.command == "PRIVMSG" {
                 Some(Envelope::from_msg(&msg))
@@ -73,7 +76,10 @@ impl<'a> Bot<'a> {
                     (Some(ref env), Handler::Passive(f)) => f(&self, &env),
                     (None, Handler::Raw(cmd, f)) => {
                         if cmd == &msg.command {
-                            debug!("running server: {}", cmd);
+                            // hide the ping spam
+                            if &msg.command != "PING" {
+                                debug!("running server: {}", cmd);
+                            }
                             f(&self, &msg)
                         }
                     }
