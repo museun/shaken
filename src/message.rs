@@ -1,5 +1,3 @@
-use crate::bot::Bot;
-
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -20,12 +18,6 @@ impl Envelope {
             data: msg.data.to_string(),
         }
     }
-}
-
-pub enum Handler {
-    Active(&'static str, fn(&Bot, &Envelope)),
-    Passive(fn(&Bot, &Envelope)),
-    Raw(&'static str, fn(&Bot, &Message)),
 }
 
 #[derive(Debug, PartialEq, Clone)]

@@ -15,28 +15,39 @@ fn main() {
         .init();
 
     let config = Config::load();
-    let addr = format!("{}:{}", &config.addr, &config.port);
+    Shaken::start(&config);
+}
 
-    let mut sleep = 0;
-    loop {
-        thread::sleep(time::Duration::from_secs(sleep));
+pub struct Shaken;
 
-        info!("trying to connect to {}", addr);
-        let bot = match Conn::new(&addr) {
-            Ok(conn) => {
-                sleep = 0;
-                Bot::new(conn, &config)
-            }
-            Err(err) => {
-                error!("error: {}", err);
-                sleep += 5;
-                continue;
-            }
-        };
+impl Shaken {
+    pub fn start(config: &Config) {
+        let addr = format!("{}:{}", &config.twitch.addr, &config.twitch.port);
 
-        bot.run(&config); // this blocks
-        info!("disconnected");
+        let mut sleep = 0;
+        loop {
+            thread::sleep(time::Duration::from_secs(sleep));
 
-        sleep += 5;
+            info!("trying to connect to {}", addr);
+            let bot = match Conn::new(&addr) {
+                Ok(conn) => {
+                    sleep = 0;
+                    Bot::new(conn, &config)
+                }
+                Err(err) => {
+                    error!("error: {}", err);
+                    sleep += 5;
+                    continue;
+                }
+            };
+
+            let _builtin = Builtin::new(&bot, &config);
+            let _shakespeare = Shakespeare::new(&bot, &config);
+
+            bot.run(&config); // this blocks
+            info!("disconnected");
+
+            sleep += 5;
+        }
     }
 }

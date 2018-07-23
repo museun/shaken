@@ -4,12 +4,23 @@ use toml;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Config {
+    pub twitch: Twitch,
+    pub shakespeare: Shakespeare,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Twitch {
     pub addr: String,
     pub port: u32,
     pub nick: String,
     pub pass: String,
     pub channels: Vec<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Shakespeare {
     pub chance: f64,
+    pub bypass: usize,
     pub interval: usize,
 }
 
@@ -20,13 +31,18 @@ impl Config {
         let data = fs::read_to_string(CONFIG_FILE)
             .or_else(|_e| {
                 let default = Config {
-                    addr: "localhost".into(),
-                    port: 6667,
-                    pass: env!("TWITCH_PASSWORD").into(),
-                    nick: "shaken".into(),
-                    channels: vec!["#museun".into()],
-                    interval: 5,
-                    chance: 0.15,
+                    twitch: Twitch {
+                        addr: "localhost".into(),
+                        port: 6667,
+                        pass: env!("TWITCH_PASSWORD").into(),
+                        nick: "shaken".into(),
+                        channels: vec!["#museun".into()],
+                    },
+                    shakespeare: Shakespeare {
+                        interval: 5,
+                        chance: 0.15,
+                        bypass: 60,
+                    },
                 };
                 toml::to_string(&default)
             })

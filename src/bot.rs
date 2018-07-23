@@ -1,54 +1,56 @@
 use crate::config::Config;
 use crate::conn::Proto;
-use crate::message::{Envelope, Handler, Message};
-use crate::state::State;
+use crate::message::{Envelope, Message};
 
-use std::sync::Mutex;
-use std::time;
+use std::rc::Rc;
+use std::sync::RwLock;
 
-use rand::prelude::*;
-
-pub struct Bot<'a> {
-    proto: Box<Proto + 'a>,
-    state: Mutex<State>,
-    channels: Vec<String>,
-    nick: &'a str,
+pub struct Bot {
+    inner: RwLock<Inner<'static>>,
+    handlers: RwLock<Vec<Handler>>,
 }
 
-impl<'a> Bot<'a> {
-    pub fn new(proto: impl Proto + 'a, config: &'a Config) -> Self {
+struct Inner<'a> {
+    proto: Rc<Box<Proto + 'a>>,
+    channels: Vec<String>,
+    nick: String,
+}
+
+impl Bot {
+    pub fn new(proto: impl Proto + 'static, config: &Config) -> Self {
+        let inner = RwLock::new(Inner {
+            proto: Rc::new(Box::new(proto)),
+            channels: config.twitch.channels.to_vec(),
+            nick: config.twitch.nick.to_string(),
+        });
+
         Self {
-            proto: Box::new(proto),
-            state: Mutex::new(State::new(config.interval, config.chance)),
-            channels: config.channels.to_vec(),
-            nick: &config.nick,
+            inner,
+            handlers: RwLock::new(vec![]),
         }
     }
 
+    pub fn proto(&'b self) -> Rc<Box<Proto + 'a>> {
+        let inner = self.inner.read().unwrap();
+        Rc::clone(&inner.proto)
+    }
+
+    pub fn nick(&self) -> String {
+        let inner = self.inner.read().unwrap();
+        inner.nick.to_string()
+    }
+
     pub fn run(&self, config: &Config) {
-        self.proto.send(&format!("PASS {}", &config.pass));
-        self.proto.send(&format!("NICK {}", &config.nick));
+        self.proto().send(&format!("PASS {}", &config.twitch.pass));
+        self.proto().send(&format!("NICK {}", &config.twitch.nick));
         // this is needed for real irc servers
-        self.proto
-            .send(&format!("USER {} * 8 :{}", &config.nick, &config.nick));
+        self.proto().send(&format!(
+            "USER {} * 8 :{}",
+            &config.twitch.nick, &config.twitch.nick
+        ));
 
-        // TODO: move this out of this function
-        let handlers = vec![
-            Handler::Active("!speak", Bot::speak),
-            Handler::Active("!version", Bot::version),
-            Handler::Passive(Bot::check_mentions),
-            Handler::Passive(Bot::auto_speak),
-            Handler::Raw("PING", |bot, msg| {
-                bot.proto.send(&format!("PONG :{}", &msg.data))
-            }),
-            Handler::Raw("001", |bot, _msg| {
-                for ch in &bot.channels {
-                    bot.proto.join(&ch)
-                }
-            }),
-        ];
-
-        while let Some(line) = self.proto.read() {
+        // can't use the write lock from this point on
+        while let Some(line) = self.proto().read() {
             let msg = Message::parse(&line);
             // hide the ping spam
             if msg.command != "PING" {
@@ -61,9 +63,11 @@ impl<'a> Bot<'a> {
                 None
             };
 
-            for hn in &handlers {
+            // TODO run this on a threadpool
+            let handlers = self.handlers.read().unwrap();
+            for hn in handlers.iter() {
                 match (&env, hn) {
-                    (Some(ref env), Handler::Active(s, f)) => {
+                    (Some(ref env), Handler::Command(s, f)) => {
                         if env.data.starts_with(s) {
                             debug!("running command: {}", s);
                             // make a clone because we're mutating it
@@ -73,7 +77,9 @@ impl<'a> Bot<'a> {
                             f(&self, &env)
                         }
                     }
-                    (Some(ref env), Handler::Passive(f)) => f(&self, &env),
+                    (Some(ref env), Handler::Passive(f)) => {
+                        f(&self, &env);
+                    }
                     (None, Handler::Raw(cmd, f)) => {
                         if cmd == &msg.command {
                             // hide the ping spam
@@ -89,55 +95,39 @@ impl<'a> Bot<'a> {
         }
     }
 
-    fn version(bot: &Bot, env: &Envelope) {
-        // these are set by the build script
-        let rev = option_env!("SHAKEN_GIT_REV").unwrap();
-        let branch = option_env!("SHAKEN_GIT_BRANCH").unwrap();
-
-        let msg = format!(
-            "https://github.com/museun/shaken/commit/{} ('{}' branch)",
-            rev, branch
-        );
-
-        bot.proto.privmsg(&env.channel, &msg)
-    }
-    fn speak(bot: &Bot, env: &Envelope) {
-        trace!("trying to speak");
-        if let Some(resp) = bot.state.lock().unwrap().generate() {
-            trace!("speaking");
-            bot.proto.privmsg(&env.channel, &resp)
-        }
+    pub fn on_command<F>(&self, cmd: &'static str, f: F)
+    where
+        F: Fn(&Bot, &Envelope) + 'static,
+    {
+        self.handlers
+            .write()
+            .unwrap()
+            .push(Handler::Command(cmd, Box::new(f)));
     }
 
-    fn check_mentions(bot: &Bot, env: &Envelope) {
-        let parts = env.data.split_whitespace();
-        for part in parts {
-            if part.starts_with('@') && &part[1..] == bot.nick {
-                Bot::speak(&bot, &env);
-                break;
-            }
-        }
+    pub fn on_passive<F>(&self, f: F)
+    where
+        F: Fn(&Bot, &Envelope) + 'static,
+    {
+        self.handlers
+            .write()
+            .unwrap()
+            .push(Handler::Passive(Box::new(f)));
     }
 
-    fn auto_speak(bot: &Bot, env: &Envelope) {
-        let (chance, previous) = {
-            let state = bot.state.lock().unwrap();
-            (state.chance, state.previous)
-        };
-
-        let bypass = if let Some(prev) = previous {
-            time::Instant::now().duration_since(prev) > time::Duration::from_secs(60)
-        } else {
-            false
-        };
-
-        if bypass {
-            trace!("bypassing the roll");
-        }
-
-        if bypass || thread_rng().gen_bool(chance) {
-            trace!("automatically trying to speak");
-            Bot::speak(bot, env)
-        }
+    pub fn on_raw<F>(&self, cmd: &'static str, f: F)
+    where
+        F: Fn(&Bot, &Message) + 'static,
+    {
+        self.handlers
+            .write()
+            .unwrap()
+            .push(Handler::Raw(cmd, Box::new(f)));
     }
+}
+
+pub enum Handler {
+    Command(&'static str, Box<Fn(&Bot, &Envelope)>),
+    Passive(Box<Fn(&Bot, &Envelope)>),
+    Raw(&'static str, Box<Fn(&Bot, &Message)>),
 }
