@@ -105,6 +105,7 @@ impl Shakespeare {
             self.previous = Some(now);
             Some(prune(&data).to_string() + ".")
         } else {
+            warn!("cannot get a response from the brain");
             None
         }
     }
