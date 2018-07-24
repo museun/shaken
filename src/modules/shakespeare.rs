@@ -1,5 +1,3 @@
-#![feature(ascii_ctype)]
-
 use rand::prelude::*;
 
 use std::sync::{Arc, RwLock};
@@ -8,11 +6,11 @@ use std::time;
 use {bot, config, message, util::http_get};
 
 pub struct Shakespeare {
-    pub(crate) previous: Option<time::Instant>,
-    pub(crate) limit: time::Duration,
-    pub(crate) interval: f64,
-    pub(crate) chance: f64,
-    pub(crate) bypass: usize,
+    previous: Option<time::Instant>,
+    limit: time::Duration,
+    interval: f64,
+    chance: f64,
+    bypass: usize,
 }
 
 impl Shakespeare {

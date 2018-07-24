@@ -66,6 +66,11 @@ impl IdleThing {
         if let Some(who) = env.get_nick() {
             let num: String = env.data.chars().take_while(char::is_ascii_digit).collect();
             if let Ok(num) = num.parse::<usize>() {
+                if num == 0 {
+                    bot.reply(&env, "zero what?");
+                    return;
+                }
+
                 match self.state.donate(who, num) {
                     Ok(s) => match s {
                         Donation::Success { old, new } => {
