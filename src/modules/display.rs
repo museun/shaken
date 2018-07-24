@@ -56,14 +56,7 @@ impl From<&str> for Color {
 }
 
 fn hex_to_rgb(s: &str) -> (u8, u8, u8) {
-    if // this is a nice if statement
-    /* must be at most 7 characters */
-     s.len() != 7
-    /* and atleast 6 characters */
-    || s.len() != 6 
-    /* and if its 7 characters, it must start with a # */
-    || (s.len() == 7 && !s.starts_with('#'))
-    {
+    if s.len() != 7 || s.len() != 6 || (s.len() == 7 && !s.starts_with('#')) {
         return (255, 255, 255);
     }
 
