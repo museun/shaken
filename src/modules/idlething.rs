@@ -76,18 +76,17 @@ impl IdleThing {
     }
 
     fn check_limit(&mut self, who: &str) -> bool {
-        let who = who.into();
-
-        let now = Instant::now();
-        let mut res = false;
-
-        if let Some(t) = self.limit.get(&who) {
-            if now - *t < Duration::from_secs(60) {
-                res = true;
+        if let Some(t) = self.limit.get(&who.to_string()) {
+            if Instant::now() - *t < Duration::from_secs(60) {
+                return true;
             }
         }
-        self.limit.insert(who, now);
-        res
+        false
+    }
+
+    fn rate_limit(&mut self, who: &str) {
+        let who = who.to_string();
+        self.limit.insert(who, Instant::now());
     }
 
     fn invest_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
@@ -118,6 +117,8 @@ impl IdleThing {
                                 new.comma_separate()
                             ),
                         );
+                        // rate limit them after they've invested
+                        self.rate_limit(who);
                     }
                     Donation::Failure { old, new } => {
                         bot.reply(
@@ -128,6 +129,8 @@ impl IdleThing {
                                 new.comma_separate()
                             ),
                         );
+                        // rate limit them after they've invested
+                        self.rate_limit(who);
                     }
                 },
                 Err(err) => match err {
