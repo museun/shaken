@@ -27,6 +27,13 @@ impl Builtin {
 
             bot.reply(&env, &msg);
         });
+
+        bot.on_command("!shaken", |bot, env| {
+            bot.reply(
+                &env,
+                "I try to impersonate The Bard, by being trained on all of his works.",
+            );
+        });
         Self {}
     }
 }
