@@ -11,8 +11,11 @@ extern crate toml;
 extern crate curl;
 extern crate rand;
 
+extern crate crossbeam_channel;
+
 mod humanize;
 mod message;
+mod util;
 
 mod modules;
 pub use modules::*;

@@ -18,6 +18,16 @@ impl Envelope {
             data: msg.data.to_string(),
         }
     }
+
+    pub fn get_nick(&self) -> Option<&str> {
+        if let Prefix::User { ref nick, .. } = self.sender {
+            trace!("got nick: {}", nick);
+            return Some(nick);
+        }
+
+        warn!("no nick attached to that message");
+        None
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]

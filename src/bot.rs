@@ -1,9 +1,9 @@
 use crate::config::Config;
 use crate::conn::Proto;
 use crate::message::{Envelope, Message};
+use crate::util::http_get;
 
-use std::rc::Rc;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 
 pub struct Bot {
     inner: RwLock<Inner<'static>>,
@@ -11,15 +11,16 @@ pub struct Bot {
 }
 
 struct Inner<'a> {
-    proto: Rc<Box<Proto + 'a>>,
+    proto: Arc<Box<Proto + 'a>>,
+    #[allow(dead_code)] // this isn't used yet
     channels: Vec<String>,
     nick: String,
 }
 
 impl Bot {
-    pub fn new(proto: impl Proto + 'static, config: &Config) -> Self {
+    pub fn new(proto: impl Proto + 'static + Send + Sync, config: &Config) -> Self {
         let inner = RwLock::new(Inner {
-            proto: Rc::new(Box::new(proto)),
+            proto: Arc::new(Box::new(proto)),
             channels: config.twitch.channels.to_vec(),
             nick: config.twitch.nick.to_string(),
         });
@@ -30,9 +31,9 @@ impl Bot {
         }
     }
 
-    pub fn proto(&'b self) -> Rc<Box<Proto + 'a>> {
+    pub fn proto(&'b self) -> Arc<Box<Proto + 'a>> {
         let inner = self.inner.read().unwrap();
-        Rc::clone(&inner.proto)
+        Arc::clone(&inner.proto)
     }
 
     pub fn nick(&self) -> String {
@@ -40,7 +41,21 @@ impl Bot {
         inner.nick.to_string()
     }
 
-    pub fn run(&self, config: &Config) {
+    pub fn reply(&self, env: &Envelope, msg: &str) {
+        if msg.is_empty() {
+            warn!("tried to reply with an empty message");
+            return;
+        }
+
+        if let Some(who) = env.get_nick() {
+            self.proto()
+                .privmsg(&env.channel, &format!("@{}: {}", who, msg))
+        } else {
+            warn!("cannot reply with no nick");
+        }
+    }
+
+    fn register(&self, config: &Config) {
         self.proto().send(&format!("PASS {}", &config.twitch.pass));
         self.proto().send(&format!("NICK {}", &config.twitch.nick));
         // this is needed for real irc servers
@@ -49,9 +64,17 @@ impl Bot {
             &config.twitch.nick, &config.twitch.nick
         ));
 
+        // TODO: request some CAPS
+    }
+
+    pub fn run(&self, config: &Config) {
+        self.register(&config);
+
         // can't use the write lock from this point on
         while let Some(line) = self.proto().read() {
             let msg = Message::parse(&line);
+            // TODO determine if we've actually gotten the right cap response
+
             // hide the ping spam
             if msg.command != "PING" {
                 debug!("{}", msg);
@@ -73,7 +96,7 @@ impl Bot {
                             // make a clone because we're mutating it
                             let mut env = env.clone();
                             // trim the command
-                            env.data = env.data[s.len()..].to_string();
+                            env.data = env.data[s.len()..].trim().to_string();
                             f(&self, &env)
                         }
                     }
@@ -130,4 +153,27 @@ pub enum Handler {
     Command(&'static str, Box<Fn(&Bot, &Envelope)>),
     Passive(Box<Fn(&Bot, &Envelope)>),
     Raw(&'static str, Box<Fn(&Bot, &Message)>),
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Chatters {
+    pub moderators: Vec<String>,
+    pub staff: Vec<String>,
+    pub admins: Vec<String>,
+    pub global_mods: Vec<String>,
+    pub viewers: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Names {
+    pub chatter_count: usize,
+    pub chatters: Chatters,
+}
+
+pub fn get_names_for(ch: &str) -> Option<Names> {
+    let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch);
+    if let Some(resp) = http_get(&url) {
+        return serde_json::from_str::<Names>(&resp).ok();
+    }
+    None
 }

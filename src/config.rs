@@ -6,6 +6,7 @@ use toml;
 pub struct Config {
     pub twitch: Twitch,
     pub shakespeare: Shakespeare,
+    pub idlething: IdleThing,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -21,6 +22,14 @@ pub struct Twitch {
 pub struct Shakespeare {
     pub chance: f64,
     pub bypass: usize,
+    pub interval: usize,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct IdleThing {
+    pub starting: usize,
+    pub line_value: usize,
+    pub idle_value: usize,
     pub interval: usize,
 }
 
@@ -42,6 +51,12 @@ impl Config {
                         interval: 5,
                         chance: 0.15,
                         bypass: 60,
+                    },
+                    idlething: IdleThing {
+                        starting: 0,
+                        line_value: 5,
+                        idle_value: 1,
+                        interval: 60,
                     },
                 };
                 toml::to_string(&default)

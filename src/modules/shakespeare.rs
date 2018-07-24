@@ -1,10 +1,11 @@
-use curl::easy::Easy;
+#![feature(ascii_ctype)]
+
 use rand::prelude::*;
 
 use std::sync::{Arc, RwLock};
 use std::time;
 
-use {bot, config, message};
+use {bot, config, message, util::http_get};
 
 pub struct Shakespeare {
     pub(crate) previous: Option<time::Instant>,
@@ -54,8 +55,14 @@ impl Shakespeare {
         let nick = bot.nick();
         trace!("my nick is {}", nick);
 
+        fn trim_then_check(s: &str, nick: &str) -> bool {
+            let s = s.to_string();
+            let s = s.trim_right_matches(|c: char| !c.is_ascii_alphanumeric());
+            !s.is_empty() && &s[1..] == nick
+        }
+
         for part in env.data.split_whitespace() {
-            if part.starts_with('@') && part[1..] == nick {
+            if part.starts_with('@') && trim_then_check(&part, &nick) {
                 trace!("got a mention, trying to speak");
                 self.speak(bot, env);
                 return;
@@ -93,7 +100,7 @@ impl Shakespeare {
             }
         }
 
-        if let Some(data) = get("http://localhost:7878/markov/next") {
+        if let Some(data) = http_get("http://localhost:7878/markov/next") {
             trace!("generated a message");
             self.previous = Some(now);
             Some(prune(&data).to_string() + ".")
@@ -112,19 +119,4 @@ fn prune(s: &str) -> &str {
         pos += 1
     }
     &s[..s.len() - pos]
-}
-
-fn get(url: &str) -> Option<String> {
-    let mut vec = Vec::new();
-    let mut easy = Easy::new();
-    easy.url(url).ok()?;
-    {
-        let mut transfer = easy.transfer();
-        let _ = transfer.write_function(|data| {
-            vec.extend_from_slice(data);
-            Ok(data.len())
-        });
-        transfer.perform().ok()?;
-    }
-    String::from_utf8(vec).ok()
 }
