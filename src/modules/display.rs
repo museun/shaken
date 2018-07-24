@@ -16,8 +16,13 @@ impl Display {
 
         bot.on_passive(|_bot, env| {
             if let Some(nick) = env.get_nick() {
+                trace!("tags: {:?}", env.tags);
                 let display = if let Some(color) = env.tags.get("color") {
-                    Color::from(color).format(&nick)
+                    if let Some(display) = env.tags.get("display-name") {
+                        Color::from(color).format(&display)
+                    } else {
+                        Color::from(color).format(&nick)
+                    }
                 } else {
                     nick.into()
                 };
