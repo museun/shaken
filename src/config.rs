@@ -15,6 +15,7 @@ pub struct Twitch {
     pub port: u32,
     pub nick: String,
     pub pass: String,
+    pub client_id: String,
     pub channels: Vec<String>,
 }
 
@@ -35,30 +36,37 @@ pub struct IdleThing {
 
 const CONFIG_FILE: &str = "shaken.toml"; // hardcoded
 
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            twitch: Twitch {
+                addr: "localhost".into(),
+                port: 6667,
+                pass: env!("TWITCH_PASSWORD").into(),
+                client_id: env!("TWITCH_CLIENTID").into(),
+                nick: "shaken".into(),
+                channels: vec!["#museun".into()],
+            },
+            shakespeare: Shakespeare {
+                interval: 5,
+                chance: 0.15,
+                bypass: 60,
+            },
+            idlething: IdleThing {
+                starting: 0,
+                line_value: 5,
+                idle_value: 1,
+                interval: 60,
+            },
+        }
+    }
+}
+
 impl Config {
     pub fn load() -> Self {
         let data = fs::read_to_string(CONFIG_FILE)
             .or_else(|_e| {
-                let default = Config {
-                    twitch: Twitch {
-                        addr: "localhost".into(),
-                        port: 6667,
-                        pass: env!("TWITCH_PASSWORD").into(),
-                        nick: "shaken".into(),
-                        channels: vec!["#museun".into()],
-                    },
-                    shakespeare: Shakespeare {
-                        interval: 5,
-                        chance: 0.15,
-                        bypass: 60,
-                    },
-                    idlething: IdleThing {
-                        starting: 0,
-                        line_value: 5,
-                        idle_value: 1,
-                        interval: 60,
-                    },
-                };
+                let default = Config::default();
                 toml::to_string(&default)
             })
             .unwrap();
