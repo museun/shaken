@@ -3,11 +3,14 @@ use crate::conn::Proto;
 use crate::message::{Envelope, Message};
 use crate::util::http_get;
 
+use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
 
 pub struct Bot {
     inner: RwLock<Inner<'static>>,
     handlers: RwLock<Vec<Handler>>,
+    output: RwLock<VecDeque<String>>,
+    inspect: RwLock<fn(&HashMap<String, String>, &str, &str)>,
 }
 
 struct Inner<'a> {
@@ -28,6 +31,8 @@ impl Bot {
         Self {
             inner,
             handlers: RwLock::new(vec![]),
+            inspect: RwLock::new(|_, _, _| {}),
+            output: RwLock::new(VecDeque::new()),
         }
     }
 
@@ -48,11 +53,27 @@ impl Bot {
         }
 
         if let Some(who) = env.get_nick() {
-            self.proto()
-                .privmsg(&env.channel, &format!("@{}: {}", who, msg))
+            self.privmsg(&env.channel, &format!("@{}: {}", who, msg));
         } else {
             warn!("cannot reply with no nick");
         }
+    }
+
+    pub fn say(&self, env: &Envelope, msg: &str) {
+        if msg.is_empty() {
+            warn!("tried to reply with an empty message");
+            return;
+        }
+        self.privmsg(&env.channel, msg);
+    }
+
+    pub fn set_inspect(&self, f: fn(&HashMap<String, String>, &str, &str)) {
+        *self.inspect.write().unwrap() = f;
+    }
+
+    fn privmsg(&self, ch: &str, msg: &str) {
+        self.proto().privmsg(ch, msg);
+        self.output.write().unwrap().push_back(msg.into());
     }
 
     fn register(&self, config: &Config) {
@@ -116,6 +137,14 @@ impl Bot {
                     }
                     _ => {}
                 }
+            }
+
+            let me = self.nick();
+            let caps = HashMap::new();
+            let inspect = self.inspect.read().unwrap();
+            let mut list = self.output.write().unwrap();
+            for el in list.drain(..) {
+                inspect(&caps, &me, &el);
             }
         }
     }

@@ -10,8 +10,7 @@ extern crate toml;
 
 extern crate curl;
 extern crate rand;
-
-extern crate crossbeam_channel;
+extern crate rusqlite;
 
 mod humanize;
 mod message;

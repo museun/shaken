@@ -47,7 +47,7 @@ impl Shakespeare {
         trace!("trying to speak");
         if let Some(resp) = self.generate() {
             trace!("speaking");
-            bot.proto().privmsg(&env.channel, &resp)
+            bot.say(&env, &resp)
         }
     }
 
