@@ -228,7 +228,7 @@ impl IdleThingState {
 
         match self.state.insert(name.to_owned(), starting) {
             Some(old) => warn!("{} already existed ({})", &name, old),
-            None => info!("new nick added: {}", &name),
+            None => debug!("new nick added: {}", &name),
         }
     }
 

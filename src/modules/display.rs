@@ -5,9 +5,13 @@ use {bot, config};
 pub struct Display;
 impl Display {
     pub fn new(bot: &bot::Bot, _config: &config::Config) -> Self {
-        bot.set_inspect(move |_caps, me, s| {
-            // need to parse the caps to get the color
-            println!("<{}> {}", &me, &s)
+        bot.set_inspect(move |caps, me, s| {
+            let display = if let Some(color) = caps.get("color") {
+                Color::from(color).format(me)
+            } else {
+                me.into()
+            };
+            println!("<{}> {}", &display, &s)
         });
 
         bot.on_passive(|_bot, env| {
@@ -48,6 +52,7 @@ enum Color {
 impl From<(u8, u8, u8)> for Color {
     fn from(rgb: (u8, u8, u8)) -> Self {
         let (r, g, b) = rgb;
+        trace!("got color: {},{},{}", r, g, b);
         Color::Turbo(r, g, b)
     }
 }
@@ -55,14 +60,14 @@ impl From<(u8, u8, u8)> for Color {
 impl From<&str> for Color {
     fn from(s: &str) -> Self {
         let (r, g, b) = hex_to_rgb(&s);
-        Color::Turbo(r, g, b)
+        Color::from((r, g, b))
     }
 }
 
 impl From<&String> for Color {
     fn from(s: &String) -> Self {
         let (r, g, b) = hex_to_rgb(&s);
-        Color::Turbo(r, g, b)
+        Color::from((r, g, b))
     }
 }
 

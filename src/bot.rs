@@ -78,6 +78,11 @@ impl Bot {
 
     fn register(&self, config: &Config) {
         let proto = self.proto();
+        // ircv3 stuff
+        proto.send("CAP REQ :twitch.tv/tags");
+        proto.send("CAP REQ :twitch.tv/membership");
+        proto.send("CAP REQ :twitch.tv/commands");
+
         proto.send(&format!("PASS {}", &config.twitch.pass));
         proto.send(&format!("NICK {}", &config.twitch.nick));
         // this is needed for real irc servers
@@ -85,18 +90,22 @@ impl Bot {
             "USER {} * 8 :{}",
             &config.twitch.nick, &config.twitch.nick
         ));
-
-        // ircv3 stuff
-        proto.send("CAP REQ :twitch.tv/tags");
     }
 
     pub fn run(&self, config: &Config) {
         self.register(&config);
 
+        let mut caps = HashMap::new();
         // can't use the write lock from this point on
         while let Some(line) = self.proto().read() {
             let msg = Message::parse(&line);
             // TODO determine if we've actually gotten the right cap response
+            //> @color=<color>;display-name=<display-name>;emote-sets=<emote-sets>;turbo=<turbo>;user-id=<user-id>;user-type=<user-type> :tmi.twitch.tv GLOBALUSERSTATE
+
+            if msg.command == "GLOBALUSERSTATE" {
+                debug!("got our caps");
+                caps = msg.tags.clone();
+            }
 
             // hide the ping spam
             if msg.command != "PING" {
@@ -140,7 +149,6 @@ impl Bot {
             }
 
             let me = self.nick();
-            let caps = HashMap::new();
             let inspect = self.inspect.read().unwrap();
             let mut list = self.output.write().unwrap();
             for el in list.drain(..) {

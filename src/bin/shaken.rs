@@ -50,6 +50,7 @@ impl Shaken {
             let _idlething = IdleThing::new(&bot, &config);
             let _display = Display::new(&bot, &config);
 
+            info!("connected and running");
             bot.run(&config); // this blocks
             info!("disconnected");
 
