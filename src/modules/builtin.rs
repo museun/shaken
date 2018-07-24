@@ -16,6 +16,17 @@ impl Builtin {
             }
         });
 
+        bot.on_command("!version", |bot, env| {
+            let rev = option_env!("SHAKEN_GIT_REV").unwrap();
+            let branch = option_env!("SHAKEN_GIT_BRANCH").unwrap();
+
+            let msg = format!(
+                "https://github.com/museun/shaken ({} on '{}' branch)",
+                rev, branch
+            );
+
+            bot.reply(&env, &msg);
+        });
         Self {}
     }
 }
