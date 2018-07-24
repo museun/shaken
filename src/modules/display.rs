@@ -5,11 +5,15 @@ use {bot, config};
 pub struct Display;
 impl Display {
     pub fn new(bot: &bot::Bot, _config: &config::Config) -> Self {
+        bot.set_inspect(move |_caps, me, s| {
+            // need to parse the caps to get the color
+            println!("<{}> {}", &me, &s)
+        });
+
         bot.on_passive(|_bot, env| {
             if let Some(nick) = env.get_nick() {
                 let display = if let Some(color) = env.tags.get("color") {
-                    let (r, g, b) = hex_to_rgb(&color);
-                    Color::Turbo(r, g, b).format(&nick)
+                    Color::from(color).format(&nick)
                 } else {
                     nick.into()
                 };
@@ -55,8 +59,15 @@ impl From<&str> for Color {
     }
 }
 
+impl From<&String> for Color {
+    fn from(s: &String) -> Self {
+        let (r, g, b) = hex_to_rgb(&s);
+        Color::Turbo(r, g, b)
+    }
+}
+
 fn hex_to_rgb(s: &str) -> (u8, u8, u8) {
-    if s.len() != 7 || s.len() != 6 || (s.len() == 7 && !s.starts_with('#')) {
+    if (s.len() != 7 && s.len() != 6) || (s.len() == 7 && !s.starts_with('#')) {
         return (255, 255, 255);
     }
 

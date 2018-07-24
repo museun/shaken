@@ -124,6 +124,5 @@ pub trait Proto {
     }
 
     fn read(&self) -> Option<String>;
-
     fn send(&self, raw: &str);
 }
