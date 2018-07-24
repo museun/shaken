@@ -3,24 +3,26 @@ use rand::prelude::*;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use std::{fmt::Write, fs, str};
 
 use {bot, config, humanize::*, message};
 
 pub struct IdleThing {
     state: IdleThingState,
+    limit: HashMap<String, Instant>,
 }
 
 impl IdleThing {
     pub fn new(bot: &bot::Bot, config: &config::Config) -> Arc<RwLock<Self>> {
         let this = Arc::new(RwLock::new(Self {
             state: IdleThingState::load(&config),
+            limit: HashMap::new(),
         }));
 
         let next = Arc::clone(&this);
-        bot.on_command("!donate", move |bot, env| {
-            next.write().unwrap().donate_command(bot, env);
+        bot.on_command("!invest", move |bot, env| {
+            next.write().unwrap().invest_command(bot, env);
         });
 
         let next = Arc::clone(&this);
@@ -46,6 +48,7 @@ impl IdleThing {
         let dur = Duration::from_secs(config.idlething.interval as u64);
         let next = Arc::clone(&this);
 
+        let me = config.twitch.nick.clone();
         thread::spawn(move || loop {
             let ch = "museun";
             trace!("getting names for #{}", ch);
@@ -57,6 +60,11 @@ impl IdleThing {
                 v.extend(names.chatters.global_mods);
                 v.extend(names.chatters.viewers);
 
+                // ignore self
+                if let Some(n) = v.iter().position(|s| s == &me) {
+                    v.remove(n);
+                }
+
                 trace!("names for {}: {:?}", &ch, &v);
                 next.write().unwrap().state.tick(&v);
             }
@@ -67,59 +75,137 @@ impl IdleThing {
         this
     }
 
-    fn donate_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        if let Some(who) = env.get_nick() {
-            let num: String = env.data.chars().take_while(char::is_ascii_digit).collect();
-            if let Ok(num) = num.parse::<usize>() {
-                if num == 0 {
-                    bot.reply(&env, "zero what?");
-                    return;
-                }
+    fn check_limit(&mut self, who: &str) -> bool {
+        let who = who.into();
 
-                match self.state.donate(who, num) {
-                    Ok(s) => match s {
-                        Donation::Success { old, new } => {
-                            bot.reply(&env, &format!("success! you went from {} to {}", old, new));
-                        }
-                        Donation::Failure { old, new } => {
-                            bot.reply(&env, &format!("failure! you went from {} to {}", old, new));
-                        }
-                    },
-                    Err(err) => match err {
-                        IdleThingError::NotEnoughCredits { have, want } => {
-                            bot.reply(&env, &format!("you don't have enough. you have {} but you want to spend {} credits", have, want));
-                        }
-                    },
-                }
-            } else {
-                bot.reply(&env, "thats not a number I understand");
+        let now = Instant::now();
+        let mut res = false;
+
+        if let Some(t) = self.limit.get(&who) {
+            if now - *t < Duration::from_secs(60) {
+                res = true;
             }
+        }
+        self.limit.insert(who, now);
+        res
+    }
+
+    fn invest_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
+        let who = match env.get_nick() {
+            Some(who) => who,
+            None => return,
+        };
+
+        if self.check_limit(&who) {
+            debug!("{} has been rate limited", who);
+            return;
+        }
+
+        if let Some(num) = Self::parse_number(&env.data) {
+            if num == 0 {
+                bot.reply(&env, "zero what?");
+                return;
+            }
+
+            match self.state.invest(who, num) {
+                Ok(s) => match s {
+                    Donation::Success { old, new } => {
+                        bot.reply(
+                            &env,
+                            &format!(
+                                "success! {} -> {}",
+                                old.comma_separate(),
+                                new.comma_separate()
+                            ),
+                        );
+                    }
+                    Donation::Failure { old, new } => {
+                        bot.reply(
+                            &env,
+                            &format!(
+                                "failure! {} -> {}",
+                                old.comma_separate(),
+                                new.comma_separate()
+                            ),
+                        );
+                    }
+                },
+                Err(err) => match err {
+                    IdleThingError::NotEnoughCredits { have, want } => {
+                        bot.reply(&env, &format!("you don't have enough. you have {} but you want to invest {} credits", have.comma_separate(), want.comma_separate()));
+                    }
+                },
+            }
+        } else {
+            bot.reply(&env, "thats not a number I understand");
         }
     }
 
     fn give_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        if let Some(who) = env.get_nick() {
+        let who = match env.get_nick() {
+            Some(who) => who,
+            None => return,
+        };
+        let (target, data) = match env.data.split_whitespace().take(1).next() {
+            Some(target) => (target, &env.data[target.len()..]),
+            None => {
+                bot.reply(&env, "who do you want to give points to?");
+                return;
+            }
+        };
+
+        if who.eq_ignore_ascii_case(target) {
+            bot.reply(&env, "what are you doing?");
+            return;
+        }
+
+        if let Some(num) = Self::parse_number(data.trim()) {
+            if num == 0 {
+                bot.reply(&env, "zero what?");
+                return;
+            }
+
+            debug!("{} wants to give {} {} credits", who, target, num);
             if let Some(credits) = self.state.get_credits_for(&who) {
-                bot.reply(
-                    &env,
-                    &format!("you have {} credits", credits.comma_separate()),
-                )
+                if num <= credits {
+                    let c = self.state.give(&target, num);
+                    let d = self.state.take(&who, num);
+
+                    bot.reply(
+                        &env,
+                        &format!(
+                            "they now have {} credits and you have {}",
+                            c.comma_separate(),
+                            d.comma_separate()
+                        ),
+                    );
+                } else {
+                    bot.reply(
+                        &env,
+                        &format!("you only have {} credits", credits.comma_separate()),
+                    );
+                }
             } else {
                 bot.reply(&env, "you have no credits")
             }
+        } else {
+            bot.reply(&env, "how much is that?");
         }
     }
 
     fn check_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        if let Some(who) = env.get_nick() {
-            if let Some(credits) = self.state.get_credits_for(&who) {
-                bot.reply(
-                    &env,
-                    &format!("you have {} credits", credits.comma_separate()),
-                )
-            } else {
-                bot.reply(&env, "you have no credits")
-            }
+        let who = match env.get_nick() {
+            Some(who) => who,
+            None => return,
+        };
+
+        if let Some(credits) = self.state.get_credits_for(&who) {
+            bot.reply(
+                &env,
+                &format!("you have {} credits", credits.comma_separate()),
+            )
+        } else {
+            bot.reply(&env, "you have no credits")
         }
     }
 
@@ -152,6 +238,11 @@ impl IdleThing {
             self.state.increment(&who);
         }
     }
+
+    fn parse_number(data: &str) -> Option<usize> {
+        let num: String = data.chars().take_while(char::is_ascii_digit).collect();
+        num.parse::<usize>().ok()
+    }
 }
 
 /* plans:
@@ -183,8 +274,10 @@ pub struct IdleThingState {
 
     #[serde(skip)]
     starting: usize,
+
     #[serde(skip)]
     line_value: usize,
+
     #[serde(skip)]
     idle_value: usize,
 }
@@ -195,6 +288,7 @@ impl Default for IdleThingState {
             starting: 0,
             line_value: 5,
             idle_value: 1,
+
             state: Default::default(),
         }
     }
@@ -243,16 +337,31 @@ impl IdleThingState {
         }
     }
 
-    pub fn increment(&mut self, name: &str) -> Credit {
-        let line_value = self.line_value;
-
+    pub fn give(&mut self, name: &str, credits: Credit) -> Credit {
         self.state
             .entry(name.into())
-            .and_modify(|c| *c += line_value)
-            .or_insert(line_value);
+            .and_modify(|c| *c += credits)
+            .or_insert(credits);
+
         let ch = self.state[name];
-        debug!("incrementing {}'s credits, now: {}", name, ch);
+        debug!("setting {}'s credits to {}", name, ch);
         ch
+    }
+
+    pub fn take(&mut self, name: &str, credits: Credit) -> Credit {
+        self.state
+            .entry(name.into())
+            .and_modify(|c| *c -= credits)
+            .or_insert(credits);
+
+        let ch = self.state[name];
+        debug!("setting {}'s credits to {}", name, ch);
+        ch
+    }
+
+    pub fn increment(&mut self, name: &str) -> Credit {
+        let line_value = self.line_value;
+        self.give(name, line_value)
     }
 
     pub fn insert(&mut self, name: &str) {
@@ -264,7 +373,7 @@ impl IdleThingState {
         }
     }
 
-    fn donate_success(
+    fn invest_success(
         &mut self,
         name: &str,
         have: Credit,
@@ -280,7 +389,7 @@ impl IdleThingState {
         })
     }
 
-    fn donate_failure(
+    fn invest_failure(
         &mut self,
         name: &str,
         have: Credit,
@@ -313,13 +422,13 @@ impl IdleThingState {
         }
 
         if thread_rng().gen_bool(1.0 / 2.0) {
-            self.donate_failure(name, have, want)
+            self.invest_failure(name, have, want)
         } else {
-            self.donate_success(name, have, want)
+            self.invest_success(name, have, want)
         }
     }
 
-    pub fn donate(&mut self, name: &str, want: Credit) -> Result<Donation, IdleThingError> {
+    pub fn invest(&mut self, name: &str, want: Credit) -> Result<Donation, IdleThingError> {
         if let Some(have) = self.get_credits_for(name) {
             self.try_donation(name, have, want)
         } else {
@@ -396,11 +505,11 @@ mod tests {
     }
 
     #[test]
-    fn test_donate() {
+    fn test_invest() {
         let mut ch = IdleThingState::default();
 
         assert_eq!(
-            ch.donate("test", 10),
+            ch.invest("test", 10),
             Err(IdleThingError::NotEnoughCredits { have: 0, want: 10 })
         ); // not seen before. so zero credits
 
@@ -408,27 +517,27 @@ mod tests {
         assert_eq!(ch.increment("foo"), 10); // then +5
 
         assert_eq!(
-            ch.donate("test", 10),
+            ch.invest("test", 10),
             Err(IdleThingError::NotEnoughCredits { have: 0, want: 10 })
         ); // not seen before. so zero credits
 
         assert_eq!(
-            ch.donate_success("foo", 10, 5),
+            ch.invest_success("foo", 10, 5),
             Ok(Donation::Success { old: 10, new: 15 })
         );
 
         assert_eq!(
-            ch.donate_success("foo", 15, 15),
+            ch.invest_success("foo", 15, 15),
             Ok(Donation::Success { old: 15, new: 30 })
         );
 
         assert_eq!(
-            ch.donate_failure("foo", 30, 15),
+            ch.invest_failure("foo", 30, 15),
             Ok(Donation::Failure { old: 30, new: 15 })
         );
 
         assert_eq!(
-            ch.donate_failure("foo", 15, 15),
+            ch.invest_failure("foo", 15, 15),
             Ok(Donation::Failure { old: 15, new: 0 })
         );
 
