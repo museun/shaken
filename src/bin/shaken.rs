@@ -48,6 +48,7 @@ impl Shaken {
             let _builtin = Builtin::new(&bot, &config);
             let _shakespeare = Shakespeare::new(&bot, &config);
             let _idlething = IdleThing::new(&bot, &config);
+            let _display = Display::new(&bot, &config);
 
             bot.run(&config); // this blocks
             info!("disconnected");

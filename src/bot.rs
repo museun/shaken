@@ -56,15 +56,17 @@ impl Bot {
     }
 
     fn register(&self, config: &Config) {
-        self.proto().send(&format!("PASS {}", &config.twitch.pass));
-        self.proto().send(&format!("NICK {}", &config.twitch.nick));
+        let proto = self.proto();
+        proto.send(&format!("PASS {}", &config.twitch.pass));
+        proto.send(&format!("NICK {}", &config.twitch.nick));
         // this is needed for real irc servers
-        self.proto().send(&format!(
+        proto.send(&format!(
             "USER {} * 8 :{}",
             &config.twitch.nick, &config.twitch.nick
         ));
 
-        // TODO: request some CAPS
+        // ircv3 stuff
+        proto.send("CAP REQ :twitch.tv/tags");
     }
 
     pub fn run(&self, config: &Config) {

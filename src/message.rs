@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::fmt;
 
 #[derive(Debug, Clone)]
@@ -5,6 +6,7 @@ pub struct Envelope {
     pub channel: String,
     pub sender: Prefix,
     pub data: String,
+    pub tags: HashMap<String, String>,
 }
 
 impl Envelope {
@@ -16,6 +18,7 @@ impl Envelope {
             channel: msg.args[0].to_string(),
             sender: msg.prefix.unwrap(),
             data: msg.data.to_string(),
+            tags: msg.tags,
         }
     }
 
@@ -30,8 +33,23 @@ impl Envelope {
     }
 }
 
+// make sure it has caps before sending to this function
+fn parse_tags(s: &str) -> (&str, HashMap<String, String>) {
+    let n = s.find(' ').unwrap();
+    let sub = &s[..n];
+    let mut map = HashMap::new();
+    for part in sub.split_terminator(';') {
+        if let Some(index) = part.find('=') {
+            let (k, v) = (&part[..index], &part[index + 1..]);
+            map.insert(k.into(), v.into());
+        }
+    }
+    (&s[n + 1..], map)
+}
+
 #[derive(Debug, PartialEq, Clone)]
 pub struct Message {
+    pub tags: HashMap<String, String>,
     pub prefix: Option<Prefix>,
     pub command: String,
     pub args: Vec<String>,
@@ -41,6 +59,12 @@ pub struct Message {
 impl Message {
     // should probably return a result
     pub fn parse(input: &str) -> Message {
+        let (input, tags) = if !input.starts_with(':') {
+            parse_tags(&input)
+        } else {
+            (input, HashMap::new())
+        };
+
         let prefix = Prefix::parse(&input);
 
         let iter = input
@@ -60,6 +84,7 @@ impl Message {
         };
 
         Self {
+            tags,
             prefix,
             command,
             args,
@@ -104,6 +129,7 @@ pub enum Prefix {
 impl Prefix {
     pub fn parse(input: &str) -> Option<Self> {
         if !input.starts_with(':') {
+            // XXX: will this be a problem?
             None?;
         }
 
@@ -138,6 +164,7 @@ impl fmt::Display for Prefix {
     }
 }
 
+/*
 #[cfg(test)]
 mod test {
     use super::*;
@@ -258,3 +285,4 @@ mod test {
         );
     }
 }
+*/

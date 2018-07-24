@@ -6,3 +6,6 @@ pub use self::shakespeare::*;
 
 mod idlething;
 pub use self::idlething::*;
+
+mod display;
+pub use self::display::*;
