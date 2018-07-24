@@ -24,6 +24,11 @@ impl IdleThing {
         });
 
         let next = Arc::clone(&this);
+        bot.on_command("!give", move |bot, env| {
+            next.write().unwrap().give_command(bot, env);
+        });
+
+        let next = Arc::clone(&this);
         bot.on_command("!check", move |bot, env| {
             next.write().unwrap().check_command(bot, env);
         });
@@ -92,15 +97,26 @@ impl IdleThing {
         }
     }
 
+    fn give_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
+        if let Some(who) = env.get_nick() {
+            if let Some(credits) = self.state.get_credits_for(&who) {
+                bot.reply(
+                    &env,
+                    &format!("you have {} credits", credits.comma_separate()),
+                )
+            } else {
+                bot.reply(&env, "you have no credits")
+            }
+        }
+    }
+
     fn check_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
         if let Some(who) = env.get_nick() {
             if let Some(credits) = self.state.get_credits_for(&who) {
-                let credits = if credits > 0 {
-                    credits.comma_separate()
-                } else {
-                    "no".into()
-                };
-                bot.reply(&env, &format!("you have {} credits", credits))
+                bot.reply(
+                    &env,
+                    &format!("you have {} credits", credits.comma_separate()),
+                )
             } else {
                 bot.reply(&env, "you have no credits")
             }
@@ -161,7 +177,7 @@ pub enum Donation {
     Failure { old: Credit, new: Credit },
 }
 
-#[derive(Debug, Deserialize, Serialize, Default)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct IdleThingState {
     state: HashMap<String, Credit>, // this has to own the strings
 
@@ -171,6 +187,17 @@ pub struct IdleThingState {
     line_value: usize,
     #[serde(skip)]
     idle_value: usize,
+}
+
+impl Default for IdleThingState {
+    fn default() -> Self {
+        Self {
+            starting: 0,
+            line_value: 5,
+            idle_value: 1,
+            state: Default::default(),
+        }
+    }
 }
 
 impl Drop for IdleThingState {
@@ -300,8 +327,11 @@ impl IdleThingState {
         }
     }
 
+    // returns None if no value, or a 0
     pub fn get_credits_for(&self, name: &str) -> Option<Credit> {
-        self.state.get(name).cloned()
+        self.state
+            .get(name)
+            .and_then(|c| if *c == 0 { None } else { Some(*c) })
     }
 
     pub fn to_sorted<'a>(&'a self) -> Vec<(&'a str, Credit)> {
@@ -343,7 +373,7 @@ mod tests {
             ch.insert(&name)
         }
         for name in &names {
-            assert_eq!(ch.get_credits_for(&name), Some(0));
+            assert_eq!(ch.get_credits_for(&name), None);
         }
         assert_eq!(ch.get_credits_for("test"), None);
 
@@ -358,9 +388,9 @@ mod tests {
 
         ch.tick(&["foo", "baz", "quux"]);
         assert_eq!(ch.get_credits_for("foo"), Some(1)); // was already there when the tick happened
-        assert_eq!(ch.get_credits_for("bar"), Some(0)); // not there when the tick happened
-        assert_eq!(ch.get_credits_for("baz"), Some(0)); // new when the tick happened
-        assert_eq!(ch.get_credits_for("quux"), Some(0)); // new when the tick happened
+        assert_eq!(ch.get_credits_for("bar"), None); // not there when the tick happened
+        assert_eq!(ch.get_credits_for("baz"), None); // new when the tick happened
+        assert_eq!(ch.get_credits_for("quux"), None); // new when the tick happened
 
         mem::forget(ch); // don't serialize to disk
     }
