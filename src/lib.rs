@@ -16,6 +16,8 @@ mod humanize;
 mod message;
 mod util;
 
+mod twitch;
+
 mod modules;
 pub use modules::*;
 
