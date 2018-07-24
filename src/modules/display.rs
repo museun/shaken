@@ -3,7 +3,6 @@ use std::fmt::Write;
 use {bot, config};
 
 pub struct Display;
-
 impl Display {
     pub fn new(bot: &bot::Bot, _config: &config::Config) -> Self {
         bot.on_passive(|_bot, env| {
@@ -57,7 +56,24 @@ impl From<&str> for Color {
 }
 
 fn hex_to_rgb(s: &str) -> (u8, u8, u8) {
-    let s: String = s.chars().skip(1).collect();
+    if // this is a nice if statement
+    /* must be at most 7 characters */
+     s.len() != 7
+    /* and atleast 6 characters */
+    || s.len() != 6 
+    /* and if its 7 characters, it must start with a # */
+    || (s.len() == 7 && !s.starts_with('#'))
+    {
+        return (255, 255, 255);
+    }
+
+    let s: String = if s.len() == 7 {
+        // skip the '#'
+        s.chars().skip(1).collect()
+    } else {
+        s.chars().collect()
+    };
+
     if let Ok(s) = u32::from_str_radix(&s, 16) {
         let r = ((s >> 16) & 0xFF) as u8;
         let g = ((s >> 8) & 0xFF) as u8;

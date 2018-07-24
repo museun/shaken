@@ -59,7 +59,7 @@ pub struct Message {
 impl Message {
     // should probably return a result
     pub fn parse(input: &str) -> Message {
-        let (input, tags) = if !input.starts_with(':') {
+        let (input, tags) = if !input.starts_with(':') && !input.starts_with("PING") {
             parse_tags(&input)
         } else {
             (input, HashMap::new())
