@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::Write;
+use std::io::{ErrorKind, Write};
 use toml;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -65,24 +65,37 @@ impl Default for Config {
 impl Config {
     pub fn load() -> Self {
         let data = fs::read_to_string(CONFIG_FILE)
-            .or_else(|_e| {
-                let default = Config::default();
-                toml::to_string(&default)
+            .map_err(|e| {
+                match e.kind() {
+                    ErrorKind::NotFound => {
+                        Config::default().save();
+                        warn!("created a default config at `{}`", CONFIG_FILE);
+                    }
+                    ErrorKind::PermissionDenied => {
+                        error!("cannot create a config file at `{}`", CONFIG_FILE);
+                    }
+                    _ => error!("unknown error: {}", e),
+                };
+                ::std::process::exit(1);
             })
             .unwrap();
 
-        toml::from_str(&data).expect("to parse config")
+        toml::from_str(&data)
+            .map_err(|e| {
+                error!("unable to parse config: {}", e);
+                ::std::process::exit(1);
+            })
+            .unwrap()
     }
 
-    pub fn save(&self) {
+    fn save(&self) {
         let s = toml::to_string_pretty(&self).expect("to generate correct config");
-        let mut f = fs::File::create(CONFIG_FILE).expect("to be able to open file");
+        let mut f = fs::File::create(CONFIG_FILE)
+            .map_err(|e| {
+                error!("unable to create config at `{}` -- {}", CONFIG_FILE, e);
+                ::std::process::exit(1);
+            })
+            .unwrap();
         writeln!(f, "{}", s).expect("to write config");
-    }
-}
-
-impl Drop for Config {
-    fn drop(&mut self) {
-        self.save()
     }
 }
