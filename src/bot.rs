@@ -1,7 +1,6 @@
 use crate::config::Config;
 use crate::conn::Proto;
 use crate::message::{Envelope, Message};
-use crate::util::http_get;
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
@@ -13,13 +12,13 @@ pub struct Bot {
     handlers: RwLock<Vec<Handler>>,
     output: RwLock<VecDeque<String>>,
     inspect: RwLock<Inspector>,
+    nick: RwLock<String>,
 }
 
 struct Inner<'a> {
     proto: Arc<Box<Proto + 'a>>,
     #[allow(dead_code)] // this isn't used yet
     channels: Vec<String>,
-    nick: String,
 }
 
 impl Bot {
@@ -27,7 +26,6 @@ impl Bot {
         let inner = RwLock::new(Inner {
             proto: Arc::new(Box::new(proto)),
             channels: config.twitch.channels.to_vec(),
-            nick: config.twitch.nick.to_string(),
         });
 
         Self {
@@ -35,6 +33,7 @@ impl Bot {
             handlers: RwLock::new(vec![]),
             inspect: RwLock::new(|_, _, _| {}),
             output: RwLock::new(VecDeque::new()),
+            nick: RwLock::new(config.twitch.nick.to_string()),
         }
     }
 
@@ -44,8 +43,8 @@ impl Bot {
     }
 
     pub fn nick(&self) -> String {
-        let inner = self.inner.read().unwrap();
-        inner.nick.to_string()
+        let inner = self.nick.read().unwrap();
+        inner.to_string()
     }
 
     pub fn reply(&self, env: &Envelope, msg: &str) {
@@ -102,11 +101,12 @@ impl Bot {
         while let Some(line) = self.proto().read() {
             let msg = Message::parse(&line);
             // TODO determine if we've actually gotten the right cap response
-            //> @color=<color>;display-name=<display-name>;emote-sets=<emote-sets>;turbo=<turbo>;user-id=<user-id>;user-type=<user-type> :tmi.twitch.tv GLOBALUSERSTATE
 
             if msg.command == "GLOBALUSERSTATE" {
                 debug!("got our caps");
                 caps = msg.tags.clone();
+                //display-name=shaken_bot
+                *self.nick.write().unwrap() = caps["display-name"].to_string();
             }
 
             // hide the ping spam
@@ -134,14 +134,12 @@ impl Bot {
                             f(&self, &env)
                         }
                     }
-                    (Some(ref env), Handler::Passive(f)) => {
-                        f(&self, &env);
-                    }
+                    (Some(ref env), Handler::Passive(f)) => f(&self, &env),
                     (None, Handler::Raw(cmd, f)) => {
                         if cmd == &msg.command {
                             // hide the ping spam
                             if &msg.command != "PING" {
-                                debug!("running server: {}", cmd);
+                                debug!("running raw handler: {}", cmd);
                             }
                             f(&self, &msg)
                         }
@@ -194,27 +192,4 @@ pub enum Handler {
     Command(&'static str, Box<Fn(&Bot, &Envelope)>),
     Passive(Box<Fn(&Bot, &Envelope)>),
     Raw(&'static str, Box<Fn(&Bot, &Message)>),
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Chatters {
-    pub moderators: Vec<String>,
-    pub staff: Vec<String>,
-    pub admins: Vec<String>,
-    pub global_mods: Vec<String>,
-    pub viewers: Vec<String>,
-}
-
-#[derive(Deserialize, Debug)]
-pub struct Names {
-    pub chatter_count: usize,
-    pub chatters: Chatters,
-}
-
-pub fn get_names_for(ch: &str) -> Option<Names> {
-    let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch);
-    if let Some(resp) = http_get(&url) {
-        return serde_json::from_str::<Names>(&resp).ok();
-    }
-    None
 }

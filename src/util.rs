@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 use curl::easy::Easy;
 
-pub fn http_get(url: &str) -> Option<String> {
+pub fn http_get<S: AsRef<str>>(url: S) -> Option<String> {
     let mut vec = Vec::new();
     let mut easy = Easy::new();
-    easy.url(url).ok()?;
+    easy.url(url.as_ref()).ok()?;
     {
         let mut transfer = easy.transfer();
         let _ = transfer.write_function(|data| {

@@ -54,7 +54,7 @@ impl Proto for Conn {
     fn send(&self, data: &str) {
         // XXX: might want to rate limit here
         let mut writer = self.writer.lock().unwrap();
-        for part in split(&data) {
+        for part in split(data) {
             // don't log the password
             if &part[..4] != "PASS" {
                 let line = &part[..part.len() - 2];
@@ -80,7 +80,9 @@ impl Proto for Conn {
     }
 }
 
-fn split(raw: &str) -> Vec<String> {
+fn split<S: AsRef<str>>(raw: S) -> Vec<String> {
+    let raw = raw.as_ref();
+
     if raw.len() > 510 - 2 && raw.contains(':') {
         let split = raw.splitn(2, ':').map(|s| s.trim()).collect::<Vec<_>>();
         let (head, tail) = (split[0], split[1]);
@@ -111,16 +113,8 @@ pub trait Proto {
         self.send(&format!("PRIVMSG {} :{}", target, data))
     }
 
-    fn notice(&self, target: &str, data: &str) {
-        self.send(&format!("NOTICE {} :{}", target, data))
-    }
-
     fn join(&self, channel: &str) {
         self.send(&format!("JOIN {}", channel))
-    }
-
-    fn part(&self, channel: &str) {
-        self.send(&format!("PART {}", channel))
     }
 
     fn read(&self) -> Option<String>;

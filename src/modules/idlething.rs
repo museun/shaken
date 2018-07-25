@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::thread;
 use std::time::{Duration, Instant};
-use std::{fmt::Write, fs, str};
+use std::{fs, str};
 
 use crate::{bot, config, humanize::*, message, twitch};
 
@@ -50,41 +50,41 @@ impl IdleThing {
         let dur = Duration::from_secs(config.idlething.interval as u64);
         let next = Arc::clone(&this);
 
-        let me = config.twitch.nick.clone();
-
+        let me = bot.nick();
         let config = config.clone();
-        thread::spawn(move || loop {
+        thread::spawn(move || {
+            let ch = "museun"; // TODO iterate thru all channels
             let client = twitch::TwitchClient::new(&config);
 
-            let ch = "museun"; // TODO iterate thru all channels
+            loop {
+                trace!("getting names for #{}", ch);
+                if let Some(names) = twitch::get_names_for(ch) {
+                    let mut v = Vec::with_capacity(names.chatter_count);
+                    v.extend(names.chatters.moderators);
+                    v.extend(names.chatters.staff);
+                    v.extend(names.chatters.admins);
+                    v.extend(names.chatters.global_mods);
+                    v.extend(names.chatters.viewers);
 
-            trace!("getting names for #{}", ch);
-            if let Some(names) = bot::get_names_for(ch) {
-                let mut v = Vec::with_capacity(names.chatter_count);
-                v.extend(names.chatters.moderators);
-                v.extend(names.chatters.staff);
-                v.extend(names.chatters.admins);
-                v.extend(names.chatters.global_mods);
-                v.extend(names.chatters.viewers);
-
-                // ignore self
-                if let Some(n) = v.iter().position(|s| s == &me) {
-                    v.remove(n);
-                }
-
-                trace!("names for {}: {:?}", &ch, &v);
-                if let Some(users) = client.get_users(&v) {
-                    let mut vec = vec![];
-                    for user in &users {
-                        vec.push(user.id.to_string())
+                    // remove myself. this is using the nick from the config
+                    if let Some(n) = v.iter().position(|s| s == &me) {
+                        v.remove(n);
                     }
 
-                    trace!("ids: {:?}", &vec);
-                    next.write().unwrap().state.tick(&vec);
+                    trace!("names for {}: {:?}", &ch, &v);
+                    if let Some(users) = client.get_users(&v) {
+                        let mut vec = vec![];
+                        for user in &users {
+                            vec.push(user.id.to_string())
+                        }
+
+                        trace!("ids: {:?}", &vec);
+                        next.write().unwrap().state.tick(&vec);
+                    }
                 }
+                next.write().unwrap().state.save();
+                thread::sleep(dur);
             }
-            next.write().unwrap().state.save();
-            thread::sleep(dur);
         });
 
         this
@@ -202,6 +202,11 @@ impl IdleThing {
             }
         };
 
+        if target == bot.nick() {
+            bot.reply(&env, "I don't want any credits.");
+            return;
+        }
+
         let tid = match self.lookup_id_for(&target) {
             Some(id) => id,
             None => {
@@ -266,25 +271,6 @@ impl IdleThing {
     }
 
     fn top_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        fn format<S, V>(list: V) -> String
-        where
-            S: AsRef<str>,
-            V: AsRef<[(S, usize)]>,
-        {
-            let mut buf = String::new();
-            for (i, (k, v)) in list.as_ref().iter().enumerate() {
-                write!(&mut buf, "(#{}) {}: {}, ", i + 1, k.as_ref(), v);
-            }
-            let mut buf = buf.trim();
-            if let Some(c) = buf.chars().last() {
-                if c == ',' {
-                    buf = &buf[..buf.len() - 1]
-                }
-            }
-            buf.to_string()
-        }
-
-        // TODO figure out how to use the iterator directly
         let sorted = self.state.to_sorted();
         let ids = sorted.iter().take(5).map(|(s, _)| *s).collect::<Vec<_>>();;
         trace!("ids: {:?}", ids);
@@ -294,10 +280,10 @@ impl IdleThing {
                 .iter()
                 .take(5)
                 .enumerate()
-                .map(|(i, (_n, c))| (ids[i].0.clone(), *c))
-                .collect::<Vec<_>>();
+                .map(|(i, (_n, c))| format!("(#{}) {}: {}", i + 1, ids[i].0.clone(), *c));
 
-            bot.reply(&env, &format(&list));
+            let res = ::util::join_with(list, ", ");
+            bot.reply(&env, &res);
         }
     }
 
@@ -390,15 +376,12 @@ impl IdleThingState {
 
     pub fn tick<S: AsRef<str>>(&mut self, names: &[S]) {
         let (idle_value, starting) = (self.idle_value, self.starting);
-
         for name in names.iter().map(|s| s.as_ref().to_string()) {
-            let copy = name.to_string(); // this is expensive
-            let new = self
+            self
                 .state
                 .entry(name) // I guess I could borrow the heap allocated strings. or use a Cow?
                 .and_modify(|p| *p += idle_value)
                 .or_insert(starting);
-            trace!("tick: incrementing {}'s credits to {}", &copy, new)
         }
     }
 

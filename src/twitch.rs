@@ -155,3 +155,26 @@ pub struct Stream {
     pub viewer_count: usize,
     pub started_at: String, // this should be a timestamp
 }
+
+#[derive(Deserialize, Debug)]
+pub struct Chatters {
+    pub moderators: Vec<String>,
+    pub staff: Vec<String>,
+    pub admins: Vec<String>,
+    pub global_mods: Vec<String>,
+    pub viewers: Vec<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Names {
+    pub chatter_count: usize,
+    pub chatters: Chatters,
+}
+
+pub fn get_names_for<S: AsRef<str>>(ch: S) -> Option<Names> {
+    let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch.as_ref());
+    if let Some(resp) = ::util::http_get(&url) {
+        return serde_json::from_str::<Names>(&resp).ok();
+    }
+    None
+}
