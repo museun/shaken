@@ -1,4 +1,4 @@
-use crate::{bot, config};
+use crate::{bot, config, humanize::*, twitch, util};
 
 pub struct Builtin;
 
@@ -37,8 +37,22 @@ impl Builtin {
 
         bot.on_command("!commands", |bot, env| {
             let commands = bot.get_commands();
-            let commands = ::util::join_with(commands.iter(), " ");
+            let commands = util::join_with(commands.iter(), " ");
             bot.say(&env, &format!("available commands: {}", commands));
+        });
+
+        let config = config.clone();
+        let twitch = twitch::TwitchClient::new(&config);
+        bot.on_command("!viewers", move |bot, env| {
+            // TODO make this configurable
+            if let Some(streams) = twitch.get_streams(&["museun"]) {
+                if let Some(stream) = streams.get(0) {
+                    bot.say(
+                        &env,
+                        &format!("viewers: {}", stream.viewer_count.comma_separate()),
+                    )
+                }
+            }
         });
 
         Self {}
