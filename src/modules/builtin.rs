@@ -1,5 +1,8 @@
 use crate::{bot, config, humanize::*, twitch, util};
 
+use chrono::prelude::*; // this should be using serde on the twitch client
+use std::sync::Arc;
+
 pub struct Builtin;
 
 impl Builtin {
@@ -41,18 +44,48 @@ impl Builtin {
             bot.say(&env, &format!("available commands: {}", commands));
         });
 
-        let config = config.clone();
-        let twitch = twitch::TwitchClient::new(&config);
+        let twitch = Arc::new(twitch::TwitchClient::new(&config.clone()));
+        let next = Arc::clone(&twitch);
         bot.on_command("!viewers", move |bot, env| {
             // TODO make this configurable
-            if let Some(streams) = twitch.get_streams(&["museun"]) {
+            if let Some(streams) = next.get_streams(&["museun"]) {
                 if let Some(stream) = streams.get(0) {
-                    bot.say(
-                        &env,
-                        &format!("viewers: {}", stream.viewer_count.comma_separate()),
-                    )
+                    if stream.live.is_empty() {
+                        bot.say(&env, "the stream doesn't seem to be live");
+                    } else {
+                        let viewers = stream.viewer_count.comma_separate();
+                        bot.say(&env, &format!("viewers: {}", viewers));
+                    }
                 }
-            }
+            };
+        });
+
+        let next = Arc::clone(&twitch);
+        bot.on_command("!uptime", move |bot, env| {
+            // TODO make this configurable
+            if let Some(streams) = next.get_streams(&["museun"]) {
+                if let Some(stream) = streams.get(0) {
+                    if stream.live.is_empty() {
+                        bot.say(&env, "the stream doesn't seem to be live");
+                    } else {
+                        let start = stream
+                            .started_at
+                            .parse::<DateTime<Utc>>()
+                            .expect("to parse datetime");
+                        let now: DateTime<Utc> = Utc::now();
+                        let diff = now - start;
+                        let dur = diff.to_std().expect("to convert to std duration");
+
+                        bot.say(
+                            &env,
+                            &format!(
+                                "uptime (but probably not the start time): {}",
+                                dur.as_readable_time()
+                            ),
+                        );
+                    }
+                }
+            };
         });
 
         Self {}
