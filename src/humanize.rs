@@ -65,25 +65,40 @@ impl Timestamp for Duration {
             }
         }
 
-        fn plural(n: u64, s: &str) -> String {
-            format!("{} {}", n, if n > 1 { s } else { &s[..s.len() - 1] })
-        }
-
-        let mut list = time
-            .iter()
-            .filter_map(|(s, n)| if *n > 0 { Some(plural(*n, s)) } else { None })
-            .collect::<Vec<_>>();
-
-        let len = list.len();
-        if len > 1 {
-            if len > 2 {
-                for e in &mut list.iter_mut().take(len - 2) {
-                    e.push_str(",")
-                }
-            }
-            list.insert(len - 1, "and".into())
-        }
-
-        crate::util::join_with(list.iter(), " ")
+        format_time_map(&time)
     }
+}
+
+pub(crate) fn format_time_map<S, V>(list: V) -> String
+where
+    S: AsRef<str>,
+    V: AsRef<[(S, u64)]>,
+{
+    fn plural(n: u64, s: &str) -> String {
+        format!("{} {}", n, if n > 1 { s } else { &s[..s.len() - 1] })
+    }
+
+    let mut list = list
+        .as_ref()
+        .iter()
+        .filter_map(|(s, n)| {
+            if *n > 0 {
+                Some(plural(*n, s.as_ref()))
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    let len = list.len();
+    if len > 1 {
+        if len > 2 {
+            for e in &mut list.iter_mut().take(len - 2) {
+                e.push_str(",")
+            }
+        }
+        list.insert(len - 1, "and".into())
+    }
+
+    crate::util::join_with(list.iter(), " ")
 }
