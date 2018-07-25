@@ -6,11 +6,12 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::{fmt::Write, fs, str};
 
-use {bot, config, humanize::*, message};
+use {bot, config, humanize::*, message, twitch};
 
 pub struct IdleThing {
     state: IdleThingState,
     limit: HashMap<String, Instant>,
+    twitch: twitch::TwitchClient,
 }
 
 impl IdleThing {
@@ -18,6 +19,7 @@ impl IdleThing {
         let this = Arc::new(RwLock::new(Self {
             state: IdleThingState::load(&config),
             limit: HashMap::new(),
+            twitch: twitch::TwitchClient::new(&config),
         }));
 
         let next = Arc::clone(&this);
@@ -49,8 +51,13 @@ impl IdleThing {
         let next = Arc::clone(&this);
 
         let me = config.twitch.nick.clone();
+
+        let config = config.clone();
         thread::spawn(move || loop {
-            let ch = "museun";
+            let client = twitch::TwitchClient::new(&config);
+
+            let ch = "museun"; // TODO iterate thru all channels
+
             trace!("getting names for #{}", ch);
             if let Some(names) = bot::get_names_for(ch) {
                 let mut v = Vec::with_capacity(names.chatter_count);
@@ -66,7 +73,15 @@ impl IdleThing {
                 }
 
                 trace!("names for {}: {:?}", &ch, &v);
-                next.write().unwrap().state.tick(&v);
+                if let Some(users) = client.get_users(&v) {
+                    let mut vec = vec![];
+                    for user in &users {
+                        vec.push(user.id.to_string())
+                    }
+
+                    trace!("ids: {:?}", &vec);
+                    next.write().unwrap().state.tick(&vec);
+                }
             }
             next.write().unwrap().state.save();
             thread::sleep(dur);
@@ -90,7 +105,7 @@ impl IdleThing {
     }
 
     fn invest_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        let who = match env.get_nick() {
+        let who = match env.get_id() {
             Some(who) => who,
             None => return,
         };
@@ -144,11 +159,26 @@ impl IdleThing {
         }
     }
 
+    fn lookup_id_for(&self, s: &str) -> Option<String> {
+        if let Some(list) = self.twitch.get_users(&[s]) {
+            if let Some(item) = list.get(0) {
+                return Some(item.id.to_string());
+            }
+        }
+        None
+    }
+
     fn give_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        let who = match env.get_nick() {
+        let who = match env.get_id() {
             Some(who) => who,
             None => return,
         };
+
+        let sender = match env.get_nick() {
+            Some(sender) => sender,
+            None => return,
+        };
+
         let (target, data) = match env.data.split_whitespace().take(1).next() {
             Some(target) => (target, &env.data[target.len()..]),
             None => {
@@ -157,7 +187,15 @@ impl IdleThing {
             }
         };
 
-        if who.eq_ignore_ascii_case(target) {
+        let target = match self.lookup_id_for(&target) {
+            Some(id) => id,
+            None => {
+                bot.reply(&env, "I don't know who that is");
+                return;
+            }
+        };
+
+        if sender == target {
             bot.reply(&env, "what are you doing?");
             return;
         }
@@ -197,7 +235,7 @@ impl IdleThing {
     }
 
     fn check_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        let who = match env.get_nick() {
+        let who = match env.get_id() {
             Some(who) => who,
             None => return,
         };
@@ -237,7 +275,7 @@ impl IdleThing {
             return;
         }
 
-        if let Some(who) = env.get_nick() {
+        if let Some(who) = env.get_id() {
             self.state.increment(&who);
         }
     }
@@ -247,13 +285,6 @@ impl IdleThing {
         num.parse::<usize>().ok()
     }
 }
-
-/* plans:
-keep track of the user color
-keep track of the user display name
-does the IdleThing have a 'bank?'
-is there a chance to "take" the bank?
-*/
 
 const IDLE_STORE: &str = "idlething.json";
 

@@ -136,22 +136,22 @@ fn encode(data: &str) -> String {
 
 #[derive(Deserialize, Debug)]
 pub struct User {
-    id: String,
-    login: String,
-    display_name: String,
+    pub id: String,
+    pub login: String,
+    pub display_name: String,
     #[serde(rename = "type")]
-    role: String,
-    description: String,
+    pub role: String,
+    pub description: String,
 }
 
 #[derive(Deserialize, Debug)]
 pub struct Stream {
-    id: String,
-    user_id: String,
-    game_id: String,
+    pub id: String,
+    pub user_id: String,
+    pub game_id: String,
     #[serde(rename = "type")]
-    live: String,
-    title: String,
-    viewer_count: usize,
-    started_at: String, // this should be a timestamp
+    pub live: String,
+    pub title: String,
+    pub viewer_count: usize,
+    pub started_at: String, // this should be a timestamp
 }

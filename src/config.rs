@@ -2,14 +2,14 @@ use std::fs;
 use std::io::Write;
 use toml;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
     pub twitch: Twitch,
     pub shakespeare: Shakespeare,
     pub idlething: IdleThing,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Twitch {
     pub addr: String,
     pub port: u32,
@@ -19,14 +19,14 @@ pub struct Twitch {
     pub channels: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Shakespeare {
     pub chance: f64,
     pub bypass: usize,
     pub interval: usize,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct IdleThing {
     pub starting: usize,
     pub line_value: usize,

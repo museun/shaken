@@ -31,6 +31,16 @@ impl Envelope {
         warn!("no nick attached to that message");
         None
     }
+
+    pub fn get_id(&self) -> Option<&String> {
+        match self.tags.get("user-id") {
+            Some(id) => Some(id),
+            None => {
+                warn!("no user-id attached to that message");
+                None
+            }
+        }
+    }
 }
 
 // make sure it has caps before sending to this function
