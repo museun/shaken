@@ -1,4 +1,4 @@
-use {bot, config};
+use crate::{bot, config};
 
 pub struct Builtin;
 

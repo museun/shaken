@@ -6,7 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::{fmt::Write, fs, str};
 
-use {bot, config, humanize::*, message, twitch, util};
+use crate::{bot, config, humanize::*, message, twitch};
 
 pub struct IdleThing {
     state: IdleThingState,
@@ -524,7 +524,7 @@ impl IdleThingState {
 mod tests {
     use super::*;
     extern crate env_logger;
-    use humanize::CommaSeparated;
+    use crate::humanize::CommaSeparated;
     use std::mem;
 
     fn dump(ch: &IdleThingState) {

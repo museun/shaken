@@ -3,7 +3,7 @@ use rand::prelude::*;
 use std::sync::{Arc, RwLock};
 use std::time;
 
-use {bot, config, message, util::http_get};
+use crate::{bot, config, message, util::http_get};
 
 pub struct Shakespeare {
     previous: Option<time::Instant>,

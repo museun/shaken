@@ -1,6 +1,6 @@
 use std::fmt::Write;
 
-use {bot, config};
+use crate::{bot, config};
 
 pub struct Display;
 impl Display {

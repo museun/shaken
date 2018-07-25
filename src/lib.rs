@@ -19,7 +19,7 @@ mod util;
 mod twitch;
 
 mod modules;
-pub use modules::*;
+pub use crate::modules::*;
 
 mod bot;
 pub use crate::bot::Bot;

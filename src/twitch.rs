@@ -1,4 +1,6 @@
-use config::Config;
+#![allow(dead_code)]
+
+use crate::config::Config;
 use curl::easy::{Easy, List};
 
 pub struct TwitchClient {
