@@ -25,11 +25,11 @@ impl Builtin {
                 rev, branch
             );
 
-            bot.reply(&env, &msg);
+            bot.say(&env, &msg);
         });
 
         bot.on_command("!shaken", |bot, env| {
-            bot.reply(
+            bot.say(
                 &env,
                 "I try to impersonate The Bard, by being trained on all of his works.",
             );
@@ -38,7 +38,7 @@ impl Builtin {
         bot.on_command("!commands", |bot, env| {
             let commands = bot.get_commands();
             let commands = ::util::join_with(commands.iter(), " ");
-            bot.reply(&env, &format!("available commands: {}", commands));
+            bot.say(&env, &format!("available commands: {}", commands));
         });
 
         Self {}
