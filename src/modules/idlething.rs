@@ -282,7 +282,7 @@ impl IdleThing {
                 .enumerate()
                 .map(|(i, (_n, c))| format!("(#{}) {}: {}", i + 1, ids[i].0.clone(), *c));
 
-            let res = ::util::join_with(list, ", ");
+            let res = crate::util::join_with(list, ", ");
             bot.reply(&env, &res);
         }
     }

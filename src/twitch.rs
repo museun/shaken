@@ -173,7 +173,7 @@ pub struct Names {
 
 pub fn get_names_for<S: AsRef<str>>(ch: S) -> Option<Names> {
     let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch.as_ref());
-    if let Some(resp) = ::util::http_get(&url) {
+    if let Some(resp) = crate::util::http_get(&url) {
         return serde_json::from_str::<Names>(&resp).ok();
     }
     None

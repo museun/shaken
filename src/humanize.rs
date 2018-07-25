@@ -84,6 +84,6 @@ impl Timestamp for Duration {
             list.insert(len - 1, "and".into())
         }
 
-        ::util::join_with(list.iter(), " ")
+        crate::util::join_with(list.iter(), " ")
     }
 }
