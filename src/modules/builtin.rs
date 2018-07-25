@@ -34,6 +34,13 @@ impl Builtin {
                 "I try to impersonate The Bard, by being trained on all of his works.",
             );
         });
+
+        bot.on_command("!commands", |bot, env| {
+            let commands = bot.get_commands();
+            let commands = ::util::join_with(commands.iter(), " ");
+            bot.reply(&env, &format!("available commands: {}", commands));
+        });
+
         Self {}
     }
 }

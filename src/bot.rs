@@ -93,6 +93,17 @@ impl Bot {
         ));
     }
 
+    pub fn get_commands(&self) -> Vec<String> {
+        let handlers = self.handlers.read().unwrap();
+        let mut vec = vec![];
+        for hn in handlers.iter() {
+            if let Handler::Command(cmd, _) = hn {
+                vec.push(cmd.to_string());
+            }
+        }
+        vec
+    }
+
     pub fn run(&self, config: &Config) {
         self.register(&config);
 
