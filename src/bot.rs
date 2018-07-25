@@ -6,11 +6,13 @@ use crate::util::http_get;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, RwLock};
 
+type Inspector = fn(&HashMap<String, String>, &str, &str);
+
 pub struct Bot {
     inner: RwLock<Inner<'static>>,
     handlers: RwLock<Vec<Handler>>,
     output: RwLock<VecDeque<String>>,
-    inspect: RwLock<fn(&HashMap<String, String>, &str, &str)>,
+    inspect: RwLock<Inspector>,
 }
 
 struct Inner<'a> {

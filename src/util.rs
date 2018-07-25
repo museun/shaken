@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use curl::easy::Easy;
 
 pub fn http_get(url: &str) -> Option<String> {
@@ -30,4 +31,12 @@ where
         buf.push_str(i.as_ref());
     }
     buf
+}
+
+pub(crate) mod testing {
+    pub fn init_logger() {
+        let _ = env_logger::Builder::from_default_env()
+            .default_format_timestamp(false)
+            .try_init();
+    }
 }

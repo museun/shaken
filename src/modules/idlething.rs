@@ -523,21 +523,7 @@ impl IdleThingState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    extern crate env_logger;
-    use crate::humanize::CommaSeparated;
     use std::mem;
-
-    fn dump(ch: &IdleThingState) {
-        for (k, v) in ch.to_sorted() {
-            debug!("{}: {}", k, v.comma_separate());
-        }
-    }
-
-    fn init_logger() {
-        let _ = env_logger::Builder::from_default_env()
-            .default_format_timestamp(false)
-            .try_init();
-    }
 
     #[test]
     fn test_default_insert() {
