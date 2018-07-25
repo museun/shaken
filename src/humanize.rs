@@ -48,29 +48,30 @@ impl Timestamp for Duration {
     }
 
     fn as_readable_time(&self) -> String {
-        let mut seconds = self.as_secs();
-        let days = seconds / (24 * 60 * 60);
-        seconds -= days;
-        let hours = seconds / (60 * 60);
-        seconds -= hours;
-        let minutes = (seconds / 60) % 60;
-        seconds -= minutes;
-        let seconds = seconds % 60;
-
-        let list = vec![
-            (days, "days"),
-            (hours, "hours"),
-            (minutes, "minutes"),
-            (seconds, "seconds"),
+        let table = [
+            ("days", 86400), // please
+            ("hours", 3600), // dont
+            ("minutes", 60), // format
+            ("seconds", 1),  // this :()
         ];
+
+        let mut time = vec![];
+        let mut secs = self.as_secs();
+        for (name, d) in &table {
+            let div = secs / d;
+            if div > 0 {
+                time.push((name, div));
+                secs -= d * div;
+            }
+        }
 
         fn plural(n: u64, s: &str) -> String {
             format!("{} {}", n, if n > 1 { s } else { &s[..s.len() - 1] })
         }
 
-        let mut list = list
+        let mut list = time
             .iter()
-            .filter_map(|(n, s)| if *n > 0 { Some(plural(*n, s)) } else { None })
+            .filter_map(|(s, n)| if *n > 0 { Some(plural(*n, s)) } else { None })
             .collect::<Vec<_>>();
 
         let len = list.len();
