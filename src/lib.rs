@@ -12,8 +12,6 @@ extern crate chrono;
 extern crate curl;
 extern crate rand;
 
-extern crate rusqlite;
-
 mod humanize;
 mod message;
 mod util;

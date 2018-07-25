@@ -47,45 +47,68 @@ impl Builtin {
         let twitch = Arc::new(twitch::TwitchClient::new(&config.clone()));
         let next = Arc::clone(&twitch);
         bot.on_command("!viewers", move |bot, env| {
-            // TODO make this configurable
-            if let Some(streams) = next.get_streams(&["museun"]) {
-                if let Some(stream) = streams.get(0) {
-                    if stream.live.is_empty() {
+            // have to duplicate it because of its scoping. still cleaner this way
+            macro_rules! maybe {
+                ($e:expr) => {
+                    if $e {
                         bot.say(&env, "the stream doesn't seem to be live");
-                    } else {
-                        let viewers = stream.viewer_count.comma_separate();
-                        bot.say(&env, &format!("viewers: {}", viewers));
+                        return;
                     }
-                }
-            };
+                };
+            }
+
+            // TODO make this configurable
+            let streams = next.get_streams(&["museun"]);
+            maybe!(streams.is_none());
+
+            let streams = streams.unwrap();
+            maybe!(streams.is_empty());
+
+            let stream = &streams[0];
+            maybe!(stream.live.is_empty() || stream.live == "");
+
+            let viewers = stream.viewer_count.comma_separate();
+            bot.say(&env, &format!("viewers: {}", viewers));
         });
 
         let next = Arc::clone(&twitch);
         bot.on_command("!uptime", move |bot, env| {
-            // TODO make this configurable
-            if let Some(streams) = next.get_streams(&["museun"]) {
-                if let Some(stream) = streams.get(0) {
-                    if stream.live.is_empty() {
+            // have to duplicate it because of its scoping. still cleaner this way
+            macro_rules! maybe {
+                ($e:expr) => {
+                    if $e {
                         bot.say(&env, "the stream doesn't seem to be live");
-                    } else {
-                        let start = stream
-                            .started_at
-                            .parse::<DateTime<Utc>>()
-                            .expect("to parse datetime");
-                        let now: DateTime<Utc> = Utc::now();
-                        let diff = now - start;
-                        let dur = diff.to_std().expect("to convert to std duration");
-
-                        bot.say(
-                            &env,
-                            &format!(
-                                "uptime (but probably not the start time): {}",
-                                dur.as_readable_time()
-                            ),
-                        );
+                        return;
                     }
-                }
-            };
+                };
+            }
+
+            // TODO make this configurable
+            let streams = next.get_streams(&["museun"]);
+            maybe!(streams.is_none());
+
+            let streams = streams.unwrap();
+            maybe!(streams.is_empty());
+
+            let stream = &streams[0];
+            maybe!(stream.live.is_empty() || stream.live == "");
+
+            let start = stream
+                .started_at
+                .parse::<DateTime<Utc>>()
+                .expect("to parse datetime");
+
+            let dur = (Utc::now() - start)
+                .to_std()
+                .expect("to convert to std duration");
+
+            bot.say(
+                &env,
+                &format!(
+                    "uptime (but probably not the start time): {}",
+                    dur.as_readable_time()
+                ),
+            );
         });
 
         Self {}

@@ -52,7 +52,7 @@ impl Timestamp for Duration {
             ("days", 86400), // please
             ("hours", 3600), // dont
             ("minutes", 60), // format
-            ("seconds", 1),  // this :()
+            ("seconds", 1),  // this :(
         ];
 
         let mut time = vec![];
