@@ -6,7 +6,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::{fmt::Write, fs, str};
 
-use {bot, config, humanize::*, message, twitch};
+use {bot, config, humanize::*, message, twitch, util};
 
 pub struct IdleThing {
     state: IdleThingState,
@@ -159,11 +159,26 @@ impl IdleThing {
         }
     }
 
-    fn lookup_id_for(&self, s: &str) -> Option<String> {
-        if let Some(list) = self.twitch.get_users(&[s]) {
+    fn lookup_id_for(&self, name: &str) -> Option<String> {
+        if let Some(list) = self.twitch.get_users(&[name]) {
             if let Some(item) = list.get(0) {
                 return Some(item.id.to_string());
             }
+        }
+        None
+    }
+
+    fn lookup_display_for<S, V>(&self, ids: V) -> Option<Vec<(String, String)>>
+    where
+        S: AsRef<str>,
+        V: AsRef<[S]>,
+    {
+        if let Some(list) = self.twitch.get_users_from_ids(ids.as_ref()) {
+            return Some(
+                list.iter()
+                    .map(|user| (user.display_name.clone(), user.id.clone()))
+                    .collect(),
+            );
         }
         None
     }
@@ -187,7 +202,7 @@ impl IdleThing {
             }
         };
 
-        let target = match self.lookup_id_for(&target) {
+        let tid = match self.lookup_id_for(&target) {
             Some(id) => id,
             None => {
                 bot.reply(&env, "I don't know who that is");
@@ -206,10 +221,10 @@ impl IdleThing {
                 return;
             }
 
-            debug!("{} wants to give {} {} credits", who, target, num);
+            debug!("{} wants to give {} {} credits", who, tid, num);
             if let Some(credits) = self.state.get_credits_for(&who) {
                 if num <= credits {
-                    let c = self.state.give(&target, num);
+                    let c = self.state.give(&tid, num);
                     let d = self.state.take(&who, num);
 
                     bot.reply(
@@ -251,10 +266,14 @@ impl IdleThing {
     }
 
     fn top_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        fn comma_join(list: &[(&str, usize)]) -> String {
+        fn format<S, V>(list: V) -> String
+        where
+            S: AsRef<str>,
+            V: AsRef<[(S, usize)]>,
+        {
             let mut buf = String::new();
-            for (i, (k, v)) in list.iter().enumerate() {
-                write!(&mut buf, "(#{}) {}: {}, ", i + 1, k, v);
+            for (i, (k, v)) in list.as_ref().iter().enumerate() {
+                write!(&mut buf, "(#{}) {}: {}, ", i + 1, k.as_ref(), v);
             }
             let mut buf = buf.trim();
             if let Some(c) = buf.chars().last() {
@@ -265,9 +284,21 @@ impl IdleThing {
             buf.to_string()
         }
 
+        // TODO figure out how to use the iterator directly
         let sorted = self.state.to_sorted();
-        let res = comma_join(&sorted.iter().take(5).cloned().collect::<Vec<_>>());
-        bot.reply(&env, &res);
+        let ids = sorted.iter().take(5).map(|(s, _)| *s).collect::<Vec<_>>();;
+        trace!("ids: {:?}", ids);
+
+        if let Some(ids) = self.lookup_display_for(ids) {
+            let list = sorted
+                .iter()
+                .take(5)
+                .enumerate()
+                .map(|(i, (_n, c))| (ids[i].0.clone(), *c))
+                .collect::<Vec<_>>();
+
+            bot.reply(&env, &format(&list));
+        }
     }
 
     fn on_message(&mut self, _bot: &bot::Bot, env: &message::Envelope) {

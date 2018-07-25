@@ -98,7 +98,6 @@ impl TwitchClient {
             transfer.perform().ok()?;
         }
 
-        let json = String::from_utf8(vec.to_vec()).unwrap();
         let value = serde_json::from_slice::<serde_json::Value>(&vec)
             .map_err(|e| {
                 error!("parse json: {}", e);
