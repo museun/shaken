@@ -1,6 +1,8 @@
+use testing::TestConn;
+
 use std::io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines};
 use std::net::{self, TcpStream, ToSocketAddrs};
-use std::sync::Mutex;
+use std::sync::{Arc, RwLock};
 use std::{fmt, str};
 
 pub enum ConnError {
@@ -17,24 +19,45 @@ impl fmt::Display for ConnError {
     }
 }
 
-pub struct Conn {
-    reader: Mutex<Lines<BufReader<TcpStream>>>,
-    writer: Mutex<BufWriter<TcpStream>>,
+pub enum Conn {
+    TcpConn(TcpConn),
+    TestConn(Arc<TestConn>),
 }
 
 impl Conn {
+    pub fn read(&self) -> Option<String> {
+        match *self {
+            Conn::TcpConn(ref conn) => conn.read(),
+            Conn::TestConn(ref conn) => conn.read(),
+        }
+    }
+
+    pub fn write(&self, data: &str) {
+        match *self {
+            Conn::TcpConn(ref conn) => conn.write(data),
+            Conn::TestConn(ref conn) => conn.write(data),
+        }
+    }
+}
+
+pub struct TcpConn {
+    reader: RwLock<Lines<BufReader<TcpStream>>>,
+    writer: RwLock<BufWriter<TcpStream>>,
+}
+
+impl TcpConn {
     pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, ConnError> {
         let conn = TcpStream::connect(&addr).map_err(ConnError::CannotConnect)?;
         debug!("connected");
 
         let reader = {
             let conn = conn.try_clone().expect("to clone stream");
-            Mutex::new(BufReader::new(conn).lines())
+            RwLock::new(BufReader::new(conn).lines())
         };
 
         let writer = {
             let conn = conn.try_clone().expect("to clone stream");
-            Mutex::new(BufWriter::new(conn))
+            RwLock::new(BufWriter::new(conn))
         };
 
         Ok(Self { reader, writer })
@@ -48,12 +71,10 @@ impl Conn {
         }
         trace!("end of run loop");
     }
-}
 
-impl Proto for Conn {
-    fn send(&self, data: &str) {
+    pub fn write(&self, data: &str) {
         // XXX: might want to rate limit here
-        let mut writer = self.writer.lock().unwrap();
+        let mut writer = self.writer.write().unwrap();
         for part in split(data) {
             // don't log the password
             if &part[..4] != "PASS" {
@@ -61,15 +82,13 @@ impl Proto for Conn {
                 trace!("--> {}", &line); // trim the \r\n
             }
 
-            // XXX: should check to make sure its writing
             let _ = writer.write_all(part.as_bytes());
         }
-        // XXX: and that its flushing
         let _ = writer.flush();
     }
 
-    fn read(&self) -> Option<String> {
-        let mut reader = self.reader.lock().unwrap();
+    pub fn read(&self) -> Option<String> {
+        let mut reader = self.reader.write().unwrap();
         if let Some(Ok(line)) = reader.next() {
             trace!("<-- {}", &line);
             Some(line)
@@ -104,19 +123,4 @@ fn split<S: AsRef<str>>(raw: S) -> Vec<String> {
     } else {
         vec![format!("{}\r\n", raw)]
     }
-}
-
-// this is mostly useless for now
-pub trait Proto {
-    fn privmsg(&self, target: &str, data: &str) {
-        debug!("> [{}]: {}", target, data);
-        self.send(&format!("PRIVMSG {} :{}", target, data))
-    }
-
-    fn join(&self, channel: &str) {
-        self.send(&format!("JOIN {}", channel))
-    }
-
-    fn read(&self) -> Option<String>;
-    fn send(&self, raw: &str);
 }

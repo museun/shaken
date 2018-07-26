@@ -3,9 +3,14 @@ use rand::prelude::*;
 use std::sync::{Arc, RwLock};
 use std::time;
 
-use crate::{bot, config, message, util::http_get};
+use crate::{bot, config, message};
 
 pub struct Shakespeare {
+    inner: RwLock<Inner>,
+}
+
+#[derive(Debug)]
+struct Inner {
     previous: Option<time::Instant>,
     limit: time::Duration,
     interval: f64,
@@ -14,34 +19,30 @@ pub struct Shakespeare {
 }
 
 impl Shakespeare {
-    pub fn new(bot: &bot::Bot, config: &config::Config) -> Arc<RwLock<Self>> {
-        let this = Arc::new(RwLock::new(Self {
-            previous: None,
-            limit: time::Duration::from_secs(config.shakespeare.interval as u64),
-            interval: config.shakespeare.interval as f64,
-            chance: config.shakespeare.chance,
-            bypass: config.shakespeare.bypass,
-        }));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!speak", move |bot, env| {
-            next.write().unwrap().speak(bot, env)
+    pub fn new(bot: &bot::Bot, config: &config::Config) -> Arc<Self> {
+        let this = Arc::new(Self {
+            inner: RwLock::new(Inner {
+                previous: None,
+                limit: time::Duration::from_secs(config.shakespeare.interval as u64),
+                interval: config.shakespeare.interval as f64,
+                chance: config.shakespeare.chance,
+                bypass: config.shakespeare.bypass,
+            }),
         });
 
         let next = Arc::clone(&this);
-        bot.on_passive(move |bot, env| {
-            next.write().unwrap().auto_speak(bot, env);
-        });
+        bot.on_command("!speak", move |bot, env| next.speak(bot, env));
 
         let next = Arc::clone(&this);
-        bot.on_passive(move |bot, env| {
-            next.write().unwrap().check_mentions(bot, env);
-        });
+        bot.on_passive(move |bot, env| next.auto_speak(bot, env));
+
+        let next = Arc::clone(&this);
+        bot.on_passive(move |bot, env| next.check_mentions(bot, env));
 
         this
     }
 
-    fn speak(&mut self, bot: &bot::Bot, env: &message::Envelope) {
+    fn speak(&self, bot: &bot::Bot, env: &message::Envelope) {
         trace!("trying to speak");
         if let Some(resp) = self.generate() {
             trace!("speaking");
@@ -49,18 +50,39 @@ impl Shakespeare {
         }
     }
 
-    fn check_mentions(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        let nick = bot.nick();
-        trace!("my nick is {}", nick);
+    fn auto_speak(&self, bot: &bot::Bot, env: &message::Envelope) {
+        #[cfg(not(test))]
+        let bypass = if let Some(prev) = self.inner.read().unwrap().previous {
+            time::Instant::now().duration_since(prev)
+                > time::Duration::from_secs(self.inner.read().unwrap().bypass as u64)
+        } else {
+            false
+        };
+        #[cfg(test)]
+        let bypass = true;
+
+        if bypass {
+            trace!("bypassing the roll");
+        }
+
+        if bypass || thread_rng().gen_bool(self.inner.read().unwrap().chance) {
+            trace!("automatically trying to speak");
+            self.speak(bot, env)
+        }
+    }
+
+    fn check_mentions(&self, bot: &bot::Bot, env: &message::Envelope) {
+        let user = bot.user_info();
+        trace!("my diplay name is {}", user.display);
 
         fn trim_then_check(s: &str, nick: &str) -> bool {
             let s = s.to_string();
             let s = s.trim_right_matches(|c: char| !c.is_ascii_alphanumeric());
-            !s.is_empty() && &s[1..] == nick
+            !s.is_empty() && s[1..].eq_ignore_ascii_case(nick)
         }
 
         for part in env.data.split_whitespace() {
-            if part.starts_with('@') && trim_then_check(&part, &nick) {
+            if part.starts_with('@') && trim_then_check(&part, &user.display) {
                 trace!("got a mention, trying to speak");
                 self.speak(bot, env);
                 return;
@@ -68,31 +90,27 @@ impl Shakespeare {
         }
     }
 
-    fn auto_speak(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        let bypass = if let Some(prev) = self.previous {
-            time::Instant::now().duration_since(prev)
-                > time::Duration::from_secs(self.bypass as u64)
-        } else {
-            false
-        };
+    #[cfg(not(test))]
+    fn generate(&self) -> Option<String> {
+        use util::http_get;
 
-        if bypass {
-            trace!("bypassing the roll");
+        fn prune(s: &str) -> &str {
+            let mut pos = 0;
+            for c in s.chars().rev() {
+                if c.is_alphabetic() {
+                    break;
+                }
+                pos += 1
+            }
+            &s[..s.len() - pos]
         }
 
-        if bypass || thread_rng().gen_bool(self.chance) {
-            trace!("automatically trying to speak");
-            self.speak(bot, env)
-        }
-    }
-
-    fn generate(&mut self) -> Option<String> {
         let now = time::Instant::now();
-        if let Some(prev) = self.previous {
-            if now.duration_since(prev) < self.limit {
+        if let Some(prev) = self.inner.read().unwrap().previous {
+            if now.duration_since(prev) < self.inner.read().unwrap().limit {
                 let dur = now.duration_since(prev);
-                let rem =
-                    self.interval - (dur.as_secs() as f64 + f64::from(dur.subsec_nanos()) * 1e-9);
+                let rem = self.inner.write().unwrap().interval
+                    - (dur.as_secs() as f64 + f64::from(dur.subsec_nanos()) * 1e-9);
                 debug!("already spoke: {:.3}s remaining", rem);
                 None?;
             }
@@ -100,22 +118,87 @@ impl Shakespeare {
 
         if let Some(data) = http_get("http://localhost:7878/markov/next") {
             trace!("generated a message");
-            self.previous = Some(now);
+            self.inner.write().unwrap().previous = Some(now);
             Some(prune(&data).to_string() + ".")
         } else {
             warn!("cannot get a response from the brain");
             None
         }
     }
+
+    #[cfg(test)]
+    fn generate(&self) -> Option<String> {
+        let now = time::Instant::now();
+        if let Some(prev) = { self.inner.read().unwrap().previous } {
+            if now.duration_since(prev) < { self.inner.read().unwrap().limit } {
+                let dur = now.duration_since(prev);
+                let rem = self.inner.read().unwrap().interval
+                    - (dur.as_secs() as f64 + f64::from(dur.subsec_nanos()) * 1e-9);
+                debug!("already spoke: {:.3}s remaining", rem);
+                return None;
+            }
+        }
+
+        self.inner.write().unwrap().previous = Some(now);
+        Some("Friends, Romans, countrymen, lend me your ears.".into())
+    }
 }
 
-fn prune(s: &str) -> &str {
-    let mut pos = 0;
-    for c in s.chars().rev() {
-        if c.is_alphabetic() {
-            break;
-        }
-        pos += 1
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use testing::*;
+
+    #[test]
+    fn test_speak_command() {
+        let env = Environment::new();
+        let _module = Shakespeare::new(&env.bot, &env.config);
+
+        env.push_privmsg("!speak");
+        env.step();
+
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "Friends, Romans, countrymen, lend me your ears."
+        );
+
+        env.push_privmsg("!speak");
+        env.step();
+
+        assert_eq!(env.pop_env(), None);
     }
-    &s[..s.len() - pos]
+
+    // this always bypass the roll
+    #[test]
+    fn test_auto_speak() {
+        let env = Environment::new();
+        let _module = Shakespeare::new(&env.bot, &env.config);
+
+        env.push_privmsg("testing this out");
+        env.step();
+
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "Friends, Romans, countrymen, lend me your ears."
+        );
+    }
+
+    #[test]
+    fn test_check_mentions() {
+        let env = Environment::new();
+        let _module = Shakespeare::new(&env.bot, &env.config);
+
+        env.push_privmsg("hey @shaken");
+        env.step();
+
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "Friends, Romans, countrymen, lend me your ears."
+        );
+
+        env.push_privmsg("@shaken");
+        env.step();
+
+        assert_eq!(env.pop_env(), None);
+    }
 }

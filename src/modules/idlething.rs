@@ -6,59 +6,64 @@ use std::thread;
 use std::time::{Duration, Instant};
 use std::{fs, str};
 
-use crate::{bot, config, humanize::*, message, twitch};
+use crate::{bot, config, humanize::*, message, twitch::*};
 
 pub struct IdleThing {
+    inner: RwLock<Inner>,
+    twitch: TwitchClient,
+}
+
+struct Inner {
     state: IdleThingState,
     limit: HashMap<String, Instant>,
-    twitch: twitch::TwitchClient,
 }
 
 impl IdleThing {
-    pub fn new(bot: &bot::Bot, config: &config::Config) -> Arc<RwLock<Self>> {
-        let this = Arc::new(RwLock::new(Self {
-            state: IdleThingState::load(&config),
-            limit: HashMap::new(),
-            twitch: twitch::TwitchClient::new(&config),
-        }));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!invest", move |bot, env| {
-            next.write().unwrap().invest_command(bot, env);
+    pub fn new(bot: &bot::Bot, config: &config::Config) -> Arc<Self> {
+        let this = Arc::new(Self {
+            inner: RwLock::new(Inner {
+                state: IdleThingState::load(&config),
+                limit: HashMap::new(),
+            }),
+            twitch: TwitchClient::new(&config),
         });
 
         let next = Arc::clone(&this);
-        bot.on_command("!give", move |bot, env| {
-            next.write().unwrap().give_command(bot, env);
-        });
+        bot.on_command("!invest", move |bot, env| next.invest_command(bot, env));
 
         let next = Arc::clone(&this);
-        bot.on_command("!check", move |bot, env| {
-            next.write().unwrap().check_command(bot, env);
-        });
+        bot.on_command("!give", move |bot, env| next.give_command(bot, env));
 
         let next = Arc::clone(&this);
-        bot.on_command("!top5", move |bot, env| {
-            next.write().unwrap().top_command(bot, env);
-        });
+        bot.on_command("!check", move |bot, env| next.check_command(bot, env));
 
         let next = Arc::clone(&this);
-        bot.on_passive(move |bot, env| {
-            next.write().unwrap().on_message(bot, env);
-        });
+        bot.on_command("!top5", move |bot, env| next.top_command(bot, env));
+
+        let next = Arc::clone(&this);
+        bot.on_passive(move |bot, env| next.on_message(bot, env));
 
         let dur = Duration::from_secs(config.idlething.interval as u64);
         let next = Arc::clone(&this);
+        IdleThing::start_idle_loop(next, config.clone(), bot.user_info(), dur);
 
-        let me = bot.nick();
-        let config = config.clone();
+        this
+    }
+
+    #[cfg(test)]
+    fn start_idle_loop(_: Arc<Self>, _: config::Config, _: bot::User, _: Duration) {
+        trace!("starting empty idle loop in testing")
+    }
+
+    #[cfg(not(test))]
+    fn start_idle_loop(next: Arc<Self>, config: config::Config, user: bot::User, dur: Duration) {
         thread::spawn(move || {
             let ch = "museun"; // TODO iterate thru all channels
-            let client = twitch::TwitchClient::new(&config);
+            let client = TwitchClient::new(&config);
 
             loop {
                 trace!("getting names for #{}", ch);
-                if let Some(names) = twitch::get_names_for(ch) {
+                if let Some(names) = get_names_for(ch) {
                     let mut v = Vec::with_capacity(names.chatter_count);
                     v.extend(names.chatters.moderators);
                     v.extend(names.chatters.staff);
@@ -66,8 +71,8 @@ impl IdleThing {
                     v.extend(names.chatters.global_mods);
                     v.extend(names.chatters.viewers);
 
-                    // remove myself. this is using the nick from the config
-                    if let Some(n) = v.iter().position(|s| s == &me) {
+                    // remove the bot from the list
+                    if let Some(n) = v.iter().position(|s| s.eq_ignore_ascii_case(&user.display)) {
                         v.remove(n);
                     }
 
@@ -79,19 +84,17 @@ impl IdleThing {
                         }
 
                         trace!("ids: {:?}", &vec);
-                        next.write().unwrap().state.tick(&vec);
+                        next.inner.write().unwrap().state.tick(&vec);
                     }
                 }
-                next.write().unwrap().state.save();
+                next.inner.write().unwrap().state.save();
                 thread::sleep(dur);
             }
         });
-
-        this
     }
 
-    fn check_limit(&mut self, who: &str) -> bool {
-        if let Some(t) = self.limit.get(&who.to_string()) {
+    fn check_limit(&self, who: &str) -> bool {
+        if let Some(t) = self.inner.read().unwrap().limit.get(&who.to_string()) {
             if Instant::now() - *t < Duration::from_secs(60) {
                 return true;
             }
@@ -99,12 +102,16 @@ impl IdleThing {
         false
     }
 
-    fn rate_limit(&mut self, who: &str) {
+    fn rate_limit(&self, who: &str) {
         let who = who.to_string();
-        self.limit.insert(who, Instant::now());
+        self.inner
+            .write()
+            .unwrap()
+            .limit
+            .insert(who, Instant::now());
     }
 
-    fn invest_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
+    fn invest_command(&self, bot: &bot::Bot, env: &message::Envelope) {
         let who = match env.get_id() {
             Some(who) => who,
             None => return,
@@ -121,7 +128,12 @@ impl IdleThing {
                 return;
             }
 
-            match self.state.invest(who, num) {
+            let state = {
+                let state = &mut self.inner.write().unwrap().state;
+                state.invest(who, num)
+            };
+
+            match state {
                 Ok(s) => match s {
                     Donation::Success { old, new } => {
                         bot.reply(
@@ -183,7 +195,8 @@ impl IdleThing {
         None
     }
 
-    fn give_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
+    fn give_command(&self, bot: &bot::Bot, env: &message::Envelope) {
+        // TODO determine if these names should be case folded for simpler comparisons
         let who = match env.get_id() {
             Some(who) => who,
             None => return,
@@ -194,7 +207,7 @@ impl IdleThing {
             None => return,
         };
 
-        let (target, data) = match env.data.split_whitespace().take(1).next() {
+        let (mut target, data) = match env.data.split_whitespace().take(1).next() {
             Some(target) => (target, &env.data[target.len()..]),
             None => {
                 bot.reply(&env, "who do you want to give points to?");
@@ -202,7 +215,12 @@ impl IdleThing {
             }
         };
 
-        if target == bot.nick() {
+        // trim the potential '@'
+        if target.starts_with('@') {
+            target = &target[1..]
+        }
+
+        if target.eq_ignore_ascii_case(&bot.user_info().display) {
             bot.reply(&env, "I don't want any credits.");
             return;
         }
@@ -215,7 +233,7 @@ impl IdleThing {
             }
         };
 
-        if sender == target {
+        if sender.eq_ignore_ascii_case(target) {
             bot.reply(&env, "what are you doing?");
             return;
         }
@@ -227,10 +245,19 @@ impl IdleThing {
             }
 
             debug!("{} wants to give {} {} credits", who, tid, num);
-            if let Some(credits) = self.state.get_credits_for(&who) {
+
+            if let Some(credits) = {
+                let inner = self.inner.read().unwrap();
+                let state = &inner.state;
+                state.get_credits_for(&who)
+            } {
                 if num <= credits {
-                    let c = self.state.give(&tid, num);
-                    let d = self.state.take(&who, num);
+                    let (c, d) = {
+                        let mut state = &mut self.inner.write().unwrap().state;
+                        let c = state.give(&tid, num);
+                        let d = state.take(&who, num);
+                        (c, d)
+                    };
 
                     bot.reply(
                         &env,
@@ -254,13 +281,13 @@ impl IdleThing {
         }
     }
 
-    fn check_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
+    fn check_command(&self, bot: &bot::Bot, env: &message::Envelope) {
         let who = match env.get_id() {
             Some(who) => who,
             None => return,
         };
 
-        if let Some(credits) = self.state.get_credits_for(&who) {
+        if let Some(credits) = self.inner.read().unwrap().state.get_credits_for(&who) {
             bot.reply(
                 &env,
                 &format!("you have {} credits", credits.comma_separate()),
@@ -270,9 +297,10 @@ impl IdleThing {
         }
     }
 
-    fn top_command(&mut self, bot: &bot::Bot, env: &message::Envelope) {
-        let sorted = self.state.to_sorted();
-        let ids = sorted.iter().take(5).map(|(s, _)| *s).collect::<Vec<_>>();;
+    fn top_command(&self, bot: &bot::Bot, env: &message::Envelope) {
+        let sorted = { self.inner.write().unwrap().state.to_sorted() };
+
+        let ids = sorted.iter().take(5).map(|(s, _)| s).collect::<Vec<_>>();;
         trace!("ids: {:?}", ids);
 
         if let Some(ids) = self.lookup_display_for(ids) {
@@ -287,13 +315,13 @@ impl IdleThing {
         }
     }
 
-    fn on_message(&mut self, _bot: &bot::Bot, env: &message::Envelope) {
+    fn on_message(&self, _bot: &bot::Bot, env: &message::Envelope) {
         if env.data.starts_with('!') || env.data.starts_with('@') {
             return;
         }
 
         if let Some(who) = env.get_id() {
-            self.state.increment(&who);
+            self.inner.write().unwrap().state.increment(&who);
         }
     }
 
@@ -345,6 +373,7 @@ impl Default for IdleThingState {
     }
 }
 
+#[cfg(not(test))]
 impl Drop for IdleThingState {
     fn drop(&mut self) {
         debug!("saving IdleThing to {}", IDLE_STORE);
@@ -353,6 +382,7 @@ impl Drop for IdleThingState {
 }
 
 impl IdleThingState {
+    #[cfg(not(test))]
     pub fn load(config: &config::Config) -> Self {
         debug!("loading IdleThing from: {}", IDLE_STORE);
         let s = fs::read_to_string(IDLE_STORE)
@@ -366,6 +396,11 @@ impl IdleThingState {
         this.line_value = config.idlething.line_value;
         this.idle_value = config.idlething.idle_value;
         this
+    }
+
+    #[cfg(test)]
+    pub fn load(_config: &config::Config) -> Self {
+        IdleThingState::default()
     }
 
     pub fn save(&self) {
@@ -459,6 +494,7 @@ impl IdleThingState {
         })
     }
 
+    #[cfg(not(test))]
     fn try_donation(
         &mut self,
         name: &str,
@@ -476,6 +512,20 @@ impl IdleThingState {
         }
     }
 
+    #[cfg(test)]
+    fn try_donation(
+        &mut self,
+        name: &str,
+        have: usize,
+        want: usize,
+    ) -> Result<Donation, IdleThingError> {
+        if have == 0 || want > have {
+            Err(IdleThingError::NotEnoughCredits { have, want })?
+        }
+
+        self.invest_failure(name, have, want)
+    }
+
     pub fn invest(&mut self, name: &str, want: Credit) -> Result<Donation, IdleThingError> {
         if let Some(have) = self.get_credits_for(name) {
             self.try_donation(name, have, want)
@@ -491,11 +541,11 @@ impl IdleThingState {
             .and_then(|c| if *c == 0 { None } else { Some(*c) })
     }
 
-    pub fn to_sorted<'a>(&'a self) -> Vec<(&'a str, Credit)> {
+    pub fn to_sorted(&self) -> Vec<(String, Credit)> {
         let mut sorted = self
             .state
             .iter()
-            .map(|(k, v)| (&**k, *v))
+            .map(|(k, v)| (k.to_string(), *v))
             .collect::<Vec<_>>();
         sorted.sort_by(|l, r| r.1.cmp(&l.1));
         // should also sort it by name if equal points
@@ -507,6 +557,102 @@ impl IdleThingState {
 mod tests {
     use super::*;
     use std::mem;
+    use testing::*;
+
+    #[test]
+    fn test_invest_command() {
+        let env = Environment::new();
+        let _module = IdleThing::new(&env.bot, &env.config);
+
+        env.push_privmsg("!invest");
+        env.step();
+
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "@test: thats not a number I understand"
+        );
+
+        env.push_privmsg("!invest 10");
+        env.step();
+
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "@test: you don't have enough. you have 0 but you want to invest 10 credits"
+        );
+
+        {
+            _module.inner.write().unwrap().state.give("1004", 1000);
+        }
+
+        env.push_privmsg("!invest 500");
+        env.step();
+
+        assert_eq!(env.pop_env().unwrap().data, "@test: failure! 1,000 -> 500");
+    }
+
+    #[test]
+    fn test_give_command() {
+        let env = Environment::new();
+        let _module = IdleThing::new(&env.bot, &env.config);
+
+        env.push_privmsg("!give");
+        env.step();
+
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "@test: who do you want to give points to?"
+        );
+
+        env.push_privmsg("!give test");
+        env.step();
+
+        assert_eq!(env.pop_env().unwrap().data, "@test: what are you doing?");
+
+        env.push_privmsg("!give test 10");
+        env.step();
+
+        assert_eq!(env.pop_env().unwrap().data, "@test: what are you doing?");
+
+        {
+            _module.inner.write().unwrap().state.give("1004", 1000);
+        }
+
+        env.push_privmsg("!give shaken_bot 10");
+        env.step();
+
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "@test: they now have 10 credits and you have 990"
+        );
+    }
+
+    #[test]
+    fn test_check_command() {
+        let env = Environment::new();
+        let _module = IdleThing::new(&env.bot, &env.config);
+
+        env.push_privmsg("!check");
+        env.step();
+
+        assert_eq!(env.pop_env().unwrap().data, "@test: you have no credits");
+
+        {
+            _module.inner.write().unwrap().state.give("1004", 1000);
+        }
+
+        env.push_privmsg("!check");
+        env.step();
+
+        assert_eq!(env.pop_env().unwrap().data, "@test: you have 1,000 credits");
+    }
+
+    #[test]
+    #[ignore] // this requires too much twitch stuff
+    fn test_top5_command() {}
+
+    #[test]
+    #[ignore] // this requires too much twitch stuff
+    fn test_on_message() {}
 
     #[test]
     fn test_default_insert() {

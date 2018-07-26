@@ -8,12 +8,19 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate toml;
 
+#[macro_use]
+extern crate crossbeam_channel;
+extern crate rayon;
+
 extern crate tungstenite;
 extern crate url;
 
 extern crate chrono;
 extern crate curl;
 extern crate rand;
+
+mod color;
+mod testing;
 
 mod humanize;
 mod message;
@@ -29,4 +36,4 @@ pub use crate::bot::Bot;
 mod config;
 pub use crate::config::Config;
 mod conn;
-pub use crate::conn::{Conn, Proto};
+pub use crate::conn::{Conn, TcpConn};

@@ -32,11 +32,3 @@ where
     }
     buf
 }
-
-pub(crate) mod testing {
-    pub fn init_logger() {
-        let _ = env_logger::Builder::from_default_env()
-            .default_format_timestamp(false)
-            .try_init();
-    }
-}

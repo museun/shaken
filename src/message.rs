@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::fmt;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Envelope {
     pub channel: String,
     pub sender: Prefix,
@@ -57,7 +57,7 @@ fn parse_tags(s: &str) -> (&str, HashMap<String, String>) {
     (&s[n + 1..], map)
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Default)]
 pub struct Message {
     pub tags: HashMap<String, String>,
     pub prefix: Option<Prefix>,

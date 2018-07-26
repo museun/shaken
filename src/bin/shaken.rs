@@ -22,21 +22,20 @@ pub struct Shaken;
 
 impl Shaken {
     pub fn start(config: &Config) {
-        let addr = format!("{}:{}", &config.twitch.addr, &config.twitch.port);
+        let address = format!("{}:{}", &config.twitch.address, &config.twitch.port);
 
         let mut sleep = 0;
         loop {
             if sleep > 0 {
                 warn!("sleeping for {} seconds", sleep);
+                thread::sleep(time::Duration::from_secs(sleep));
             }
 
-            thread::sleep(time::Duration::from_secs(sleep));
-
-            info!("trying to connect to {}", addr);
-            let bot = match Conn::new(&addr) {
+            info!("trying to connect to {}", address);
+            let bot = match TcpConn::new(&address) {
                 Ok(conn) => {
                     sleep = 0;
-                    Bot::new(conn, &config)
+                    Bot::new(Conn::TcpConn(conn), &config)
                 }
                 Err(err) => {
                     error!("error: {}", err);
@@ -46,9 +45,11 @@ impl Shaken {
             };
 
             let _builtin = Builtin::new(&bot, &config);
+            let _display = Display::new(&bot, &config);
+
             let _shakespeare = Shakespeare::new(&bot, &config);
             let _idlething = IdleThing::new(&bot, &config);
-            let _display = Display::new(&bot, &config);
+            let _poll = Poll::new(&bot, &config);
 
             info!("connected and running");
             bot.run(&config); // this blocks
