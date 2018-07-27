@@ -4,7 +4,7 @@ use crate::conn::Conn;
 use crate::message::{Envelope, Message};
 
 use crossbeam_channel as channel;
-use parking_lot as sync;
+use parking_lot::{Mutex, RwLock};
 use scoped_threadpool::Pool;
 
 use std::collections::VecDeque;
@@ -27,10 +27,10 @@ pub enum Handler {
     Tick(Box<Fn(&Bot) + Send + Sync + 'static>),
 }
 
-struct Handlers(sync::RwLock<Vec<Handler>>);
+struct Handlers(RwLock<Vec<Handler>>);
 
 pub struct Bot {
-    pub(crate) inner: sync::Mutex<Inner>,
+    pub(crate) inner: Mutex<Inner>,
     pub(crate) conn: Arc<Conn>,
     handlers: Handlers,
     inspected: Inspected,
@@ -49,8 +49,8 @@ pub struct User {
 }
 
 struct Inspected {
-    output: sync::RwLock<VecDeque<String>>,
-    inspect: sync::Mutex<Inspector>, // only 1 write
+    output: RwLock<VecDeque<String>>,
+    inspect: Mutex<Inspector>, // only 1 write
 }
 
 impl Inspected {
@@ -69,7 +69,7 @@ impl Inspected {
 
 impl Bot {
     pub fn new(conn: Conn, config: &Config) -> Self {
-        let inner = sync::Mutex::new(Inner {
+        let inner = Mutex::new(Inner {
             user: User {
                 display: config.twitch.name.to_string(),
                 color: Color::from("fc0fc0"),
@@ -79,15 +79,15 @@ impl Bot {
         });
 
         let inspected = Inspected {
-            output: sync::RwLock::new(VecDeque::new()),
-            inspect: sync::Mutex::new(|_, _| {}),
+            output: RwLock::new(VecDeque::new()),
+            inspect: Mutex::new(|_, _| {}),
         };
 
         Self {
             inner,
             inspected,
             conn: Arc::new(conn),
-            handlers: Handlers(sync::RwLock::new(vec![])),
+            handlers: Handlers(RwLock::new(vec![])),
         }
     }
 
@@ -272,9 +272,6 @@ impl Bot {
 
         trace!("registered");
     }
-
-    #[cfg(test)]
-    fn register(&self, _config: &Config) {}
 
     pub fn on_command<F>(&self, cmd: &'static str, f: F)
     where

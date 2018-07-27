@@ -1,6 +1,7 @@
+use parking_lot::{Mutex, RwLock};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{fs, str};
 
@@ -53,14 +54,14 @@ impl IdleThing {
 
     fn on_tick(&self, bot: &bot::Bot) {
         let now = Instant::now();
-        let then = { *self.tick.lock().unwrap() };
+        let then = { *self.tick.lock() };
         let interval = self.internal.load(Ordering::Relaxed) as u64;
         if now - then < Duration::from_secs(interval) {
             return;
         }
 
         {
-            let mut then = self.tick.lock().unwrap();
+            let mut then = self.tick.lock();
             *then = now;
         }
 
@@ -91,15 +92,15 @@ impl IdleThing {
                 }
 
                 trace!("ids: {:?}", &vec);
-                self.inner.write().unwrap().state.tick(&vec);
+                self.inner.write().state.tick(&vec);
             }
         }
 
-        self.inner.write().unwrap().state.save();
+        self.inner.write().state.save();
     }
 
     fn check_limit(&self, who: &str) -> bool {
-        if let Some(t) = self.inner.read().unwrap().limit.get(&who.to_string()) {
+        if let Some(t) = self.inner.read().limit.get(&who.to_string()) {
             if Instant::now() - *t < Duration::from_secs(60) {
                 return true;
             }
@@ -109,11 +110,7 @@ impl IdleThing {
 
     fn rate_limit(&self, who: &str) {
         let who = who.to_string();
-        self.inner
-            .write()
-            .unwrap()
-            .limit
-            .insert(who, Instant::now());
+        self.inner.write().limit.insert(who, Instant::now());
     }
 
     fn invest_command(&self, bot: &bot::Bot, env: &message::Envelope) {
@@ -134,7 +131,7 @@ impl IdleThing {
             }
 
             let state = {
-                let state = &mut self.inner.write().unwrap().state;
+                let state = &mut self.inner.write().state;
                 state.invest(who, num)
             };
 
@@ -251,13 +248,13 @@ impl IdleThing {
             debug!("{} wants to give {} {} credits", who, tid, num);
 
             if let Some(credits) = {
-                let inner = self.inner.read().unwrap();
+                let inner = self.inner.read();
                 let state = &inner.state;
                 state.get_credits_for(&who)
             } {
                 if num <= credits {
                     let (c, d) = {
-                        let mut state = &mut self.inner.write().unwrap().state;
+                        let mut state = &mut self.inner.write().state;
                         let c = state.give(&tid, num);
                         let d = state.take(&who, num);
                         (c, d)
@@ -291,7 +288,7 @@ impl IdleThing {
             None => return,
         };
 
-        if let Some(credits) = self.inner.read().unwrap().state.get_credits_for(&who) {
+        if let Some(credits) = self.inner.read().state.get_credits_for(&who) {
             bot.reply(
                 &env,
                 &format!("you have {} credits", credits.comma_separate()),
@@ -302,7 +299,7 @@ impl IdleThing {
     }
 
     fn top_command(&self, bot: &bot::Bot, env: &message::Envelope) {
-        let sorted = { self.inner.write().unwrap().state.to_sorted() };
+        let sorted = { self.inner.write().state.to_sorted() };
 
         if let Some(ids) =
             self.lookup_display_for(sorted.iter().take(10).map(|(s, _)| s).collect::<Vec<_>>())
@@ -323,7 +320,7 @@ impl IdleThing {
         }
 
         if let Some(who) = env.get_id() {
-            self.inner.write().unwrap().state.increment(&who);
+            self.inner.write().state.increment(&who);
         }
     }
 
@@ -585,7 +582,7 @@ mod tests {
         );
 
         {
-            _module.inner.write().unwrap().state.give("1004", 1000);
+            _module.inner.write().state.give("1004", 1000);
         }
 
         env.push_privmsg("!invest 500");
@@ -618,7 +615,7 @@ mod tests {
         assert_eq!(env.pop_env().unwrap().data, "@test: what are you doing?");
 
         {
-            _module.inner.write().unwrap().state.give("1004", 1000);
+            _module.inner.write().state.give("1004", 1000);
         }
 
         env.push_privmsg("!give shaken_bot 10");
@@ -641,7 +638,7 @@ mod tests {
         assert_eq!(env.pop_env().unwrap().data, "@test: you have no credits");
 
         {
-            _module.inner.write().unwrap().state.give("1004", 1000);
+            _module.inner.write().state.give("1004", 1000);
         }
 
         env.push_privmsg("!check");

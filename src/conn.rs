@@ -5,7 +5,7 @@ use std::net::{self, TcpStream, ToSocketAddrs};
 use std::sync::Arc;
 use std::{fmt, str};
 
-use parking_lot as sync;
+use parking_lot::Mutex;
 
 pub enum ConnError {
     InvalidAddress(net::AddrParseError),
@@ -43,8 +43,8 @@ impl Conn {
 }
 
 pub struct TcpConn {
-    reader: sync::Mutex<Lines<BufReader<TcpStream>>>,
-    writer: sync::Mutex<BufWriter<TcpStream>>,
+    reader: Mutex<Lines<BufReader<TcpStream>>>,
+    writer: Mutex<BufWriter<TcpStream>>,
 }
 
 impl TcpConn {
@@ -54,12 +54,12 @@ impl TcpConn {
 
         let reader = {
             let conn = conn.try_clone().expect("to clone stream");
-            sync::Mutex::new(BufReader::new(conn).lines())
+            Mutex::new(BufReader::new(conn).lines())
         };
 
         let writer = {
             let conn = conn.try_clone().expect("to clone stream");
-            sync::Mutex::new(BufWriter::new(conn))
+            Mutex::new(BufWriter::new(conn))
         };
 
         Ok(Self { reader, writer })

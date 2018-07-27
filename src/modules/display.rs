@@ -1,7 +1,8 @@
 use crate::{bot, color::Color, config, message::Envelope};
 
+use parking_lot::Mutex;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub struct Display {
     colors: Mutex<HashMap<String, Color>>,
@@ -53,11 +54,11 @@ impl Display {
                         }
                     }
                     {
-                        let mut colors = next.colors.lock().unwrap();
+                        let mut colors = next.colors.lock();
                         colors.insert(id.to_string(), color);
                     }
                     {
-                        let colors = next.colors.lock().unwrap();
+                        let colors = next.colors.lock();
                         if let Ok(f) = ::std::fs::File::create("colors.json") {
                             let _ = serde_json::to_writer(&f, &*colors).map_err(|e| {
                                 error!("cannot save colors: {}", e);
@@ -89,7 +90,7 @@ impl Display {
                 trace!("tags: {:?}", env.tags);
 
                 let color = {
-                    let map = next.colors.lock().unwrap();
+                    let map = next.colors.lock();
                     get_color_for(&map, &env)
                 }.unwrap();
 

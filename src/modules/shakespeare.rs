@@ -1,6 +1,7 @@
 use rand::prelude::*;
 
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 use std::time;
 
 use crate::{bot, config, message};
@@ -52,7 +53,7 @@ impl Shakespeare {
 
     fn auto_speak(&self, bot: &bot::Bot, env: &message::Envelope) {
         let (previous, bypass, chance) = {
-            let inner = self.inner.lock().unwrap();
+            let inner = self.inner.lock();
             (inner.previous, inner.bypass, inner.chance)
         };
 
@@ -108,7 +109,7 @@ impl Shakespeare {
         }
 
         let now = time::Instant::now();
-        let inner = &mut self.inner.lock().unwrap();
+        let inner = &mut self.inner.lock();
         if let Some(prev) = inner.previous {
             if now.duration_since(prev) < inner.limit {
                 let dur = now.duration_since(prev);
@@ -133,7 +134,7 @@ impl Shakespeare {
     #[cfg(test)] // this won't work
     fn generate(&self) -> Option<String> {
         let now = time::Instant::now();
-        let inner = &mut self.inner.lock().unwrap();
+        let inner = &mut self.inner.lock();
         if let Some(prev) = { inner.previous } {
             if now.duration_since(prev) < { inner.limit } {
                 let dur = now.duration_since(prev);

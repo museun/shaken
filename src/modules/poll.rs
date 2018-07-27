@@ -1,8 +1,9 @@
 #![allow(dead_code, unused_variables)] // go away
 use crate::{bot, config, message};
 
+use parking_lot::{Mutex, RwLock};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, RwLock}; // TODO switch over to parking_lot
+use std::sync::Arc;
 use std::time;
 
 pub struct Poll {
@@ -53,7 +54,7 @@ impl Poll {
                 .for_each(|opt| bot.say(&env, &opt));
 
             let poll = TwitchPoll::new(&env, &options);
-            *next.poll.write().unwrap() = Some(poll);
+            *next.poll.write() = Some(poll);
         });
 
         let next = Arc::clone(&this);
@@ -69,7 +70,7 @@ impl Poll {
                 return;
             }
 
-            let poll = { next.poll.read().unwrap() };
+            let poll = { next.poll.read() };
             if poll.is_none() {
                 debug!("no poll was configured");
                 bot.say(&env, "no poll set up");
@@ -100,7 +101,7 @@ impl Poll {
             );
 
             info!("starting the poll");
-            *next.tick.lock().unwrap() = time::Instant::now();
+            *next.tick.lock() = time::Instant::now();
             next.running.store(true, Ordering::Relaxed);
         });
 
@@ -148,7 +149,7 @@ impl Poll {
                     }
 
                     trace!("trying to vote for: {}", n - 1);
-                    if let Some(ref mut poll) = *next.poll.write().unwrap() {
+                    if let Some(ref mut poll) = *next.poll.write() {
                         poll.vote(&who, n - 1)
                     }
                 }
@@ -162,7 +163,7 @@ impl Poll {
                 return;
             }
 
-            let then = next.tick.lock().unwrap();
+            let then = next.tick.lock();
             if time::Instant::now() - *then
                 < time::Duration::from_secs(next.duration.load(Ordering::Relaxed) as u64)
             {
@@ -173,7 +174,7 @@ impl Poll {
             next.running.store(false, Ordering::Relaxed);
 
             // this doesn't need an if let
-            if let Some(ref mut poll) = *next.poll.write().unwrap() {
+            if let Some(ref mut poll) = *next.poll.write() {
                 let target = poll.target.clone(); // might as well clone it
 
                 let iter = poll.tally().iter().take(3).enumerate();
@@ -344,7 +345,7 @@ mod tests {
         assert_eq!(env.pop_env().unwrap().data, "is this poll right?");
         assert!(env.pop_env().is_none());
 
-        let poll = poll.poll.read().unwrap();
+        let poll = poll.poll.read();
         assert!(poll.is_some());
         if let Some(ref poll) = *poll {
             assert_eq!(poll.options.len(), 3);

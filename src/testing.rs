@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 use std::collections::VecDeque;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
+
+use parking_lot::RwLock;
 
 use crate::{bot, config, message};
 
@@ -100,13 +102,13 @@ impl TestConn {
     }
 
     pub fn read(&self) -> Option<String> {
-        let s = self.read.write().unwrap().pop_front();
+        let s = self.read.write().pop_front();
         trace!("read: {:?}", s);
         s
     }
 
     pub fn write(&self, data: &str) {
-        self.write.write().unwrap().push_back(data.into());
+        self.write.write().push_back(data.into());
         trace!("write: {:?}", data);
     }
 
@@ -114,23 +116,23 @@ impl TestConn {
 
     // reads from the write queue (most recent)
     pub fn pop(&self) -> Option<String> {
-        let s = self.write.write().unwrap().pop_back();
+        let s = self.write.write().pop_back();
         debug!("pop: {:?}", s);
         s
     }
 
     // writes to the read queue
     pub fn push(&self, data: &str) {
-        self.read.write().unwrap().push_back(data.into());
+        self.read.write().push_back(data.into());
         debug!("push: {:?}", data);
     }
 
     pub fn read_len(&self) -> usize {
-        self.read.read().unwrap().len()
+        self.read.read().len()
     }
 
     pub fn write_len(&self) -> usize {
-        self.write.read().unwrap().len()
+        self.write.read().len()
     }
 }
 
