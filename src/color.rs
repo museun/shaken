@@ -38,6 +38,7 @@ impl From<Option<&String>> for Color {
 }
 
 fn hex_to_rgb(s: &str) -> (u8, u8, u8) {
+    // should be a #RRGGBB or a RRGGBB
     if (s.len() != 7 && s.len() != 6) || (s.len() == 7 && !s.starts_with('#')) {
         return (255, 255, 255);
     }
