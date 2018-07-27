@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use std::fmt::Write;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Color {
     Turbo(u8, u8, u8),
 }
