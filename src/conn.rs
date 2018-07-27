@@ -2,8 +2,10 @@ use testing::TestConn;
 
 use std::io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines};
 use std::net::{self, TcpStream, ToSocketAddrs};
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 use std::{fmt, str};
+
+use parking_lot as sync;
 
 pub enum ConnError {
     InvalidAddress(net::AddrParseError),
@@ -13,8 +15,8 @@ pub enum ConnError {
 impl fmt::Display for ConnError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ConnError::InvalidAddress(e) => writeln!(f, "invalid address: {}", e),
-            ConnError::CannotConnect(e) => writeln!(f, "cannot connect: {}", e),
+            ConnError::InvalidAddress(e) => write!(f, "invalid address: {}", e),
+            ConnError::CannotConnect(e) => write!(f, "cannot connect: {}", e),
         }
     }
 }
@@ -41,8 +43,8 @@ impl Conn {
 }
 
 pub struct TcpConn {
-    reader: RwLock<Lines<BufReader<TcpStream>>>,
-    writer: RwLock<BufWriter<TcpStream>>,
+    reader: sync::Mutex<Lines<BufReader<TcpStream>>>,
+    writer: sync::Mutex<BufWriter<TcpStream>>,
 }
 
 impl TcpConn {
@@ -52,29 +54,20 @@ impl TcpConn {
 
         let reader = {
             let conn = conn.try_clone().expect("to clone stream");
-            RwLock::new(BufReader::new(conn).lines())
+            sync::Mutex::new(BufReader::new(conn).lines())
         };
 
         let writer = {
             let conn = conn.try_clone().expect("to clone stream");
-            RwLock::new(BufWriter::new(conn))
+            sync::Mutex::new(BufWriter::new(conn))
         };
 
         Ok(Self { reader, writer })
     }
 
-    pub fn run(&self, process: fn(String)) {
-        trace!("starting run loop");
-        while let Some(line) = self.read() {
-            trace!("<-- {}", line);
-            process(line)
-        }
-        trace!("end of run loop");
-    }
-
     pub fn write(&self, data: &str) {
         // XXX: might want to rate limit here
-        let mut writer = self.writer.write().unwrap();
+        let mut writer = self.writer.lock();
         for part in split(data) {
             // don't log the password
             if &part[..4] != "PASS" {
@@ -82,13 +75,20 @@ impl TcpConn {
                 trace!("--> {}", &line); // trim the \r\n
             }
 
-            let _ = writer.write_all(part.as_bytes());
+            trace!("trying to write to socket");
+            if writer.write_all(part.as_bytes()).is_ok() {
+                trace!("wrote to socket");
+            } else {
+                error!("cannot write to socket");
+                return;
+            }
         }
-        let _ = writer.flush();
+        writer.flush().expect("to flush");
     }
 
     pub fn read(&self) -> Option<String> {
-        let mut reader = self.reader.write().unwrap();
+        let mut reader = self.reader.lock();
+        trace!("trying to read from socket");
         if let Some(Ok(line)) = reader.next() {
             trace!("<-- {}", &line);
             Some(line)

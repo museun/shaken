@@ -14,6 +14,7 @@ pub struct Environment {
     pub conn: Arc<TestConn>,
     pub bot: bot::Bot,
     pub config: config::Config,
+    pub user_id: String,
 }
 
 impl Environment {
@@ -24,13 +25,23 @@ impl Environment {
             conn: Arc::clone(&conn),
             bot: Bot::new(Conn::TestConn(Arc::clone(&conn)), &Config::default()),
             config: Config::default(),
+            user_id: "1004".into(),
         }
+    }
+
+    // although this is going thru a mutex, might as well do a mutable borrow to keep the surprises low
+    pub fn set_owner(&mut self, id: &str) {
+        let mut inner = self.bot.inner.lock();
+        inner.owners.push(id.to_string())
+    }
+
+    pub fn set_user_id(&mut self, id: &str) {
+        self.user_id = id.to_string();
     }
 
     pub fn step(&self) {
         let msg = {
-            let inner = self.bot.inner.read().unwrap();
-            match inner.conn.read() {
+            match self.bot.conn.read() {
                 Some(line) => message::Message::parse(&line),
                 None => return,
             }
@@ -40,21 +51,13 @@ impl Environment {
     }
 
     pub fn tick(&self) {
-        let msg = {
-            let inner = self.bot.inner.read().unwrap();
-            match inner.conn.read() {
-                Some(line) => message::Message::parse(&line),
-                None => return,
-            }
-        };
-
         self.bot.dispatch(&message::Message::default(), true);
     }
 
     pub fn push_privmsg(&self, data: &str) {
         self.conn.push(&format!(
-            "user-id=1004 :test!user@irc.test PRIVMSG #test :{}",
-            data
+            "user-id={} :test!user@irc.test PRIVMSG #test :{}",
+            self.user_id, data
         ))
     }
 
@@ -68,6 +71,20 @@ impl Environment {
         let mut data = self.conn.pop()?.to_string();
         data.insert_str(0, ":test!user@irc.test ");
         Some(message::Envelope::from_msg(&message::Message::parse(&data)))
+    }
+
+    pub fn drain_envs(&self) {
+        while let Some(_) = self.pop_env() {}
+    }
+
+    pub fn drain_env_warn_log(&self) {
+        while let Some(env) = self.pop_env() {
+            warn!("{:#?}", env);
+        }
+    }
+
+    pub fn drain_msgs(&self) {
+        while let Some(_) = self.pop_msg() {}
     }
 }
 

@@ -10,14 +10,14 @@ extern crate toml;
 
 #[macro_use]
 extern crate crossbeam_channel;
-extern crate rayon;
-
-extern crate tungstenite;
-extern crate url;
+extern crate parking_lot;
+extern crate scoped_threadpool;
 
 extern crate chrono;
 extern crate curl;
 extern crate rand;
+extern crate tungstenite;
+extern crate url;
 
 mod color;
 mod testing;

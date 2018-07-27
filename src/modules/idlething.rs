@@ -1,8 +1,6 @@
-use rand::prelude::*;
-
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use std::thread;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 use std::{fs, str};
 
@@ -11,6 +9,8 @@ use crate::{bot, config, humanize::*, message, twitch::*};
 pub struct IdleThing {
     inner: RwLock<Inner>,
     twitch: TwitchClient,
+    tick: Mutex<Instant>,
+    internal: AtomicUsize,
 }
 
 struct Inner {
@@ -26,6 +26,8 @@ impl IdleThing {
                 limit: HashMap::new(),
             }),
             twitch: TwitchClient::new(&config),
+            tick: Mutex::new(Instant::now()),
+            internal: AtomicUsize::new(config.idlething.interval),
         });
 
         let next = Arc::clone(&this);
@@ -43,54 +45,57 @@ impl IdleThing {
         let next = Arc::clone(&this);
         bot.on_passive(move |bot, env| next.on_message(bot, env));
 
-        let dur = Duration::from_secs(config.idlething.interval as u64);
         let next = Arc::clone(&this);
-        IdleThing::start_idle_loop(next, config.clone(), bot.user_info(), dur);
+        bot.on_tick(move |bot| next.on_tick(bot));
 
         this
     }
 
-    #[cfg(test)]
-    fn start_idle_loop(_: Arc<Self>, _: config::Config, _: bot::User, _: Duration) {
-        trace!("starting empty idle loop in testing")
-    }
+    fn on_tick(&self, bot: &bot::Bot) {
+        let now = Instant::now();
+        let then = { *self.tick.lock().unwrap() };
+        let interval = self.internal.load(Ordering::Relaxed) as u64;
+        if now - then < Duration::from_secs(interval) {
+            return;
+        }
 
-    #[cfg(not(test))]
-    fn start_idle_loop(next: Arc<Self>, config: config::Config, user: bot::User, dur: Duration) {
-        thread::spawn(move || {
-            let ch = "museun"; // TODO iterate thru all channels
-            let client = TwitchClient::new(&config);
+        {
+            let mut then = self.tick.lock().unwrap();
+            *then = now;
+        }
 
-            loop {
-                trace!("getting names for #{}", ch);
-                if let Some(names) = get_names_for(ch) {
-                    let mut v = Vec::with_capacity(names.chatter_count);
-                    v.extend(names.chatters.moderators);
-                    v.extend(names.chatters.staff);
-                    v.extend(names.chatters.admins);
-                    v.extend(names.chatters.global_mods);
-                    v.extend(names.chatters.viewers);
+        let user = bot.user_info();
 
-                    // remove the bot from the list
-                    if let Some(n) = v.iter().position(|s| s.eq_ignore_ascii_case(&user.display)) {
-                        v.remove(n);
-                    }
+        // TODO make this configurable
+        let ch = "museun";
 
-                    trace!("names for {}: {:?}", &ch, &v);
-                    if let Some(users) = client.get_users(&v) {
-                        let mut vec = vec![];
-                        for user in &users {
-                            vec.push(user.id.to_string())
-                        }
+        trace!("getting names for #{}", ch);
+        if let Some(names) = get_names_for(ch) {
+            let mut v = Vec::with_capacity(names.chatter_count);
+            v.extend(names.chatters.moderators);
+            v.extend(names.chatters.staff);
+            v.extend(names.chatters.admins);
+            v.extend(names.chatters.global_mods);
+            v.extend(names.chatters.viewers);
 
-                        trace!("ids: {:?}", &vec);
-                        next.inner.write().unwrap().state.tick(&vec);
-                    }
-                }
-                next.inner.write().unwrap().state.save();
-                thread::sleep(dur);
+            // remove the bot from the list
+            if let Some(n) = v.iter().position(|s| s.eq_ignore_ascii_case(&user.display)) {
+                v.remove(n);
             }
-        });
+
+            trace!("names for {}: {:?}", &ch, &v);
+            if let Some(users) = self.twitch.get_users(&v) {
+                let mut vec = vec![];
+                for user in &users {
+                    vec.push(user.id.to_string())
+                }
+
+                trace!("ids: {:?}", &vec);
+                self.inner.write().unwrap().state.tick(&vec);
+            }
+        }
+
+        self.inner.write().unwrap().state.save();
     }
 
     fn check_limit(&self, who: &str) -> bool {
@@ -144,14 +149,12 @@ impl IdleThing {
                                 new.comma_separate()
                             ),
                         );
-                        // rate limit them after they've invested
-                        self.rate_limit(who);
                     }
                     Donation::Failure { old, new } => {
                         bot.reply(
                             &env,
                             &format!(
-                                "failure! {} -> {}",
+                                "failure! {} -> {}. try again in a minute",
                                 old.comma_separate(),
                                 new.comma_separate()
                             ),
@@ -184,6 +187,7 @@ impl IdleThing {
     where
         S: AsRef<str>,
         V: AsRef<[S]>,
+        S: ::std::fmt::Debug,
     {
         if let Some(list) = self.twitch.get_users_from_ids(ids.as_ref()) {
             return Some(
@@ -300,17 +304,15 @@ impl IdleThing {
     fn top_command(&self, bot: &bot::Bot, env: &message::Envelope) {
         let sorted = { self.inner.write().unwrap().state.to_sorted() };
 
-        let ids = sorted.iter().take(5).map(|(s, _)| s).collect::<Vec<_>>();;
-        trace!("ids: {:?}", ids);
-
-        if let Some(ids) = self.lookup_display_for(ids) {
-            let list = sorted
-                .iter()
-                .take(5)
-                .enumerate()
-                .map(|(i, (_n, c))| format!("(#{}) {}: {}", i + 1, ids[i].0.clone(), *c));
-
-            let res = crate::util::join_with(list, ", ");
+        if let Some(ids) =
+            self.lookup_display_for(sorted.iter().take(10).map(|(s, _)| s).collect::<Vec<_>>())
+        {
+            let mut list = vec![];
+            for (i, (name, id)) in ids.iter().enumerate().take(5) {
+                let pos = sorted.iter().position(|(i, _)| i == id).unwrap(); // check?
+                list.push(format!("(#{}) {}: {}", i + 1, name.clone(), sorted[pos].1));
+            }
+            let res = crate::util::join_with(list.iter(), ", ");
             bot.reply(&env, &res);
         }
     }
@@ -427,7 +429,7 @@ impl IdleThingState {
             .or_insert(credits);
 
         let ch = self.state[name];
-        debug!("setting {}'s credits to {}", name, ch);
+        trace!("setting {}'s credits to {}", name, ch);
         ch
     }
 
@@ -438,7 +440,7 @@ impl IdleThingState {
             .or_insert(credits);
 
         let ch = self.state[name];
-        debug!("setting {}'s credits to {}", name, ch);
+        trace!("setting {}'s credits to {}", name, ch);
         ch
     }
 
@@ -501,6 +503,8 @@ impl IdleThingState {
         have: usize,
         want: usize,
     ) -> Result<Donation, IdleThingError> {
+        use rand::prelude::*;
+
         if have == 0 || want > have {
             Err(IdleThingError::NotEnoughCredits { have, want })?
         }

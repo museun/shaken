@@ -1,12 +1,12 @@
 use rand::prelude::*;
 
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex};
 use std::time;
 
 use crate::{bot, config, message};
 
 pub struct Shakespeare {
-    inner: RwLock<Inner>,
+    inner: Mutex<Inner>,
 }
 
 #[derive(Debug)]
@@ -21,7 +21,7 @@ struct Inner {
 impl Shakespeare {
     pub fn new(bot: &bot::Bot, config: &config::Config) -> Arc<Self> {
         let this = Arc::new(Self {
-            inner: RwLock::new(Inner {
+            inner: Mutex::new(Inner {
                 previous: None,
                 limit: time::Duration::from_secs(config.shakespeare.interval as u64),
                 interval: config.shakespeare.interval as f64,
@@ -52,9 +52,14 @@ impl Shakespeare {
 
     fn auto_speak(&self, bot: &bot::Bot, env: &message::Envelope) {
         #[cfg(not(test))]
-        let bypass = if let Some(prev) = self.inner.read().unwrap().previous {
-            time::Instant::now().duration_since(prev)
-                > time::Duration::from_secs(self.inner.read().unwrap().bypass as u64)
+        let (previous, bypass, chance) = {
+            let inner = self.inner.lock().unwrap();
+            (inner.previous, inner.bypass, inner.chance)
+        };
+
+        let bypass = if let Some(prev) = previous {
+            time::Instant::now().duration_since(prev)  // don't format this
+            > time::Duration::from_secs(bypass as u64)
         } else {
             false
         };
@@ -65,7 +70,7 @@ impl Shakespeare {
             trace!("bypassing the roll");
         }
 
-        if bypass || thread_rng().gen_bool(self.inner.read().unwrap().chance) {
+        if bypass || thread_rng().gen_bool(chance) {
             trace!("automatically trying to speak");
             self.speak(bot, env)
         }
@@ -106,11 +111,13 @@ impl Shakespeare {
         }
 
         let now = time::Instant::now();
-        if let Some(prev) = self.inner.read().unwrap().previous {
-            if now.duration_since(prev) < self.inner.read().unwrap().limit {
+        let inner = &mut self.inner.lock().unwrap();
+        if let Some(prev) = inner.previous {
+            if now.duration_since(prev) < inner.limit {
                 let dur = now.duration_since(prev);
-                let rem = self.inner.write().unwrap().interval
-                    - (dur.as_secs() as f64 + f64::from(dur.subsec_nanos()) * 1e-9);
+                let rem = inner.interval
+                    - (dur.as_secs() as f64  // don't format this
+                    + f64::from(dur.subsec_nanos()) * 1e-9);
                 debug!("already spoke: {:.3}s remaining", rem);
                 None?;
             }
@@ -118,7 +125,7 @@ impl Shakespeare {
 
         if let Some(data) = http_get("http://localhost:7878/markov/next") {
             trace!("generated a message");
-            self.inner.write().unwrap().previous = Some(now);
+            inner.previous = Some(now);
             Some(prune(&data).to_string() + ".")
         } else {
             warn!("cannot get a response from the brain");
@@ -126,20 +133,22 @@ impl Shakespeare {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(test)] // this won't work
     fn generate(&self) -> Option<String> {
         let now = time::Instant::now();
-        if let Some(prev) = { self.inner.read().unwrap().previous } {
-            if now.duration_since(prev) < { self.inner.read().unwrap().limit } {
+        let inner = &mut self.inner.lock().unwrap();
+        if let Some(prev) = { inner.previous } {
+            if now.duration_since(prev) < { inner.limit } {
                 let dur = now.duration_since(prev);
-                let rem = self.inner.read().unwrap().interval
-                    - (dur.as_secs() as f64 + f64::from(dur.subsec_nanos()) * 1e-9);
+                let rem = inner.interval
+                    - (dur.as_secs() as f64  // don't format this
+                    + f64::from(dur.subsec_nanos()) * 1e-9);
                 debug!("already spoke: {:.3}s remaining", rem);
                 return None;
             }
         }
 
-        self.inner.write().unwrap().previous = Some(now);
+        inner.previous = Some(now);
         Some("Friends, Romans, countrymen, lend me your ears.".into())
     }
 }

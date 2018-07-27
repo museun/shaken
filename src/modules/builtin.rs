@@ -41,7 +41,7 @@ impl Builtin {
 
     fn autojoin_raw(&self, bot: &Bot, _msg: &message::Message) {
         // TODO configure this
-        bot.join("#museun")
+        bot.join("#museun");
     }
 
     fn ping_raw(&self, bot: &Bot, msg: &message::Message) {
