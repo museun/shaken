@@ -61,7 +61,7 @@ impl Shakespeare {
             time::Instant::now().duration_since(prev)  // don't format this
             > time::Duration::from_secs(bypass as u64)
         } else {
-            false
+            false || bypass == 0
         };
 
         if bypass {
@@ -175,7 +175,7 @@ mod tests {
         assert_eq!(env.pop_env(), None);
     }
 
-    // this always bypass the roll
+    // this always bypasses the roll
     #[test]
     fn test_auto_speak() {
         let mut env = Environment::new();
@@ -196,7 +196,7 @@ mod tests {
         let env = Environment::new();
         let _module = Shakespeare::new(&env.bot, &env.config);
 
-        env.push_privmsg("hey @shaken");
+        env.push_privmsg("hey @shaken_bot");
         env.step();
 
         assert_eq!(

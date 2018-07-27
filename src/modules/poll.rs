@@ -393,39 +393,10 @@ mod tests {
         ::std::thread::sleep(::std::time::Duration::from_secs(2));
         env.tick();
 
-        assert_eq!(env.pop_env().unwrap().data, "#3 with 0: option c");
-        assert_eq!(env.pop_env().unwrap().data, "#2 with 0: option b");
-        assert_eq!(env.pop_env().unwrap().data, "#1 with 0: option a");
+        assert_eq!(env.pop_env().unwrap().data, "(0 votes) #3 option c");
+        assert_eq!(env.pop_env().unwrap().data, "(0 votes) #2 option b");
+        assert_eq!(env.pop_env().unwrap().data, "(0 votes) #1 option a");
         assert!(env.pop_env().is_none());
-    }
-
-    #[test]
-    fn test_poll_vote_human() {
-        init_logger();
-        let mut env = Environment::new();
-        let poll = Poll::new(&env.bot, &env.config);
-
-        poll.duration
-            .store(1, ::std::sync::atomic::Ordering::Relaxed);
-        env.set_owner("23196011");
-        env.set_user_id("23196011");
-
-        env.push_privmsg(r#"!poll "option a" "option b" "option c""#);
-        env.step();
-        env.drain_envs();
-
-        env.push_privmsg("!poll start");
-        env.step();
-        env.drain_envs();
-
-        env.set_user_id("7");
-        env.push_privmsg("!vote 0");
-        env.step();
-
-        ::std::thread::sleep(::std::time::Duration::from_secs(2));
-        env.tick();
-
-        env.drain_env_warn_log();
     }
 
     #[test]
@@ -456,9 +427,9 @@ mod tests {
         ::std::thread::sleep(::std::time::Duration::from_secs(2));
         env.tick();
 
-        assert_eq!(env.pop_env().unwrap().data, "(3 votes) #3 option c");
+        assert_eq!(env.pop_env().unwrap().data, "(0 votes) #3 option c");
         assert_eq!(env.pop_env().unwrap().data, "(3 votes) #2 option b");
-        assert_eq!(env.pop_env().unwrap().data, "(4 votes) #1 option a");
+        assert_eq!(env.pop_env().unwrap().data, "(3 votes) #1 option a");
         assert!(env.pop_env().is_none());
     }
 

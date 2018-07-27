@@ -588,7 +588,10 @@ mod tests {
         env.push_privmsg("!invest 500");
         env.step();
 
-        assert_eq!(env.pop_env().unwrap().data, "@test: failure! 1,000 -> 500");
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "@test: failure! 1,000 -> 500. try again in a minute"
+        );
     }
 
     #[test]
@@ -619,6 +622,14 @@ mod tests {
         }
 
         env.push_privmsg("!give shaken_bot 10");
+        env.step();
+
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "@test: I don't want any credits."
+        );
+
+        env.push_privmsg("!give museun 10");
         env.step();
 
         assert_eq!(

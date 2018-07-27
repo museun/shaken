@@ -251,7 +251,6 @@ impl Bot {
         self.inspected.write(&msg);
     }
 
-    #[cfg(not(test))]
     fn register(&self) {
         trace!("registering");
 
