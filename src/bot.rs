@@ -71,7 +71,7 @@ impl Bot {
     pub fn new(conn: Conn, config: &Config) -> Self {
         let inner = sync::Mutex::new(Inner {
             user: User {
-                display: "".into(), // we don't have our name yet
+                display: config.twitch.name.to_string(),
                 color: Color::from("fc0fc0"),
                 userid: "".into(), // we don't have our id yet
             },
@@ -91,8 +91,8 @@ impl Bot {
         }
     }
 
-    pub fn run(&self, config: &Config) {
-        self.register(&config);
+    pub fn run(&self) {
+        self.register();
 
         let tick = channel::tick(time::Duration::from_secs(1));
         let (tx, rx) = channel::unbounded(); // maybe use a bounded channel
@@ -252,7 +252,7 @@ impl Bot {
     }
 
     #[cfg(not(test))]
-    fn register(&self, config: &Config) {
+    fn register(&self) {
         trace!("registering");
 
         // ircv3 stuff
@@ -260,12 +260,15 @@ impl Bot {
         self.conn.write("CAP REQ :twitch.tv/membership");
         self.conn.write("CAP REQ :twitch.tv/commands");
 
-        self.conn.write(&format!("PASS {}", &config.twitch.pass));
-
-        // maybe this is needed
-        self.conn.write(&format!("NICK {}", "shaken_bot"));
         self.conn
-            .write(&format!("USER {} * 8 :{}", "shaken_bot", "shaken_bot"));
+            .write(&format!("PASS {}", env!("SHAKEN_TWITCH_PASSWORD")));
+
+        let inner = self.inner.lock();
+        self.conn.write(&format!("NICK {}", inner.user.display));
+
+        // this would be needed for a real irc server
+        // self.conn
+        //     .write(&format!("USER {} * 8 :{}", "shaken_bot", "shaken_bot"));
 
         trace!("registered");
     }

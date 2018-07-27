@@ -13,11 +13,9 @@ pub struct Config {
 pub struct Twitch {
     pub address: String,
     pub port: u32,
-    pub pass: String,
-    pub client_id: String,
+    pub name: String,
     pub owners: Vec<String>,
     pub channels: Vec<String>,
-    // we don't use a nickname 'cause twitch uses the oauth token for all that
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -43,8 +41,7 @@ impl Default for Config {
             twitch: Twitch {
                 address: "irc.chat.twitch.tv".into(),
                 port: 6667,
-                pass: env!("TWITCH_PASSWORD").into(),
-                client_id: env!("TWITCH_CLIENTID").into(),
+                name: "shaken_bot".into(),
                 owners: vec!["23196011".into()],
                 channels: vec!["#museun".into()],
             },

@@ -52,7 +52,7 @@ impl Shaken {
             let _poll = Poll::new(&bot, &config);
 
             info!("connected and running");
-            bot.run(&config); // this blocks
+            bot.run(); // this blocks
             info!("disconnected");
 
             sleep += 5;

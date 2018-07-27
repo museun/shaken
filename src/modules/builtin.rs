@@ -10,9 +10,9 @@ pub struct Builtin {
 }
 
 impl Builtin {
-    pub fn new(bot: &Bot, config: &config::Config) -> Arc<Self> {
+    pub fn new(bot: &Bot, _config: &config::Config) -> Arc<Self> {
         let this = Arc::new(Self {
-            twitch: twitch::TwitchClient::new(&config.clone()),
+            twitch: twitch::TwitchClient::new(),
         });
 
         let next = Arc::clone(&this);

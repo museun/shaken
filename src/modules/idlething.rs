@@ -25,7 +25,7 @@ impl IdleThing {
                 state: IdleThingState::load(&config),
                 limit: HashMap::new(),
             }),
-            twitch: TwitchClient::new(&config),
+            twitch: TwitchClient::new(),
             tick: Mutex::new(Instant::now()),
             internal: AtomicUsize::new(config.idlething.interval),
         });
@@ -560,8 +560,8 @@ impl IdleThingState {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::mem;
     use crate::testing::*;
+    use std::mem;
 
     #[test]
     fn test_invest_command() {

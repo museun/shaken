@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-use crate::config::Config;
 use curl::easy::{Easy, List};
 
 pub struct TwitchClient {
@@ -7,9 +6,9 @@ pub struct TwitchClient {
 }
 
 impl TwitchClient {
-    pub fn new(config: &Config) -> Self {
+    pub fn new() -> Self {
         Self {
-            client_id: config.twitch.client_id.to_string(),
+            client_id: env!("SHAKEN_TWITCH_CLIENT_ID").to_string(),
         }
     }
 
