@@ -10,7 +10,7 @@ pub struct Display {
 impl Display {
     pub fn new(bot: &bot::Bot, _config: &config::Config) -> Arc<Self> {
         let colors = {
-            ::std::fs::File::create("colors.json")
+            ::std::fs::File::open("colors.json")
                 .map_err(|_| None)
                 .and_then(|f| {
                     serde_json::from_reader(&f).map_err(|e| {

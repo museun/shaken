@@ -72,7 +72,7 @@ impl Bot {
         let inner = sync::Mutex::new(Inner {
             user: User {
                 display: "".into(), // we don't have our name yet
-                color: Color::from(None),
+                color: Color::from("fc0fc0"),
                 userid: "".into(), // we don't have our id yet
             },
             owners: config.twitch.owners.clone(),
@@ -138,7 +138,7 @@ impl Bot {
                         trace!("got our caps");
                         let user = User {
                             display: msg.tags["display-name"].to_string(),
-                            color: Color::from(msg.tags.get("color")),
+                            color: Color::from("fc0fc0"), //msg.tags.get("color")
                             userid: msg.tags["user-id"].to_string(),
                         };
 
