@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables)] // go away
-use {bot, config, message};
+use crate::{bot, config, message};
 
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, RwLock}; // TODO switch over to parking_lot
@@ -316,7 +316,7 @@ struct Choice {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use testing::*;
+    use crate::testing::*;
 
     #[test]
     fn test_poll() {

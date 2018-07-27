@@ -144,7 +144,7 @@ impl Builtin {
                 map[i] = (map[i].0, part.parse::<u64>().unwrap());
             }
 
-            let timecode = ::humanize::format_time_map(&map);
+            let timecode = crate::humanize::format_time_map(&map);
             msg.push_str(&format!(", obs says: {}", &timecode));
         }
 
@@ -185,7 +185,7 @@ impl Builtin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use testing::*;
+    use crate::testing::*;
 
     #[test]
     fn test_autojoin_raw() {

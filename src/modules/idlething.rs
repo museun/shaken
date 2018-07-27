@@ -561,7 +561,7 @@ impl IdleThingState {
 mod tests {
     use super::*;
     use std::mem;
-    use testing::*;
+    use crate::testing::*;
 
     #[test]
     fn test_invest_command() {

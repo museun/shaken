@@ -51,7 +51,6 @@ impl Shakespeare {
     }
 
     fn auto_speak(&self, bot: &bot::Bot, env: &message::Envelope) {
-        #[cfg(not(test))]
         let (previous, bypass, chance) = {
             let inner = self.inner.lock().unwrap();
             (inner.previous, inner.bypass, inner.chance)
@@ -63,8 +62,6 @@ impl Shakespeare {
         } else {
             false
         };
-        #[cfg(test)]
-        let bypass = true;
 
         if bypass {
             trace!("bypassing the roll");
@@ -97,7 +94,7 @@ impl Shakespeare {
 
     #[cfg(not(test))]
     fn generate(&self) -> Option<String> {
-        use util::http_get;
+        use crate::util::http_get;
 
         fn prune(s: &str) -> &str {
             let mut pos = 0;
@@ -156,7 +153,7 @@ impl Shakespeare {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use testing::*;
+    use crate::testing::*;
 
     #[test]
     fn test_speak_command() {
@@ -180,7 +177,8 @@ mod tests {
     // this always bypass the roll
     #[test]
     fn test_auto_speak() {
-        let env = Environment::new();
+        let mut env = Environment::new();
+        env.config.shakespeare.bypass = 0;
         let _module = Shakespeare::new(&env.bot, &env.config);
 
         env.push_privmsg("testing this out");

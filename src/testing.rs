@@ -2,7 +2,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 
-use {bot, config, message};
+use crate::{bot, config, message};
 
 pub fn init_logger() {
     let _ = env_logger::Builder::from_default_env()
@@ -19,7 +19,7 @@ pub struct Environment {
 
 impl Environment {
     pub fn new() -> Self {
-        use {bot::Bot, config::Config, conn::Conn};
+        use crate::{bot::Bot, config::Config, conn::Conn};
         let conn = Arc::new(TestConn::new());
         Self {
             conn: Arc::clone(&conn),

@@ -1,4 +1,4 @@
-use testing::TestConn;
+use crate::testing::TestConn;
 
 use std::io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines};
 use std::net::{self, TcpStream, ToSocketAddrs};
