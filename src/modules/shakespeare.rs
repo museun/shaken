@@ -61,7 +61,7 @@ impl Shakespeare {
             time::Instant::now().duration_since(prev)  // don't format this
             > time::Duration::from_secs(bypass as u64)
         } else {
-            false || bypass == 0
+            bypass == 0
         };
 
         if bypass {
