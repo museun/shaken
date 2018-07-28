@@ -15,7 +15,7 @@ pub struct Twitch {
     pub port: u32,
     pub name: String,
     pub owners: Vec<String>,
-    pub channels: Vec<String>,
+    pub channel: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -43,7 +43,7 @@ impl Default for Config {
                 port: 6667,
                 name: "shaken_bot".into(),
                 owners: vec!["23196011".into()],
-                channels: vec!["#museun".into()],
+                channel: "museun".into(), // twitch channel, not irc channel
             },
             shakespeare: Shakespeare {
                 interval: 5,

@@ -1,9 +1,7 @@
 use crate::{bot::*, config, humanize::*, message, twitch, util};
 
+use chrono::prelude::*;
 use std::sync::Arc;
-
-use chrono::prelude::*; // this should be using serde on the twitch client
-use tungstenite as ws;
 
 pub struct Builtin {
     twitch: twitch::TwitchClient,
@@ -40,8 +38,7 @@ impl Builtin {
     }
 
     fn autojoin_raw(&self, bot: &Bot, _msg: &message::Message) {
-        // TODO configure this
-        bot.join("#museun");
+        bot.join(&format!("#{}", &bot.channel));
     }
 
     fn ping_raw(&self, bot: &Bot, msg: &message::Message) {
@@ -84,8 +81,7 @@ impl Builtin {
             };
         }
 
-        // TODO make this configurable
-        let streams = self.twitch.get_streams(&["museun"]);
+        let streams = self.twitch.get_streams(&[&bot.channel]);
         maybe!(streams.is_none());
 
         let streams = streams.unwrap();
@@ -111,8 +107,7 @@ impl Builtin {
 
         let timecode = Self::get_uptime_from_obs();
 
-        // TODO make this configurable
-        let streams = self.twitch.get_streams(&["museun"]);
+        let streams = self.twitch.get_streams(&[&bot.channel]);
         maybe!(streams.is_none());
 
         let streams = streams.unwrap();
@@ -152,33 +147,60 @@ impl Builtin {
     }
 
     fn get_uptime_from_obs() -> Option<String> {
-        // TOOD make this configurable
-        if let Ok((mut socket, _r)) =
-            ws::connect(::url::Url::parse("ws://localhost:45454").unwrap())
-        {
+        fn get_inner(tx: &crossbeam_channel::Sender<String>) -> Option<()> {
+            use tungstenite as ws;
+
+            let conn = ws::connect(::url::Url::parse("ws://localhost:45454").unwrap());
+            if conn.is_err() {
+                return None;
+            }
+
+            let (mut socket, _r) = conn.unwrap();
+
             // this should really be done by serde, but we're only going to send 1 message for now
             let msg = r#"{"request-type":"GetStreamingStatus", "message-id":"0"}"#.to_string();
-            socket.write_message(ws::Message::Text(msg)).unwrap();
+            socket
+                .write_message(ws::Message::Text(msg))
+                .expect("must be able to write this");
 
-            // this is awful.
             let msg = socket
                 .read_message()
                 .map_err(|e| error!("cannot read message from websocket: {}", e))
                 .ok()?;
+
             let msg = msg
                 .to_text()
                 .map_err(|e| error!("cannot convert message to text: {}", e))
                 .ok()?;
+
             let val = serde_json::from_str::<serde_json::Value>(&msg)
                 .map_err(|e| error!("cannot parse json: {}", e))
                 .ok()?;
 
             if val["streaming"].is_boolean() && val["streaming"].as_bool().unwrap() {
                 let timecode = val["stream-timecode"].as_str()?;
-                return Some(timecode.to_string());
+                let ts = timecode.to_string();
+                tx.send(ts);
+                Some(())
+            } else {
+                None
             }
         }
-        None
+
+        let (tx, rx) = crossbeam_channel::bounded(1);
+        let tx = tx.clone();
+        ::std::thread::spawn(move || {
+            if get_inner(&tx).is_none() {
+                drop(tx)
+            }
+        });
+
+        use crossbeam_channel::after;
+        let timeout = ::std::time::Duration::from_millis(150);
+        select!{
+                recv(rx, msg) => msg,
+                recv(after(timeout)) => None,
+        }
     }
 }
 
@@ -247,9 +269,11 @@ mod tests {
         env.push_privmsg("!commands");
         env.step();
 
-        assert_eq!(
-            env.pop_env().unwrap().data,
-            "available commands: !version !shaken !commands !viewers !uptime"
+        assert!(
+            env.pop_env()
+                .unwrap()
+                .data
+                .starts_with("available commands:")
         );
     }
 
@@ -262,7 +286,9 @@ mod tests {
     #[test]
     #[ignore]
     fn test_uptime_command() {
-        // this requires connecting to twitch. would need mocking
-        // also connects to obs
+        // this requires connecting to twitch
+        // also requires obs is running
+        // would need mocking
+
     }
 }

@@ -1,4 +1,6 @@
 #![feature(rust_2018_preview)]
+
+// doesn't rust 2018 remove the need for this?
 #[macro_use]
 extern crate log;
 
@@ -11,11 +13,13 @@ extern crate toml;
 #[macro_use]
 extern crate crossbeam_channel;
 extern crate parking_lot;
-extern crate scoped_threadpool;
+extern crate scoped_threadpool; // do I need this?
 
 extern crate chrono;
 extern crate curl;
+
 extern crate rand;
+
 extern crate tungstenite;
 extern crate url;
 

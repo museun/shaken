@@ -11,8 +11,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time;
 
-type Inspector = fn(&User, &str);
-
 // LOCK: determine whether we actually need to wrap these in a mutex
 pub enum Handler {
     Command(
@@ -32,6 +30,7 @@ struct Handlers(RwLock<Vec<Handler>>);
 pub struct Bot {
     pub(crate) inner: Mutex<Inner>,
     pub(crate) conn: Arc<Conn>,
+    pub(crate) channel: String,
     handlers: Handlers,
     inspected: Inspected,
 }
@@ -50,7 +49,7 @@ pub struct User {
 
 struct Inspected {
     output: RwLock<VecDeque<String>>,
-    inspect: Mutex<Inspector>, // only 1 write
+    inspect: Mutex<Box<Fn(&User, &str) + Send + Sync + 'static>>, // only 1 write
 }
 
 impl Inspected {
@@ -80,12 +79,13 @@ impl Bot {
 
         let inspected = Inspected {
             output: RwLock::new(VecDeque::new()),
-            inspect: Mutex::new(|_, _| {}),
+            inspect: Mutex::new(Box::new(|_, _| {})),
         };
 
         Self {
             inner,
             inspected,
+            channel: config.twitch.channel.to_string(),
             conn: Arc::new(conn),
             handlers: Handlers(RwLock::new(vec![])),
         }
@@ -101,7 +101,8 @@ impl Bot {
         // TODO make this into an enum, commands need to be an enum anyway
         let empty = Message::default();
 
-        let mut pool = Pool::new(4);
+        // XXX: only need 2 threads for now
+        let mut pool = Pool::new(2);
         pool.scoped(|scope| {
             scope.execute(move || 'events: loop {
                 select!{
@@ -228,8 +229,11 @@ impl Bot {
         self.conn().write(data)
     }
 
-    pub fn set_inspect(&self, f: Inspector) {
-        *self.inspected.inspect.lock() = f;
+    pub fn set_inspect<F>(&self, f: F)
+    where
+        F: Fn(&User, &str) + Send + Sync + 'static,
+    {
+        *self.inspected.inspect.lock() = Box::new(f);
     }
 
     pub fn get_commands(&self) -> Vec<String> {

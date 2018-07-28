@@ -66,12 +66,10 @@ impl IdleThing {
         }
 
         let user = bot.user_info();
+        let ch = &bot.channel;
 
-        // TODO make this configurable
-        let ch = "museun";
-
-        trace!("getting names for #{}", ch);
-        if let Some(names) = get_names_for(ch) {
+        trace!("getting names for #{}", &ch);
+        if let Some(names) = get_names_for(&ch) {
             let mut v = Vec::with_capacity(names.chatter_count);
             v.extend(names.chatters.moderators);
             v.extend(names.chatters.staff);

@@ -32,3 +32,12 @@ where
     }
     buf
 }
+
+pub fn get_timestamp() -> u64 {
+    use std::time::SystemTime;
+
+    let ts = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap();
+    ts.as_secs() * 1000 + u64::from(ts.subsec_nanos()) / 1_000_000
+}

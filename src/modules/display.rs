@@ -69,15 +69,11 @@ impl Display {
             }
         });
 
+        // --
+
         let next = Arc::clone(&this);
         bot.on_passive(move |_bot, env| {
-            // disable !command display
-            // TODO get a list of commands and only ignore commands we know
-            if env.data.starts_with('!') {
-                return;
-            }
-
-            fn get_color_for(map: &HashMap<String, Color>, env: &Envelope) -> Option<Color> {
+            fn get_color_for(map: &HashMap<String, Color>, env: &'a Envelope) -> Option<Color> {
                 map.get(env.get_id()?).cloned().or_else(|| {
                     env.tags
                         .get("color")
@@ -94,13 +90,17 @@ impl Display {
                     get_color_for(&map, &env)
                 }.unwrap();
 
-                let display = if let Some(display) = env.tags.get("display-name") {
-                    color.format(&display)
-                } else {
-                    color.format(&nick)
-                };
+                let display = env
+                    .tags
+                    .get("display-name")
+                    .and_then(|s| Some(s.as_ref()))
+                    .or_else(|| Some(nick))
+                    .unwrap();
 
-                println!("<{}> {}", display, &env.data);
+                if env.data.starts_with('!') {
+                    return;
+                }
+                println!("<{}> {}", color.format(&display), &env.data);
             }
         });
 

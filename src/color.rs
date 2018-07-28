@@ -2,15 +2,13 @@
 use std::fmt::Write;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum Color {
-    Turbo(u8, u8, u8),
-}
+pub struct Color((u8, u8, u8));
 
 impl From<(u8, u8, u8)> for Color {
     fn from(rgb: (u8, u8, u8)) -> Self {
         let (r, g, b) = rgb;
         trace!("got color: {},{},{}", r, g, b);
-        Color::Turbo(r, g, b)
+        Color((r, g, b))
     }
 }
 
@@ -68,9 +66,7 @@ impl Color {
         }
 
         let mut buf = String::new();
-        match *self {
-            Color::Turbo(r, g, b) => write!(buf, "{}", wrap((r, g, b), s)).unwrap(),
-        };
+        write!(buf, "{}", wrap(self.0, s)).unwrap();
 
         buf
     }
