@@ -93,9 +93,11 @@ impl Bot {
 
     pub fn run(&self) {
         self.register();
+        let interval = time::Duration::from_secs(1);
+        use crossbeam_channel::tick;
 
-        let tick = channel::tick(time::Duration::from_secs(1));
-        let (tx, rx) = channel::unbounded(); // maybe use a bounded channel
+        // maybe use a bounded channel
+        let (tx, rx) = channel::unbounded();
 
         // so the dispatch handling is easier, just keep sending the same empty message for non-message events
         // TODO make this into an enum, commands need to be an enum anyway
@@ -119,7 +121,7 @@ impl Bot {
                             }
                         }
                     },
-                    recv(tick, _) => {
+                    recv(tick(interval), _) => {
                         self.dispatch(&empty, true);
                     },
                 }
