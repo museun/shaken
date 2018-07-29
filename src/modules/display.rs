@@ -227,26 +227,3 @@ impl Display {
         });
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use testing::*;
-
-    #[test]
-    fn test_serialize() {
-        init_logger();
-
-        let ts = ::util::get_timestamp();
-
-        let data = Message::Display {
-            userid: "1000".to_string(),
-            timestamp: ts.to_string(),
-            color: Color::from("#FF00FF"),
-            display: "test user".to_string(),
-            data: "this is a test message".to_string(),
-        };
-
-        info!("{}", serde_json::to_string_pretty(&data).unwrap());
-    }
-}
