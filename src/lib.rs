@@ -24,7 +24,10 @@ extern crate tungstenite;
 extern crate url;
 
 mod color;
+pub use crate::color::Color;
+
 mod testing;
+pub use crate::testing::Environment;
 
 mod humanize;
 mod message;
@@ -36,8 +39,10 @@ mod modules;
 pub use crate::modules::*;
 
 mod bot;
-pub use crate::bot::Bot;
+pub use crate::bot::{Bot, User};
+
 mod config;
 pub use crate::config::Config;
+
 mod conn;
 pub use crate::conn::{Conn, TcpConn};

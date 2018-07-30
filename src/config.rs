@@ -7,6 +7,7 @@ pub struct Config {
     pub twitch: Twitch,
     pub shakespeare: Shakespeare,
     pub idlething: IdleThing,
+    pub websocket: WebSocket,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -33,6 +34,11 @@ pub struct IdleThing {
     pub interval: usize,
 }
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct WebSocket {
+    pub address: String,
+}
+
 const CONFIG_FILE: &str = "shaken.toml"; // hardcoded
 
 impl Default for Config {
@@ -55,6 +61,9 @@ impl Default for Config {
                 line_value: 5,
                 idle_value: 1,
                 interval: 60,
+            },
+            websocket: WebSocket {
+                address: "localhost:51000".into(),
             },
         }
     }

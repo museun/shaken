@@ -63,6 +63,13 @@ impl Environment {
         ))
     }
 
+    pub fn push_user_context(&self, user: &bot::User, data: &str) {
+        self.conn.push(&format!(
+            "user-id={};color={};display-name={} :{}!user@irc.test PRIVMSG #test :{}",
+            &user.userid, &user.color, &user.display, &user.display, data
+        ))
+    }
+
     pub fn pop_msg(&self) -> Option<message::Message> {
         let mut data = self.conn.pop()?.to_string();
         data.insert_str(0, ":test!user@irc.test ");

@@ -10,10 +10,9 @@ use std::time::Duration;
 use tungstenite as ws;
 
 #[derive(Debug, Clone, Serialize)]
-
 struct Message {
     pub userid: String, // not sure about the lifetime yet
-    pub timestamp: String,
+    pub timestamp: usize,
     pub color: Color,
     pub display: String,
     pub data: String,
@@ -22,10 +21,11 @@ struct Message {
 pub struct Display {
     colors: Mutex<HashMap<String, Color>>,
     queue: channel::Sender<Message>,
+    buf: channel::Receiver<Message>,
 }
 
 impl Display {
-    pub fn new(bot: &bot::Bot, _config: &config::Config) -> Arc<Self> {
+    pub fn new(bot: &bot::Bot, config: &config::Config) -> Arc<Self> {
         let colors = {
             ::std::fs::File::open("colors.json")
                 .map_err(|_| None)
@@ -39,13 +39,15 @@ impl Display {
                 .unwrap()
         };
 
-        let (tx, rx) = channel::unbounded();
+        let (tx, rx) = channel::bounded(8); // only buffer 16 messages
+
         let this = Arc::new(Self {
             colors: Mutex::new(colors),
             queue: tx,
+            buf: rx.clone(),
         });
 
-        Self::drain_to_client(&rx);
+        Self::drain_to_client(&rx, config.websocket.address.clone());
 
         let next = Arc::clone(&this);
         bot.set_inspect(move |me, s| {
@@ -54,12 +56,17 @@ impl Display {
                 // all this cloning
                 let msg = Message {
                     userid: me.userid.to_string(),
-                    timestamp: ts.to_string(),
+                    timestamp: ts as usize,
                     color: me.color.clone(),
                     display: me.display.to_string(),
                     data: s.to_string(),
                 };
 
+                if next.queue.is_full() {
+                    warn!("queue is full, dropping one");
+                    let _ = next.buf.recv();
+                }
+                debug!("queue at: {}", next.queue.len());
                 next.queue.send(msg);
             }
 
@@ -74,9 +81,7 @@ impl Display {
 
         let next = Arc::clone(&this);
         bot.on_command("!color", move |bot, env| {
-            let badcolors = &[
-                Color::from((0, 0, 0)), // black
-            ];
+            let badcolors = &[Color::from("#000000")];
 
             if let Some(id) = env.get_id() {
                 if let Some(part) = env.data.split_whitespace().collect::<Vec<_>>().get(0) {
@@ -137,12 +142,17 @@ impl Display {
                     // all this cloning
                     let msg = Message {
                         userid: env.get_id().unwrap().to_string(),
-                        timestamp: ts.to_string(),
+                        timestamp: ts as usize,
                         color: color.clone(),
                         display: display.to_string(),
                         data: env.data.to_string(),
                     };
 
+                    if next.queue.is_full() {
+                        warn!("queue is full, dropping one");
+                        let _ = next.buf.recv();
+                    }
+                    debug!("queue at: {}", next.queue.len());
                     next.queue.send(msg);
                 }
 
@@ -209,17 +219,17 @@ impl Display {
         }
     }
 
-    fn drain_to_client(rx: &channel::Receiver<Message>) {
-        // TODO get this from the config
-        const ADDRESS: &str = "localhost:51000";
-
+    fn drain_to_client(rx: &channel::Receiver<Message>, addr: String) {
         let rx = rx.clone();
         thread::spawn(move || {
-            let listener = TcpListener::bind(ADDRESS)
-                .unwrap_or_else(|_| panic!("must be able to bind to {}", ADDRESS));
+            let listener = TcpListener::bind(&addr)
+                .unwrap_or_else(|_| panic!("must be able to bind to {}", &addr));
+            info!("websocket listening on: {}", addr);
 
             for stream in listener.incoming() {
+                debug!("got a tcp conn for websocket");
                 if let Ok(stream) = stream {
+                    debug!("turned it into a websocket");
                     let rx = rx.clone();
                     Self::handle_connection(stream, &rx);
                 }

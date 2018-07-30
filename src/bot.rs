@@ -40,7 +40,7 @@ pub(crate) struct Inner {
     pub(crate) owners: Vec<String>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct User {
     pub display: String,
     pub color: Color,
