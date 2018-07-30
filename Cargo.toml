@@ -22,4 +22,5 @@ chrono = "0.4.4"
 crossbeam-channel = "0.2.3"
 parking_lot = "0.6.3"
 scoped_threadpool = "0.1.9"
+
 tungstenite = "0.6.0"

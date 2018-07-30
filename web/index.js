@@ -16,15 +16,22 @@ const socket = new WebSocket("ws://localhost:51000");
 socket.addEventListener('open', function (event) {
     socket.send(JSON.stringify("42")); // this should be a real handshake
 });
+
 socket.addEventListener('message', function (event) {
     let data = JSON.parse(event.data);
     if (lines.length >= MAX) {
         lines.shift();
     }
 
-    lines.push(data);
-    // they won't have the same timestamp
-    lines.sort((a, b) => { return a.timestamp < b.timestamp ? -1 : 1; });
+    let pos = lines.findIndex((el) => {
+        return el.timestamp < data.timestamp;
+    });
+
+    if (pos == -1 || pos == 0) {
+        lines.push(data);
+    } else {
+        lines.splice(pos, 0, data);
+    }
 
     console.log(`<${data.display}> ${data.data}`);
 });
