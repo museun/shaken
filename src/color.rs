@@ -65,6 +65,16 @@ impl RGB {
         }
     }
 
+    pub fn is_dark(&self) -> bool {
+        let (_, _, l) = HSL::from_color(&self).0;
+        l < 30.0
+    }
+
+    pub fn is_light(&self) -> bool {
+        let (_, _, l) = HSL::from_color(&self).0;
+        l > 80.0
+    }
+
     pub fn format(&self, s: &str) -> String {
         fn wrap(rgb: (u8, u8, u8), s: &str) -> String {
             let (r, g, b) = rgb;

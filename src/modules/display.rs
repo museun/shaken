@@ -81,30 +81,32 @@ impl Display {
 
         let next = Arc::clone(&this);
         bot.on_command("!color", move |bot, env| {
-            let badcolors = &[RGB::from("#000000")];
+            let id = match env.get_id() {
+                Some(id) => id,
+                None => return,
+            };
 
-            if let Some(id) = env.get_id() {
-                if let Some(part) = env.data.split_whitespace().collect::<Vec<_>>().get(0) {
-                    let color = RGB::from(*part);
+            let part = match env.data.split_whitespace().collect::<Vec<_>>().get(0) {
+                Some(part) => part,
+                None => return,
+            };
 
-                    for bad in badcolors {
-                        if color == *bad {
-                            bot.reply(&env, "don't use that color");
-                            return;
-                        }
-                    }
-                    {
-                        let mut colors = next.colors.lock();
-                        colors.insert(id.to_string(), color);
-                    }
-                    {
-                        let colors = next.colors.lock();
-                        if let Ok(f) = ::std::fs::File::create("colors.json") {
-                            let _ = serde_json::to_writer(&f, &*colors).map_err(|e| {
-                                error!("cannot save colors: {}", e);
-                            });
-                        }
-                    }
+            let color = RGB::from(*part);
+            if color.is_dark() {
+                bot.reply(&env, "don't use that color");
+                return;
+            }
+
+            {
+                let mut colors = next.colors.lock();
+                colors.insert(id.to_string(), color);
+            }
+            {
+                let colors = next.colors.lock();
+                if let Ok(f) = ::std::fs::File::create("colors.json") {
+                    let _ = serde_json::to_writer(&f, &*colors).map_err(|e| {
+                        error!("cannot save colors: {}", e);
+                    });
                 }
             }
         });
