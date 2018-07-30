@@ -86,7 +86,8 @@ impl Display {
                 None => return,
             };
 
-            let part = match env.data.split_whitespace().collect::<Vec<_>>().get(0) {
+            let parts = env.data.split_whitespace().collect::<Vec<_>>();
+            let part = match parts.get(0) {
                 Some(part) => part,
                 None => return,
             };
