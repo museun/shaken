@@ -63,7 +63,7 @@ impl Display {
                 };
 
                 if next.queue.is_full() {
-                    warn!("queue is full, dropping one");
+                    debug!("queue is full, dropping one");
                     let _ = next.buf.recv();
                 }
                 debug!("queue at: {}", next.queue.len());
@@ -152,7 +152,7 @@ impl Display {
                     };
 
                     if next.queue.is_full() {
-                        warn!("queue is full, dropping one");
+                        debug!("queue is full, dropping one");
                         let _ = next.buf.recv();
                     }
                     debug!("queue at: {}", next.queue.len());
