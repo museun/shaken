@@ -47,12 +47,11 @@ impl RGB {
             return (255, 255, 255);
         }
 
-        // TODO use a &str here
-        let s: String = if s.len() == 7 {
+        let s = if s.len() == 7 {
             // skip the '#'
-            s.chars().skip(1).collect()
+            &s[1..]
         } else {
-            s.chars().collect()
+            s
         };
 
         if let Ok(s) = u32::from_str_radix(&s, 16) {

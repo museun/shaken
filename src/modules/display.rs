@@ -39,7 +39,7 @@ impl Display {
                 .unwrap()
         };
 
-        let (tx, rx) = channel::bounded(8); // only buffer 16 messages
+        let (tx, rx) = channel::bounded(16); // only buffer 16 messages
 
         let this = Arc::new(Self {
             colors: Mutex::new(colors),
