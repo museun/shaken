@@ -13,21 +13,20 @@ impl fmt::Display for RGB {
 impl From<(u8, u8, u8)> for RGB {
     fn from(rgb: (u8, u8, u8)) -> Self {
         let (r, g, b) = rgb;
-        trace!("got color: {},{},{}", r, g, b);
         RGB((r, g, b))
     }
 }
 
 impl From<&str> for RGB {
     fn from(s: &str) -> Self {
-        let (r, g, b) = hex_to_rgb(&s);
+        let (r, g, b) = Self::hex_to_rgb(&s);
         RGB::from((r, g, b))
     }
 }
 
 impl From<&String> for RGB {
     fn from(s: &String) -> Self {
-        let (r, g, b) = hex_to_rgb(&s);
+        let (r, g, b) = Self::hex_to_rgb(&s);
         RGB::from((r, g, b))
     }
 }
@@ -41,31 +40,31 @@ impl From<Option<&String>> for RGB {
     }
 }
 
-fn hex_to_rgb(s: &str) -> (u8, u8, u8) {
-    // should be a #RRGGBB or a RRGGBB
-    if (s.len() != 7 && s.len() != 6) || (s.len() == 7 && !s.starts_with('#')) {
-        return (255, 255, 255);
-    }
-
-    // TODO use a &str here
-    let s: String = if s.len() == 7 {
-        // skip the '#'
-        s.chars().skip(1).collect()
-    } else {
-        s.chars().collect()
-    };
-
-    if let Ok(s) = u32::from_str_radix(&s, 16) {
-        let r = ((s >> 16) & 0xFF) as u8;
-        let g = ((s >> 8) & 0xFF) as u8;
-        let b = (s & 0xFF) as u8;
-        (r, g, b)
-    } else {
-        (255, 255, 255)
-    }
-}
-
 impl RGB {
+    fn hex_to_rgb(s: &str) -> (u8, u8, u8) {
+        // should be a #RRGGBB or a RRGGBB
+        if (s.len() != 7 && s.len() != 6) || (s.len() == 7 && !s.starts_with('#')) {
+            return (255, 255, 255);
+        }
+
+        // TODO use a &str here
+        let s: String = if s.len() == 7 {
+            // skip the '#'
+            s.chars().skip(1).collect()
+        } else {
+            s.chars().collect()
+        };
+
+        if let Ok(s) = u32::from_str_radix(&s, 16) {
+            let r = ((s >> 16) & 0xFF) as u8;
+            let g = ((s >> 8) & 0xFF) as u8;
+            let b = (s & 0xFF) as u8;
+            (r, g, b)
+        } else {
+            (255, 255, 255)
+        }
+    }
+
     pub fn format(&self, s: &str) -> String {
         fn wrap(rgb: (u8, u8, u8), s: &str) -> String {
             let (r, g, b) = rgb;
@@ -80,7 +79,14 @@ impl RGB {
 }
 
 #[derive(PartialEq, Debug)]
-struct HSL((f64, f64, f64)); // H S L
+pub struct HSL((f64, f64, f64)); // H S L
+
+impl fmt::Display for HSL {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (h, s, l) = self.0;
+        write!(f, "{:.2}%, {:.2}%, {:.2}%", h, s, l)
+    }
+}
 
 impl HSL {
     pub fn from_color(color: &RGB) -> Self {
@@ -161,5 +167,10 @@ mod tests {
         for (rgb, hsl, name) in colors {
             assert_eq!(*hsl, HSL::from_color(&rgb), "{}", name)
         }
+    }
+
+    #[test]
+    fn test_write() {
+        println!("{}", HSL::from_color(&RGB::from("#ff00ff")));
     }
 }

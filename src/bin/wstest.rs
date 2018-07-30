@@ -1,3 +1,4 @@
+#![feature(rust_2018_preview)]
 extern crate env_logger;
 #[macro_use]
 extern crate log;
@@ -56,9 +57,9 @@ impl State {
                 s.trim_left_matches('0').to_string()
             }
 
-            fn gen_color() -> Color {
+            fn gen_color() -> RGB {
                 let c: Vec<u8> = thread_rng().sample_iter(&Standard).take(3).collect();
-                Color::from((c[0], c[1], c[2]))
+                RGB::from((c[0], c[1], c[2]))
             }
 
             (0..10)

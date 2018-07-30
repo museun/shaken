@@ -1,4 +1,4 @@
-use crate::color::Color;
+use crate::color::RGB;
 use crate::config::Config;
 use crate::conn::Conn;
 use crate::message::{Envelope, Message};
@@ -43,7 +43,7 @@ pub(crate) struct Inner {
 #[derive(Clone, PartialEq, Debug)]
 pub struct User {
     pub display: String,
-    pub color: Color,
+    pub color: RGB,
     pub userid: String,
 }
 
@@ -71,7 +71,7 @@ impl Bot {
         let inner = Mutex::new(Inner {
             user: User {
                 display: config.twitch.name.to_string(),
-                color: Color::from("fc0fc0"),
+                color: RGB::from("fc0fc0"),
                 userid: "".into(), // we don't have our id yet
             },
             owners: config.twitch.owners.clone(),
@@ -141,7 +141,7 @@ impl Bot {
                         trace!("got our caps");
                         let user = User {
                             display: msg.tags["display-name"].to_string(),
-                            color: Color::from("fc0fc0"), //msg.tags.get("color")
+                            color: RGB::from("fc0fc0"), //msg.tags.get("color")
                             userid: msg.tags["user-id"].to_string(),
                         };
 

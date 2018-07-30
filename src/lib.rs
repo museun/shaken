@@ -24,7 +24,7 @@ extern crate tungstenite;
 extern crate url;
 
 mod color;
-pub use crate::color::Color;
+pub use crate::color::{HSL, RGB};
 
 mod testing;
 pub use crate::testing::Environment;

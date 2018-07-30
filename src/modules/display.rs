@@ -1,4 +1,4 @@
-use crate::{bot, color::Color, config, message::Envelope};
+use crate::{bot, color::RGB, config, message::Envelope};
 
 use crossbeam_channel as channel;
 use parking_lot::Mutex;
@@ -13,13 +13,13 @@ use tungstenite as ws;
 struct Message {
     pub userid: String, // not sure about the lifetime yet
     pub timestamp: usize,
-    pub color: Color,
+    pub color: RGB,
     pub display: String,
     pub data: String,
 }
 
 pub struct Display {
-    colors: Mutex<HashMap<String, Color>>,
+    colors: Mutex<HashMap<String, RGB>>,
     queue: channel::Sender<Message>,
     buf: channel::Receiver<Message>,
 }
@@ -35,7 +35,7 @@ impl Display {
                         None
                     })
                 })
-                .or_else::<HashMap<String, Color>, _>(|_: Option<()>| Ok(HashMap::new()))
+                .or_else::<HashMap<String, RGB>, _>(|_: Option<()>| Ok(HashMap::new()))
                 .unwrap()
         };
 
@@ -52,7 +52,7 @@ impl Display {
         let next = Arc::clone(&this);
         bot.set_inspect(move |me, s| {
             {
-                let ts = ::util::get_timestamp();
+                let ts = crate::util::get_timestamp();
                 // all this cloning
                 let msg = Message {
                     userid: me.userid.to_string(),
@@ -81,11 +81,11 @@ impl Display {
 
         let next = Arc::clone(&this);
         bot.on_command("!color", move |bot, env| {
-            let badcolors = &[Color::from("#000000")];
+            let badcolors = &[RGB::from("#000000")];
 
             if let Some(id) = env.get_id() {
                 if let Some(part) = env.data.split_whitespace().collect::<Vec<_>>().get(0) {
-                    let color = Color::from(*part);
+                    let color = RGB::from(*part);
 
                     for bad in badcolors {
                         if color == *bad {
@@ -113,12 +113,12 @@ impl Display {
 
         let next = Arc::clone(&this);
         bot.on_passive(move |_bot, env| {
-            fn get_color_for(map: &HashMap<String, Color>, env: &'a Envelope) -> Option<Color> {
+            fn get_color_for(map: &HashMap<String, RGB>, env: &'a Envelope) -> Option<RGB> {
                 map.get(env.get_id()?).cloned().or_else(|| {
                     env.tags
                         .get("color")
-                        .and_then(|s| Some(Color::from(s)))
-                        .or_else(|| Some(Color::from((255, 255, 255))))
+                        .and_then(|s| Some(RGB::from(s)))
+                        .or_else(|| Some(RGB::from((255, 255, 255))))
                 })
             }
 
@@ -138,7 +138,7 @@ impl Display {
                     .unwrap();
 
                 {
-                    let ts = ::util::get_timestamp();
+                    let ts = crate::util::get_timestamp();
                     // all this cloning
                     let msg = Message {
                         userid: env.get_id().unwrap().to_string(),
@@ -192,7 +192,7 @@ impl Display {
         };
 
         let interval = |socket: &mut ws::WebSocket<TcpStream>| {
-            let ts = ::util::get_timestamp();
+            let ts = crate::util::get_timestamp();
             // TODO make this less bad
             let ts = ts.to_string().as_bytes().to_vec();
             if let Err(err) = socket.write_message(ws::Message::Ping(ts)) {
