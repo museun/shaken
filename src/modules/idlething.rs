@@ -32,22 +32,40 @@ impl IdleThing {
         });
 
         let next = Arc::clone(&this);
-        bot.on_command("!invest", move |bot, env| next.invest_command(bot, env));
+        bot.on_command("!invest", move |bot, env| {
+            next.invest_command(bot, env);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_command("!give", move |bot, env| next.give_command(bot, env));
+        bot.on_command("!give", move |bot, env| {
+            next.give_command(bot, env);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_command("!check", move |bot, env| next.check_command(bot, env));
+        bot.on_command("!check", move |bot, env| {
+            next.check_command(bot, env);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_command("!top5", move |bot, env| next.top_command(bot, env));
+        bot.on_command("!top5", move |bot, env| {
+            next.top_command(bot, env);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_passive(move |bot, env| next.on_message(bot, env));
+        bot.on_passive(move |bot, env| {
+            next.on_message(bot, env);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_tick(move |bot| next.on_tick(bot));
+        bot.on_tick(move |bot| {
+            next.on_tick(bot);
+            None
+        });
 
         this
     }

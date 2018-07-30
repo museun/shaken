@@ -14,25 +14,46 @@ impl Builtin {
         });
 
         let next = Arc::clone(&this);
-        bot.on_raw("PING", move |bot, msg| next.ping_raw(bot, msg));
+        bot.on_raw("PING", move |bot, msg| {
+            next.ping_raw(bot, msg);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_raw("001", move |bot, msg| next.autojoin_raw(bot, msg));
+        bot.on_raw("001", move |bot, msg| {
+            next.autojoin_raw(bot, msg);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_command("!version", move |bot, env| next.version_command(bot, env));
+        bot.on_command("!version", move |bot, env| {
+            next.version_command(bot, env);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_command("!shaken", move |bot, env| next.shaken_command(bot, env));
+        bot.on_command("!shaken", move |bot, env| {
+            next.shaken_command(bot, env);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_command("!commands", move |bot, env| next.commands_command(bot, env));
+        bot.on_command("!commands", move |bot, env| {
+            next.commands_command(bot, env);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_command("!viewers", move |bot, env| next.viewers_command(bot, env));
+        bot.on_command("!viewers", move |bot, env| {
+            next.viewers_command(bot, env);
+            None
+        });
 
         let next = Arc::clone(&this);
-        bot.on_command("!uptime", move |bot, env| next.uptime_command(bot, env));
+        bot.on_command("!uptime", move |bot, env| {
+            next.uptime_command(bot, env);
+            None
+        });
 
         this
     }

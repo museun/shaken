@@ -81,21 +81,15 @@ impl Display {
 
         let next = Arc::clone(&this);
         bot.on_command("!color", move |bot, env| {
-            let id = match env.get_id() {
-                Some(id) => id,
-                None => return,
-            };
+            let id = env.get_id()?;
 
             let parts = env.data.split_whitespace().collect::<Vec<_>>();
-            let part = match parts.get(0) {
-                Some(part) => part,
-                None => return,
-            };
+            let part = parts.get(0)?;
 
             let color = RGB::from(*part);
             if color.is_dark() {
                 bot.reply(&env, "don't use that color");
-                return;
+                return None;
             }
 
             {
@@ -110,6 +104,8 @@ impl Display {
                     });
                 }
             }
+
+            None
         });
 
         // --
@@ -125,45 +121,45 @@ impl Display {
                 })
             }
 
-            if let Some(nick) = env.get_nick() {
-                trace!("tags: {:?}", env.tags);
+            let nick = env.get_nick()?;
+            trace!("tags: {:?}", env.tags);
 
-                let color = {
-                    let map = next.colors.lock();
-                    get_color_for(&map, &env)
-                }.unwrap();
+            let color = {
+                let map = next.colors.lock();
+                get_color_for(&map, &env)
+            }?;
 
-                let display = env
-                    .tags
-                    .get("display-name")
-                    .and_then(|s| Some(s.as_ref()))
-                    .or_else(|| Some(nick))
-                    .unwrap();
+            let display = env
+                .tags
+                .get("display-name")
+                .and_then(|s| Some(s.as_ref()))
+                .or_else(|| Some(nick))?;
 
-                {
-                    let ts = crate::util::get_timestamp();
-                    // all this cloning
-                    let msg = Message {
-                        userid: env.get_id().unwrap().to_string(),
-                        timestamp: ts as usize,
-                        color: color.clone(),
-                        display: display.to_string(),
-                        data: env.data.to_string(),
-                    };
+            {
+                let ts = crate::util::get_timestamp();
+                // all this cloning
+                let msg = Message {
+                    userid: env.get_id().unwrap().to_string(),
+                    timestamp: ts as usize,
+                    color: color.clone(),
+                    display: display.to_string(),
+                    data: env.data.to_string(),
+                };
 
-                    if next.queue.is_full() {
-                        debug!("queue is full, dropping one");
-                        let _ = next.buf.recv();
-                    }
-                    debug!("queue at: {}", next.queue.len());
-                    next.queue.send(msg);
+                if next.queue.is_full() {
+                    debug!("queue is full, dropping one");
+                    let _ = next.buf.recv();
                 }
-
-                if env.data.starts_with('!') {
-                    return;
-                }
-                println!("<{}> {}", color.format(&display), &env.data);
+                debug!("queue at: {}", next.queue.len());
+                next.queue.send(msg);
             }
+
+            if env.data.starts_with('!') {
+                return None;
+            }
+            println!("<{}> {}", color.format(&display), &env.data);
+
+            None
         });
 
         this

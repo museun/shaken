@@ -26,7 +26,7 @@ impl Poll {
         bot.on_command("!poll", move |bot, env| {
             if !bot.is_owner_id(env.get_id().unwrap()) {
                 debug!("{} tried to use the poll command", env.get_id().unwrap());
-                return;
+                return None;
             }
 
             // TODO add in proper subcommand processing
@@ -34,7 +34,7 @@ impl Poll {
                 || (env.data.len() >= 5 && &env.data[..5] == "start")
             {
                 // just to stop the subcommands from being trigered here
-                return;
+                return None;
             }
 
             if next.running.load(Ordering::Relaxed) {
@@ -55,26 +55,28 @@ impl Poll {
 
             let poll = TwitchPoll::new(&env, &options);
             *next.poll.write() = Some(poll);
+
+            None
         });
 
         let next = Arc::clone(&this);
         bot.on_command("!poll start", move |bot, env| {
             if !bot.is_owner_id(env.get_id().unwrap()) {
                 debug!("{} tried to start the poll", env.get_id().unwrap());
-                return;
+                return None;
             }
 
             if next.running.load(Ordering::Relaxed) {
                 warn!("poll is already running");
                 bot.say(&env, "poll is already running");
-                return;
+                return None;
             }
 
             let poll = { next.poll.read() };
             if poll.is_none() {
                 debug!("no poll was configured");
                 bot.say(&env, "no poll set up");
-                return;
+                return None;
             }
 
             let n: String = env
@@ -103,71 +105,71 @@ impl Poll {
             info!("starting the poll");
             *next.tick.lock() = time::Instant::now();
             next.running.store(true, Ordering::Relaxed);
+
+            None
         });
 
         let next = Arc::clone(&this);
         bot.on_command("!poll stop", move |bot, env| {
             if !bot.is_owner_id(env.get_id().unwrap()) {
                 debug!("{} tried to stop the poll", env.get_id().unwrap());
-                return;
+                return None;
             }
 
             if !next.running.load(Ordering::Relaxed) {
                 warn!("poll isn't running");
                 bot.say(&env, "poll isn't running");
-                return;
+                return None;
             }
 
             info!("stopping the poll");
             next.running.store(false, Ordering::Relaxed);
             bot.say(&env, "stopped the poll");
+
+            None
         });
 
         let next = Arc::clone(&this);
         bot.on_command("!vote", move |bot, env| {
             if !next.running.load(Ordering::Relaxed) {
                 // poll isn't running
-                return;
+                return None;
             }
 
-            let who = env.get_id();
-            if who.is_none() {
-                return;
+            let who = env.get_id()?;
+
+            let data = env.data.split_whitespace().take(1).next()?;
+            let n: String = data
+                .chars()
+                .skip_while(|&c| c == '#')
+                .take_while(char::is_ascii_digit)
+                .collect();
+
+            let n = n.parse::<usize>().ok()?;
+            if n == 0 {
+                return None;
             }
-            let who = who.unwrap();
 
-            if let Some(data) = env.data.split_whitespace().take(1).next() {
-                let n: String = data
-                    .chars()
-                    .skip_while(|&c| c == '#')
-                    .take_while(char::is_ascii_digit)
-                    .collect();
-
-                if let Ok(n) = n.parse::<usize>() {
-                    if n == 0 {
-                        return;
-                    }
-
-                    trace!("trying to vote for: {}", n - 1);
-                    if let Some(ref mut poll) = *next.poll.write() {
-                        poll.vote(&who, n - 1)
-                    }
-                }
+            trace!("trying to vote for: {}", n - 1);
+            if let Some(ref mut poll) = *next.poll.write() {
+                poll.vote(&who, n - 1)
             }
+
+            None
         });
 
         let next = Arc::clone(&this);
         bot.on_tick(move |bot| {
             if !next.running.load(Ordering::Relaxed) {
                 // the poll isn't running
-                return;
+                return None;
             }
 
             let then = next.tick.lock();
             if time::Instant::now() - *then
                 < time::Duration::from_secs(next.duration.load(Ordering::Relaxed) as u64)
             {
-                return;
+                return None;
             }
 
             info!("tallying the poll");
@@ -185,6 +187,8 @@ impl Poll {
                     )
                 });
             }
+
+            None
         });
 
         this
