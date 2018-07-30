@@ -3,3 +3,6 @@
 shaken.toml
 *.json
 *.txt
+web/node_modules/**
+web/dist/**
+web/.cache/**

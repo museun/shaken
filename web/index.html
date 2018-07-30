@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>shaken</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div id="chat" class="container">
+        <div class="message" v-for="line in lines">
+            <div class="display">
+                <div class="name" :style="{color:`rgb(${line.color[0]}, ${line.color[1]} , ${line.color[2]})`}">
+                    {{line.display}}
+                </div>
+            </div>
+            <div class="data">{{ line.data }}</div>
+        </div>
+    </div>
+</body>
+
+<script src="index.js" />
+
+</html>

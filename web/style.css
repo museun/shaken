@@ -1,0 +1,32 @@
+@import url('https://fonts.googleapis.com/css?family=PT+Sans');
+
+body {
+    background: black;    
+    margin: 0px;
+}
+
+.container {
+    display: flex;        
+    flex-direction: column;
+    justify-content: flex-end;
+    width: 100vw;
+    height: 100vw;
+    color: white;
+    font-family: 'PT Sans', sans-serif;    
+}
+
+.message {
+    display: grid;
+    grid-template-columns: minmax(5ch, 18ch) auto; 
+    grid-gap: 2ch;
+    padding-top: 0.7rem;
+}
+
+.display{
+    text-align: right;
+}
+
+.data {
+    text-align: left;
+}
+
