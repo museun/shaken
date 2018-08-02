@@ -32,22 +32,13 @@ impl Shakespeare {
         });
 
         let next = Arc::clone(&this);
-        bot.on_command("!speak", move |bot, env| {
-            next.speak(bot, env);
-            None
-        });
+        bot.on_command("!speak", move |bot, env| next.speak(bot, env));
 
         let next = Arc::clone(&this);
-        bot.on_passive(move |bot, env| {
-            next.auto_speak(bot, env);
-            None
-        });
+        bot.on_passive(move |bot, env| next.auto_speak(bot, env));
 
         let next = Arc::clone(&this);
-        bot.on_passive(move |bot, env| {
-            next.check_mentions(bot, env);
-            None
-        });
+        bot.on_passive(move |bot, env| next.check_mentions(bot, env));
 
         this
     }

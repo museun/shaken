@@ -14,14 +14,14 @@ use std::time;
 pub enum Handler {
     Command(
         &'static str,
-        Box<Fn(&Bot, &Envelope) -> Option<()> + Send + Sync + 'static>,
+        Box<Fn(&Bot, &Envelope) + Send + Sync + 'static>,
     ),
-    Passive(Box<Fn(&Bot, &Envelope) -> Option<()> + Send + Sync + 'static>),
+    Passive(Box<Fn(&Bot, &Envelope) + Send + Sync + 'static>),
     Raw(
         &'static str,
-        Box<Fn(&Bot, &Message) -> Option<()> + Send + Sync + 'static>,
+        Box<Fn(&Bot, &Message) + Send + Sync + 'static>,
     ),
-    Tick(Box<Fn(&Bot) -> Option<()> + Send + Sync + 'static>),
+    Tick(Box<Fn(&Bot) + Send + Sync + 'static>),
 }
 
 struct Handlers(RwLock<Vec<Handler>>);
@@ -277,32 +277,30 @@ impl Bot {
         trace!("registered");
     }
 
-    // maybe make a trait which defaults to the Option<()> variant
-
     pub fn on_command<F>(&self, cmd: &'static str, f: F)
     where
-        F: Fn(&Bot, &Envelope) -> Option<()> + Send + Sync + 'static,
+        F: Fn(&Bot, &Envelope) + Send + Sync + 'static,
     {
         self.add_handler(Handler::Command(cmd, Box::new(f)));
     }
 
     pub fn on_passive<F>(&self, f: F)
     where
-        F: Fn(&Bot, &Envelope) -> Option<()> + Send + Sync + 'static,
+        F: Fn(&Bot, &Envelope) + Send + Sync + 'static,
     {
         self.add_handler(Handler::Passive(Box::new(f)));
     }
 
     pub fn on_raw<F>(&self, cmd: &'static str, f: F)
     where
-        F: Fn(&Bot, &Message) -> Option<()> + Send + Sync + 'static,
+        F: Fn(&Bot, &Message) + Send + Sync + 'static,
     {
         self.add_handler(Handler::Raw(cmd, Box::new(f)));
     }
 
     pub fn on_tick<F>(&self, f: F)
     where
-        F: Fn(&Bot) -> Option<()> + Send + Sync + 'static,
+        F: Fn(&Bot) + Send + Sync + 'static,
     {
         self.add_handler(Handler::Tick(Box::new(f)));
     }

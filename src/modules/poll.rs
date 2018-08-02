@@ -1,5 +1,5 @@
 #![allow(dead_code, unused_variables)] // go away
-use crate::{bot, config, message};
+use crate::{bot::Bot, config, message::Envelope};
 
 use parking_lot::{Mutex, RwLock};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -14,7 +14,7 @@ pub struct Poll {
 }
 
 impl Poll {
-    pub fn new(bot: &bot::Bot, _config: &config::Config) -> Arc<Self> {
+    pub fn new(bot: &Bot, _config: &config::Config) -> Arc<Self> {
         let this = Arc::new(Self {
             poll: RwLock::new(None),
             tick: Mutex::new(time::Instant::now()),
@@ -24,174 +24,188 @@ impl Poll {
 
         let next = Arc::clone(&this);
         bot.on_command("!poll", move |bot, env| {
-            if !bot.is_owner_id(env.get_id().unwrap()) {
-                debug!("{} tried to use the poll command", env.get_id().unwrap());
-                return None;
-            }
-
-            // TODO add in proper subcommand processing
-            if (env.data.len() >= 4 && &env.data[..4] == "stop")
-                || (env.data.len() >= 5 && &env.data[..5] == "start")
-            {
-                // just to stop the subcommands from being trigered here
-                return None;
-            }
-
-            if next.running.load(Ordering::Relaxed) {
-                warn!("poll is already running");
-                bot.say(&env, "poll is already running, stopping it");
-                next.running.store(false, Ordering::Relaxed);
-            }
-
-            trace!("collecting the options");
-            let options = Self::collect_options(&env.data);
-            bot.say(&env, "is this poll right?");
-            trace!("verifying poll is right");
-            options
-                .iter()
-                .enumerate()
-                .map(|(i, s)| format!("#{}: {}", i + 1, s))
-                .for_each(|opt| bot.say(&env, &opt));
-
-            let poll = TwitchPoll::new(&env, &options);
-            *next.poll.write() = Some(poll);
-
-            None
+            next.poll_command(bot, env);
         });
 
         let next = Arc::clone(&this);
         bot.on_command("!poll start", move |bot, env| {
-            if !bot.is_owner_id(env.get_id().unwrap()) {
-                debug!("{} tried to start the poll", env.get_id().unwrap());
-                return None;
-            }
-
-            if next.running.load(Ordering::Relaxed) {
-                warn!("poll is already running");
-                bot.say(&env, "poll is already running");
-                return None;
-            }
-
-            let poll = { next.poll.read() };
-            if poll.is_none() {
-                debug!("no poll was configured");
-                bot.say(&env, "no poll set up");
-                return None;
-            }
-
-            let n: String = env
-                .data
-                .chars()
-                .skip_while(|&c| c == '#')
-                .take_while(char::is_ascii_digit)
-                .collect();
-
-            let pos = if let Ok(n) = n.parse::<usize>() {
-                n
-            } else {
-                next.duration.load(Ordering::Relaxed)
-            };
-
-            next.duration.store(pos, Ordering::Relaxed);
-
-            bot.say(
-                &env,
-                &format!(
-                    "starting poll for the next {} seconds. use '!vote n' to vote for that option",
-                    next.duration.load(Ordering::Relaxed)
-                ),
-            );
-
-            info!("starting the poll");
-            *next.tick.lock() = time::Instant::now();
-            next.running.store(true, Ordering::Relaxed);
-
-            None
+            next.poll_start_command(bot, env);
         });
 
         let next = Arc::clone(&this);
         bot.on_command("!poll stop", move |bot, env| {
-            if !bot.is_owner_id(env.get_id().unwrap()) {
-                debug!("{} tried to stop the poll", env.get_id().unwrap());
-                return None;
-            }
-
-            if !next.running.load(Ordering::Relaxed) {
-                warn!("poll isn't running");
-                bot.say(&env, "poll isn't running");
-                return None;
-            }
-
-            info!("stopping the poll");
-            next.running.store(false, Ordering::Relaxed);
-            bot.say(&env, "stopped the poll");
-
-            None
+            next.poll_stop_command(bot, env);
         });
 
         let next = Arc::clone(&this);
         bot.on_command("!vote", move |bot, env| {
-            if !next.running.load(Ordering::Relaxed) {
-                // poll isn't running
-                return None;
-            }
-
-            let who = env.get_id()?;
-
-            let data = env.data.split_whitespace().take(1).next()?;
-            let n: String = data
-                .chars()
-                .skip_while(|&c| c == '#')
-                .take_while(char::is_ascii_digit)
-                .collect();
-
-            let n = n.parse::<usize>().ok()?;
-            if n == 0 {
-                return None;
-            }
-
-            trace!("trying to vote for: {}", n - 1);
-            if let Some(ref mut poll) = *next.poll.write() {
-                poll.vote(&who, n - 1)
-            }
-
-            None
+            next.poll_vote_command(bot, env);
         });
 
         let next = Arc::clone(&this);
         bot.on_tick(move |bot| {
-            if !next.running.load(Ordering::Relaxed) {
-                // the poll isn't running
-                return None;
-            }
-
-            let then = next.tick.lock();
-            if time::Instant::now() - *then
-                < time::Duration::from_secs(next.duration.load(Ordering::Relaxed) as u64)
-            {
-                return None;
-            }
-
-            info!("tallying the poll");
-            next.running.store(false, Ordering::Relaxed);
-
-            // this doesn't need an if let
-            if let Some(ref mut poll) = *next.poll.write() {
-                let target = poll.target.clone(); // might as well clone it
-
-                let iter = poll.tally().iter().take(3).enumerate();
-                iter.for_each(|(i, opt)| {
-                    bot.say(
-                        &target,
-                        &format!("({} votes) #{} {}", opt.count, opt.position + 1, opt.option),
-                    )
-                });
-            }
-
-            None
+            next.on_tick(bot);
         });
 
         this
+    }
+
+    fn poll_command(&self, bot: &Bot, env: &Envelope) {
+        if !bot.is_owner_id(env.get_id().unwrap()) {
+            debug!("{} tried to use the poll command", env.get_id().unwrap());
+            return;
+        }
+
+        // TODO add in proper subcommand processing
+        if (env.data.len() >= 4 && &env.data[..4] == "stop")
+            || (env.data.len() >= 5 && &env.data[..5] == "start")
+        {
+            // just to stop the subcommands from being trigered here
+            return;
+        }
+
+        if self.running.load(Ordering::Relaxed) {
+            warn!("poll is already running");
+            bot.say(&env, "poll is already running, stopping it");
+            self.running.store(false, Ordering::Relaxed);
+        }
+
+        trace!("collecting the options");
+        let options = Self::collect_options(&env.data);
+        bot.say(&env, "is this poll right?");
+        trace!("verifying poll is right");
+        options
+            .iter()
+            .enumerate()
+            .map(|(i, s)| format!("#{}: {}", i + 1, s))
+            .for_each(|opt| bot.say(&env, &opt));
+
+        let poll = TwitchPoll::new(&env, &options);
+        *self.poll.write() = Some(poll);
+    }
+
+    fn poll_start_command(&self, bot: &Bot, env: &Envelope) {
+        if !bot.is_owner_id(env.get_id().unwrap()) {
+            debug!("{} tried to start the poll", env.get_id().unwrap());
+            return;
+        }
+
+        if self.running.load(Ordering::Relaxed) {
+            warn!("poll is already running");
+            bot.say(&env, "poll is already running");
+            return;
+        }
+
+        let poll = { self.poll.read() };
+        if poll.is_none() {
+            debug!("no poll was configured");
+            bot.say(&env, "no poll set up");
+            return;
+        }
+
+        let n: String = env
+            .data
+            .chars()
+            .skip_while(|&c| c == '#')
+            .take_while(char::is_ascii_digit)
+            .collect();
+
+        let pos = if let Ok(n) = n.parse::<usize>() {
+            n
+        } else {
+            self.duration.load(Ordering::Relaxed)
+        };
+
+        self.duration.store(pos, Ordering::Relaxed);
+
+        bot.say(
+            &env,
+            &format!(
+                "starting poll for the next {} seconds. use '!vote n' to vote for that option",
+                self.duration.load(Ordering::Relaxed)
+            ),
+        );
+
+        info!("starting the poll");
+        *self.tick.lock() = time::Instant::now();
+        self.running.store(true, Ordering::Relaxed);
+    }
+
+    fn poll_stop_command(&self, bot: &Bot, env: &Envelope) {
+        if !bot.is_owner_id(env.get_id().unwrap()) {
+            debug!("{} tried to stop the poll", env.get_id().unwrap());
+            return;
+        }
+
+        if !self.running.load(Ordering::Relaxed) {
+            warn!("poll isn't running");
+            bot.say(&env, "poll isn't running");
+            return;
+        }
+
+        info!("stopping the poll");
+        self.running.store(false, Ordering::Relaxed);
+        bot.say(&env, "stopped the poll");
+    }
+
+    fn poll_vote_command(&self, bot: &Bot, env: &Envelope) -> Option<()> {
+        if !self.running.load(Ordering::Relaxed) {
+            // poll isn't running
+            return None;
+        }
+
+        let who = env.get_id()?;
+
+        let data = env.data.split_whitespace().take(1).next()?;
+        let n: String = data
+            .chars()
+            .skip_while(|&c| c == '#')
+            .take_while(char::is_ascii_digit)
+            .collect();
+
+        let n = n.parse::<usize>().ok()?;
+        if n == 0 {
+            return None;
+        }
+
+        trace!("trying to vote for: {}", n - 1);
+        if let Some(ref mut poll) = *self.poll.write() {
+            poll.vote(&who, n - 1)
+        }
+
+        None
+    }
+
+    fn on_tick(&self, bot: &Bot) -> Option<()> {
+        if !self.running.load(Ordering::Relaxed) {
+            // the poll isn't running
+            return None;
+        }
+
+        let then = self.tick.lock();
+        if time::Instant::now() - *then
+            < time::Duration::from_secs(self.duration.load(Ordering::Relaxed) as u64)
+        {
+            return None;
+        }
+
+        info!("tallying the poll");
+        self.running.store(false, Ordering::Relaxed);
+
+        // this doesn't need an if let
+        if let Some(ref mut poll) = *self.poll.write() {
+            let target = poll.target.clone(); // might as well clone it
+
+            let iter = poll.tally().iter().take(3).enumerate();
+            iter.for_each(|(i, opt)| {
+                bot.say(
+                    &target,
+                    &format!("({} votes) #{} {}", opt.count, opt.position + 1, opt.option),
+                )
+            });
+        }
+
+        None
     }
 
     fn collect_options(input: &str) -> Vec<String> {
@@ -263,13 +277,13 @@ impl Poll {
 
 #[derive(Debug, Clone)]
 struct TwitchPoll {
-    target: message::Envelope,
+    target: Envelope,
     options: Vec<Choice>,
     seen: Vec<String>, // maybe use a hash set here
 }
 
 impl TwitchPoll {
-    pub fn new<S>(target: &message::Envelope, options: &[S]) -> Self
+    pub fn new<S>(target: &Envelope, options: &[S]) -> Self
     where
         S: AsRef<str>,
     {
@@ -282,8 +296,7 @@ impl TwitchPoll {
                     option: f.as_ref().to_string(),
                     position: i,
                     count: 0,
-                })
-                .collect(),
+                }).collect(),
             seen: vec![],
         }
     }
