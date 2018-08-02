@@ -1,25 +1,31 @@
 @import url('https://fonts.googleapis.com/css?family=PT+Sans');
 
 body {
-    background: black;    
+    background: rgba(20, 21, 25,100);    
     margin: 0px;
 }
 
 .container {
-    display: flex;        
+    display: flex;
+    border-color: red;
+    border-style: solid;
+    border-width: 1px;
     flex-direction: column;
     justify-content: flex-end;
-    width: 100vw;
-    height: 100vw;
+    width: 643px;
+    height: 350px;
     color: white;
     font-family: 'PT Sans', sans-serif;    
+    font-size: 14px;
+    padding: 2px;
 }
 
 .message {
     display: grid;
-    grid-template-columns: minmax(5ch, 18ch) auto; 
+    grid-template-columns: minmax(5ch, 23ch) auto; 
     grid-gap: 2ch;
-    padding-top: 0.7rem;
+    padding-top: 0.24rem;
+    padding-bottom: 0.25rem;
 }
 
 .display{

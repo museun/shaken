@@ -6,3 +6,4 @@ shaken.toml
 web/node_modules/**
 web/dist/**
 web/.cache/**
+run.ps1

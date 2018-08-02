@@ -11,7 +11,6 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time;
 
-// LOCK: determine whether we actually need to wrap these in a mutex
 pub enum Handler {
     Command(
         &'static str,
@@ -277,6 +276,8 @@ impl Bot {
 
         trace!("registered");
     }
+
+    // maybe make a trait which defaults to the Option<()> variant
 
     pub fn on_command<F>(&self, cmd: &'static str, f: F)
     where
