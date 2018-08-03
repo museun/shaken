@@ -460,7 +460,7 @@ mod tests {
 
         env.push_privmsg("!poll stop");
         env.step();
-        assert_eq!(env.pop_env().expect("a").data, "poll isn't running");
+        assert_eq!(env.pop_env().unwrap().data, "poll isn't running");
         assert!(env.pop_env().is_none());
 
         env.push_privmsg(r#"!poll "option a" "option b" "option c""#);

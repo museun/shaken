@@ -92,7 +92,7 @@ impl Environment {
         while let Some(_) = self.pop_env() {}
     }
 
-    pub fn drain_env_warn_log(&self) {
+    pub fn drain_envs_warn_log(&self) {
         while let Some(env) = self.pop_env() {
             warn!("{:#?}", env);
         }

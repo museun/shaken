@@ -3,25 +3,25 @@ use rand::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use std::{fs, str};
+use std::{fmt, str};
 
 use crate::{bot, config, humanize::*, message, twitch::*};
 
-pub struct IdleThing {
+pub struct Invest {
     inner: RwLock<Inner>,
     twitch: TwitchClient,
 }
 
 struct Inner {
-    state: IdleThingState,
+    state: InvestState,
     limit: HashMap<String, Instant>,
 }
 
-impl IdleThing {
+impl Invest {
     pub fn new(bot: &bot::Bot, config: &config::Config) -> Arc<Self> {
         let this = Arc::new(Self {
             inner: RwLock::new(Inner {
-                state: IdleThingState::load(&config),
+                state: InvestState::load(&config),
                 limit: HashMap::new(),
             }),
             twitch: TwitchClient::new(),
@@ -40,6 +40,9 @@ impl IdleThing {
         bot.on_command("!top5", move |bot, env| next.top_command(bot, env));
 
         let next = Arc::clone(&this);
+        bot.on_command("!stats", move |bot, env| next.stats_command(bot, env));
+
+        let next = Arc::clone(&this);
         bot.on_passive(move |bot, env| next.on_message(bot, env));
 
         this
@@ -48,9 +51,12 @@ impl IdleThing {
     fn invest_command(&self, bot: &bot::Bot, env: &message::Envelope) {
         let who = bail!(env.get_id());
 
-        if self.check_rate_limit(&who) {
-            debug!("{} has been rate limited", who);
-            return;
+        #[cfg(not(test))]
+        {
+            if self.check_rate_limit(&who) {
+                debug!("{} has been rate limited", who);
+                return;
+            }
         }
 
         let num = match self.get_credits_from_str(&env.data, &who) {
@@ -88,7 +94,7 @@ impl IdleThing {
                     )
                 }
             },
-            Err(IdleThingError::NotEnoughCredits { have, want }) => format!(
+            Err(InvestError::NotEnoughCredits { have, want }) => format!(
                 "you don't have enough. you have {}, but you want to invest {} credits",
                 have.comma_separate(),
                 want.comma_separate()
@@ -215,6 +221,23 @@ impl IdleThing {
         }
     }
 
+    fn stats_command(&self, bot: &bot::Bot, env: &message::Envelope) {
+        let who = bail!(env.get_id());
+
+        let total = { self.inner.read().state.total };
+
+        let mut inner = self.inner.write();
+        let user = inner.state.get(who);
+        bot.reply(
+            &env,
+            &format!(
+                "you've {}. and I've 'collected' {} credits",
+                user,
+                total.comma_separate()
+            ),
+        );
+    }
+
     fn on_message(&self, _bot: &bot::Bot, env: &message::Envelope) {
         if env.data.starts_with('!') || env.data.starts_with('@') {
             return;
@@ -294,7 +317,7 @@ impl IdleThing {
             let credits = state.get_credits_for(&id);
             trace!("got {:?} credits for {}", credits, id);
             credits
-        }?;
+        }.or(Some(0))?;
 
         Some(match num {
             NumType::Num(num) => num,
@@ -323,201 +346,255 @@ impl From<&str> for NumType {
     }
 }
 
-const IDLE_STORE: &str = "idlething.json";
-
+const INVEST_STORE: &str = "invest.json";
 type Credit = usize;
 
+#[derive(Deserialize, Serialize, Debug)]
+struct InvestUser {
+    id: String,
+    max: usize,
+    current: usize,
+    total: usize,
+    invest: (usize, usize), // success, failure
+}
+
+impl InvestUser {
+    pub fn new(id: &str) -> InvestUser {
+        InvestUser {
+            id: id.to_string(),
+            max: 0,
+            current: 0,
+            total: 0,
+            invest: (0, 0),
+        }
+    }
+}
+
+impl fmt::Display for InvestUser {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let (success, failure) = self.invest;
+
+        let mut percentage = (failure as f64) / (success as f64) * 100.0;
+        if !percentage.is_normal() {
+            percentage = 0.0;
+        }
+
+        write!(
+            f,
+            "reached a max of {} credits, out of {} total credits with {} successes and {} failures ({:.2}%).",
+            self.max.comma_separate(),
+            self.total.comma_separate(),
+            success.comma_separate(),
+            failure.comma_separate(),
+            percentage,
+        )
+    }
+}
+
 #[derive(Debug, PartialEq)]
-pub enum IdleThingError {
+enum InvestError {
     NotEnoughCredits { have: Credit, want: Credit },
     // a rate limit error?
 }
 
 #[derive(Debug, PartialEq)]
-pub enum Donation {
+enum Donation {
     Success { old: Credit, new: Credit },
     Failure { old: Credit, new: Credit },
 }
 
+type InvestResult = Result<Donation, InvestError>;
+
 #[derive(Debug, Deserialize, Serialize)]
-pub struct IdleThingState {
-    state: HashMap<String, Credit>, // this has to own the strings
+struct InvestState {
+    total: usize, // total lost
+    state: HashMap<String, InvestUser>,
+
+    #[serde(skip)]
+    chance: f64,
 
     #[serde(skip)]
     starting: usize,
 
     #[serde(skip)]
     line_value: usize,
-
-    #[serde(skip)]
-    idle_value: usize,
 }
 
-impl Default for IdleThingState {
+impl Default for InvestState {
     fn default() -> Self {
         Self {
             starting: 0,
             line_value: 5,
-            idle_value: 1,
+            chance: 1.0 / 2.0,
 
+            total: 0,
             state: Default::default(),
         }
     }
 }
 
-#[cfg(not(test))]
-impl Drop for IdleThingState {
+impl Drop for InvestState {
     fn drop(&mut self) {
-        debug!("saving IdleThing to {}", IDLE_STORE);
+        debug!("saving InvestState to {}", INVEST_STORE);
         self.save();
     }
 }
 
-impl IdleThingState {
+impl InvestState {
     #[cfg(not(test))]
     pub fn load(config: &config::Config) -> Self {
-        debug!("loading IdleThing from: {}", IDLE_STORE);
-        let s = fs::read_to_string(IDLE_STORE)
+        use std::fs;
+        debug!("loading InvestState from: {}", INVEST_STORE);
+        let s = fs::read_to_string(INVEST_STORE)
             .or_else(|_| {
-                debug!("loading default IdleThing");
-                serde_json::to_string_pretty(&IdleThingState::default())
+                debug!("loading default Invest");
+                serde_json::to_string_pretty(&InvestState::default())
             }).expect("to get json");
         let mut this: Self = serde_json::from_str(&s).expect("to deserialize struct");
-        this.starting = config.idlething.starting;
-        this.line_value = config.idlething.line_value;
-        this.idle_value = config.idlething.idle_value;
+        this.starting = config.invest.starting;
+        this.line_value = config.invest.line_value;
+        this.chance = config.invest.chance;
         this
     }
 
     #[cfg(test)]
     pub fn load(_config: &config::Config) -> Self {
-        IdleThingState::default()
+        InvestState::default()
     }
 
     pub fn save(&self) {
-        let f = fs::File::create(IDLE_STORE).expect("to create file");
-        serde_json::to_writer(&f, &self).expect("to serialize struct");
-        trace!("saving IdleThing to {}", IDLE_STORE)
+        #[cfg(not(test))]
+        {
+            use std::fs;
+            let f = fs::File::create(INVEST_STORE).expect("to create file");
+            serde_json::to_writer(&f, &self).expect("to serialize struct");
+            trace!("saving Invest to {}", INVEST_STORE)
+        }
     }
 
-    pub fn give(&mut self, name: &str, credits: Credit) -> Credit {
+    pub fn get(&mut self, id: &str) -> &InvestUser {
         self.state
-            .entry(name.into())
-            .and_modify(|c| *c += credits)
-            .or_insert(credits);
-
-        let ch = self.state[name];
-        trace!("setting {}'s credits to {}", name, ch);
-        ch
+            .entry(id.into())
+            .or_insert_with(|| InvestUser::new(id))
     }
 
-    pub fn take(&mut self, name: &str, credits: Credit) -> Credit {
+    pub fn give(&mut self, id: &str, credits: Credit) -> Credit {
         self.state
-            .entry(name.into())
-            .and_modify(|c| *c -= credits)
-            .or_insert(credits);
+            .entry(id.into())
+            .and_modify(|c| {
+                c.current += credits;
+                c.total += credits;
+                if c.current > c.max {
+                    c.max = c.current;
+                }
+            }).or_insert_with(|| {
+                let mut user = InvestUser::new(id);
+                user.current = credits;
+                user.max = credits;
+                user.total = credits;
+                user
+            });
 
-        let ch = self.state[name];
-        trace!("setting {}'s credits to {}", name, ch);
-        ch
+        self.save();
+        let credits = self.state[id].current;
+        trace!("setting {}'s credits to {}", id, credits);
+        credits
     }
 
-    pub fn increment(&mut self, name: &str) -> Credit {
+    pub fn take(&mut self, id: &str, credits: Credit) -> Credit {
+        self.state
+            .entry(id.into())
+            .and_modify(|c| c.current -= credits)
+            .or_insert_with(|| {
+                let mut user = InvestUser::new(id);
+                user.current = credits;
+                user
+            });
+
+        self.save();
+        let credits = self.state[id].current;
+        trace!("setting {}'s credits to {}", id, credits);
+        credits
+    }
+
+    pub fn increment(&mut self, id: &str) -> Credit {
         let line_value = self.line_value;
-        self.give(name, line_value)
+        self.give(id, line_value)
     }
 
-    fn invest_success(
-        &mut self,
-        name: &str,
-        have: Credit,
-        want: Credit,
-    ) -> Result<Donation, IdleThingError> {
-        self.state.entry(name.into()).and_modify(|c| *c += want);
+    fn invest_success(&mut self, id: &str, have: Credit, want: Credit) -> InvestResult {
+        self.state.entry(id.into()).and_modify(|c| {
+            c.current += want;
+            c.total += want;
+            c.invest.0 += 1;
+            if c.current > c.max {
+                c.max = c.current
+            }
+        });
 
-        let amount = self.state[name];
-        debug!("donation was successful: {}, {} -> {}", name, have, amount);
+        let amount = self.state[id].current;
+        debug!("donation was successful: {}, {} -> {}", id, have, amount);
         Ok(Donation::Success {
             old: have,
             new: amount,
         })
     }
 
-    fn invest_failure(
-        &mut self,
-        name: &str,
-        have: Credit,
-        want: Credit,
-    ) -> Result<Donation, IdleThingError> {
-        self.state.entry(name.into()).and_modify(|c| {
-            if let Some(v) = c.checked_sub(want) {
-                *c = v
+    fn invest_failure(&mut self, id: &str, have: Credit, want: Credit) -> InvestResult {
+        self.state.entry(id.into()).and_modify(|c| {
+            if let Some(v) = c.current.checked_sub(want) {
+                c.current = v
             } else {
-                *c = 0;
-            }
+                c.current = 0;
+            };
+            c.invest.1 += 1;
         });
 
-        let amount = self.state[name];
-        debug!("donation was a failure: {}, {} -> {}", name, have, amount);
+        let amount = self.state[id].current;
+        self.total += want;
+
+        debug!("donation was a failure: {}, {} -> {}", id, have, amount);
         Ok(Donation::Failure {
             old: have,
             new: amount,
         })
     }
 
-    #[cfg(not(test))]
-    fn try_donation(
-        &mut self,
-        name: &str,
-        have: usize,
-        want: usize,
-    ) -> Result<Donation, IdleThingError> {
+    fn try_donation(&mut self, id: &str, have: usize, want: usize) -> InvestResult {
         if have == 0 || want > have {
-            Err(IdleThingError::NotEnoughCredits { have, want })?
+            Err(InvestError::NotEnoughCredits { have, want })?
         }
 
-        if thread_rng().gen_bool(1.0 / 2.0) {
-            self.invest_failure(name, have, want)
+        let res = if thread_rng().gen_bool(self.chance) {
+            self.invest_failure(id, have, want)
         } else {
-            self.invest_success(name, have, want)
-        }
+            self.invest_success(id, have, want)
+        };
+
+        self.save();
+        res
     }
 
-    #[cfg(test)]
-    fn try_donation(
-        &mut self,
-        name: &str,
-        have: usize,
-        want: usize,
-    ) -> Result<Donation, IdleThingError> {
-        if have == 0 || want > have {
-            Err(IdleThingError::NotEnoughCredits { have, want })?
-        }
-
-        self.invest_failure(name, have, want)
-    }
-
-    pub fn invest(&mut self, name: &str, want: Credit) -> Result<Donation, IdleThingError> {
-        if let Some(have) = self.get_credits_for(name) {
-            self.try_donation(name, have, want)
+    pub fn invest(&mut self, id: &str, want: Credit) -> InvestResult {
+        if let Some(have) = self.get_credits_for(id) {
+            self.try_donation(id, have, want)
         } else {
-            Err(IdleThingError::NotEnoughCredits { have: 0, want })
+            Err(InvestError::NotEnoughCredits { have: 0, want })
         }
     }
 
-    // returns None if no value
-    pub fn get_credits_for(&self, name: &str) -> Option<Credit> {
-        self.state.get(name).or(Some(&0)).and_then(|c| Some(*c))
+    pub fn get_credits_for(&self, id: &str) -> Option<Credit> {
+        self.state.get(id).and_then(|c| Some(c.current))
     }
 
     pub fn to_sorted(&self) -> Vec<(String, Credit)> {
         let mut sorted = self
             .state
             .iter()
-            .map(|(k, v)| (k.to_string(), *v))
+            .map(|(k, v)| (k.to_string(), v.current))
             .collect::<Vec<_>>();
         sorted.sort_by(|l, r| r.1.cmp(&l.1));
-        // should also sort it by name if equal points
+        // TODO: should also sort it by name if equal credits
         sorted
     }
 }
@@ -531,7 +608,7 @@ mod tests {
     #[test]
     fn test_invest_command() {
         let env = Environment::new();
-        let _module = IdleThing::new(&env.bot, &env.config);
+        let _module = Invest::new(&env.bot, &env.config);
 
         env.push_privmsg("!invest");
         env.step();
@@ -567,7 +644,7 @@ mod tests {
     #[test]
     fn test_give_command() {
         let env = Environment::new();
-        let _module = IdleThing::new(&env.bot, &env.config);
+        let _module = Invest::new(&env.bot, &env.config);
 
         env.push_privmsg("!give");
         env.step();
@@ -611,7 +688,7 @@ mod tests {
     #[test]
     fn test_check_command() {
         let env = Environment::new();
-        let _module = IdleThing::new(&env.bot, &env.config);
+        let _module = Invest::new(&env.bot, &env.config);
 
         env.push_privmsg("!check");
         env.step();
@@ -637,12 +714,93 @@ mod tests {
     fn test_on_message() {}
 
     #[test]
+    fn test_stats_commande() {
+        let env = Environment::new();
+        let module = Invest::new(&env.bot, &env.config);
+
+        init_logger();
+
+        env.push_privmsg("!stats");
+        env.step();
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 0 credits, out of 0 total credits with 0 successes and 0 failures (0.00%).. and I've 'collected' 0 credits");
+        assert_eq!(env.pop_env(), None);
+
+        fn failure(m: &Invest) {
+            m.inner.write().state.chance = 1.0;
+        }
+
+        fn success(m: &Invest) {
+            m.inner.write().state.chance = 0.0;
+        }
+
+        fn give(m: &Invest, n: usize) {
+            m.inner.write().state.give("1004", n);
+        }
+
+        failure(&module);
+        give(&module, 1000);
+
+        env.push_privmsg("!stats");
+        env.step();
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 0 failures (0.00%).. and I've 'collected' 0 credits");
+
+        env.push_privmsg("!invest 500");
+        env.step();
+        env.drain_envs();
+
+        env.push_privmsg("!stats");
+        env.step();
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 1 failures (0.00%).. and I've 'collected' 500 credits");
+
+        env.push_privmsg("!invest 300");
+        env.step();
+        env.drain_envs();
+
+        env.push_privmsg("!stats");
+        env.step();
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 2 failures (0.00%).. and I've 'collected' 800 credits");
+
+        success(&module);
+
+        env.push_privmsg("!invest 200");
+        env.step();
+        env.drain_envs();
+
+        env.push_privmsg("!stats");
+        env.step();
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,200 total credits with 1 successes and 2 failures (200.00%).. and I've 'collected' 800 credits");
+
+        env.push_privmsg("!invest all");
+        env.step();
+        env.push_privmsg("!invest all");
+        env.step();
+        env.drain_envs();
+
+        env.push_privmsg("!stats");
+        env.step();
+        env.drain_envs_warn_log();
+
+        failure(&module);
+        env.push_privmsg("!invest all");
+        env.step();
+        env.drain_envs();
+
+        env.push_privmsg("!stats");
+        env.step();
+        env.drain_envs_warn_log();
+
+        //env.drain_envs_warn_log();
+
+        // TODO write more tests for this
+    }
+
+    #[test]
     fn test_invest() {
-        let mut ch = IdleThingState::default();
+        let mut ch = InvestState::default();
 
         assert_eq!(
             ch.invest("test", 10),
-            Err(IdleThingError::NotEnoughCredits { have: 0, want: 10 })
+            Err(InvestError::NotEnoughCredits { have: 0, want: 10 })
         ); // not seen before. so zero credits
 
         assert_eq!(ch.increment("foo"), 5); // starts at 0, so +5
@@ -650,7 +808,7 @@ mod tests {
 
         assert_eq!(
             ch.invest("test", 10),
-            Err(IdleThingError::NotEnoughCredits { have: 0, want: 10 })
+            Err(InvestError::NotEnoughCredits { have: 0, want: 10 })
         ); // not seen before. so zero credits
 
         assert_eq!(

@@ -48,7 +48,7 @@ impl Shaken {
             let _display = Display::new(&bot, &config);
 
             let _shakespeare = Shakespeare::new(&bot, &config);
-            let _idlething = IdleThing::new(&bot, &config);
+            let _invest = Invest::new(&bot, &config);
             let _poll = Poll::new(&bot, &config);
 
             info!("connected and running");

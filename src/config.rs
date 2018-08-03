@@ -6,7 +6,7 @@ use toml;
 pub struct Config {
     pub twitch: Twitch,
     pub shakespeare: Shakespeare,
-    pub idlething: IdleThing,
+    pub invest: Invest,
     pub websocket: WebSocket,
 }
 
@@ -27,11 +27,11 @@ pub struct Shakespeare {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct IdleThing {
+pub struct Invest {
     pub starting: usize,
     pub line_value: usize,
-    pub idle_value: usize,
     pub interval: usize,
+    pub chance: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -56,10 +56,10 @@ impl Default for Config {
                 chance: 0.15,
                 bypass: 60,
             },
-            idlething: IdleThing {
+            invest: Invest {
                 starting: 0,
                 line_value: 5,
-                idle_value: 1,
+                chance: 1.0 / 2.0,
                 interval: 60,
             },
             websocket: WebSocket {

@@ -7,8 +7,8 @@ pub use self::shakespeare::*;
 mod display;
 pub use self::display::*;
 
-mod idlething;
-pub use self::idlething::*;
+mod invest;
+pub use self::invest::*;
 
 mod poll;
 pub use self::poll::*;
