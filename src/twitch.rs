@@ -102,23 +102,20 @@ impl TwitchClient {
             .map_err(|e| {
                 error!("parse json: {}", e);
                 e
-            })
-            .ok()?;
+            }).ok()?;
 
         let value = value
             .get("data")
             .or_else(|| {
                 error!("cannot get 'data' from json value");
                 None
-            })?
-            .clone();
+            })?.clone();
 
         serde_json::from_value(value)
             .map_err(|e| {
                 error!("cannot convert : {}", e);
                 e
-            })
-            .ok()
+            }).ok()
     }
 }
 

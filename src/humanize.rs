@@ -87,8 +87,7 @@ where
             } else {
                 None
             }
-        })
-        .collect::<Vec<_>>();
+        }).collect::<Vec<_>>();
 
     let len = list.len();
     if len > 1 {

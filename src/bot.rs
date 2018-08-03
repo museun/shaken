@@ -8,7 +8,6 @@ use parking_lot::{Mutex, RwLock};
 use scoped_threadpool::Pool;
 
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::time;
 
 pub enum Handler {
@@ -25,19 +24,6 @@ pub enum Handler {
 }
 
 struct Handlers(RwLock<Vec<Handler>>);
-
-pub struct Bot {
-    pub(crate) inner: Mutex<Inner>,
-    pub(crate) conn: Arc<Conn>,
-    pub(crate) channel: String,
-    handlers: Handlers,
-    inspected: Inspected,
-}
-
-pub(crate) struct Inner {
-    pub(crate) user: User,
-    pub(crate) owners: Vec<String>,
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct User {
@@ -65,8 +51,26 @@ impl Inspected {
     }
 }
 
+pub(crate) struct Inner {
+    pub(crate) user: User,
+    pub(crate) owners: Vec<String>,
+}
+
+pub struct Bot {
+    pub(crate) inner: Mutex<Inner>,
+    pub(crate) channel: String,
+    conn: Conn,
+    handlers: Handlers,
+    inspected: Inspected,
+}
+
 impl Bot {
-    pub fn new(conn: Conn, config: &Config) -> Self {
+    pub fn new<C>(conn: C, config: &Config) -> Self
+    where
+        C: Into<Conn>,
+    {
+        let conn = conn.into();
+
         let inner = Mutex::new(Inner {
             user: User {
                 display: config.twitch.name.to_string(),
@@ -83,9 +87,9 @@ impl Bot {
 
         Self {
             inner,
-            inspected,
             channel: config.twitch.channel.to_string(),
-            conn: Arc::new(conn),
+            inspected,
+            conn,
             handlers: Handlers(RwLock::new(vec![])),
         }
     }
@@ -223,11 +227,11 @@ impl Bot {
     }
 
     pub fn join(&self, ch: &str) {
-        self.conn().write(&format!("JOIN {}", ch))
+        self.conn.write(&format!("JOIN {}", ch))
     }
 
     pub fn send(&self, data: &str) {
-        self.conn().write(data)
+        self.conn.write(data)
     }
 
     pub fn set_inspect<F>(&self, f: F)
@@ -245,10 +249,6 @@ impl Bot {
             }
         }
         vec
-    }
-
-    fn conn(&self) -> Arc<Conn> {
-        Arc::clone(&self.conn)
     }
 
     fn privmsg(&self, ch: &str, msg: &str) {

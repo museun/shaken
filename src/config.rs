@@ -84,15 +84,13 @@ impl Config {
                     _ => error!("unknown error: {}", e),
                 };
                 ::std::process::exit(1);
-            })
-            .unwrap();
+            }).unwrap();
 
         toml::from_str(&data)
             .map_err(|e| {
                 error!("unable to parse config: {}", e);
                 ::std::process::exit(1);
-            })
-            .unwrap()
+            }).unwrap()
     }
 
     fn save(&self) {
@@ -101,8 +99,7 @@ impl Config {
             .map_err(|e| {
                 error!("unable to create config at `{}` -- {}", CONFIG_FILE, e);
                 ::std::process::exit(1);
-            })
-            .unwrap();
+            }).unwrap();
         writeln!(f, "{}", s).expect("to write config");
     }
 }

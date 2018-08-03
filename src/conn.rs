@@ -42,6 +42,18 @@ impl Conn {
     }
 }
 
+impl From<TcpConn> for Conn {
+    fn from(conn: TcpConn) -> Self {
+        Conn::TcpConn(conn)
+    }
+}
+
+impl From<Arc<TestConn>> for Conn {
+    fn from(conn: Arc<TestConn>) -> Self {
+        Conn::TestConn(Arc::clone(&conn))
+    }
+}
+
 pub struct TcpConn {
     reader: Mutex<Lines<BufReader<TcpStream>>>,
     writer: Mutex<BufWriter<TcpStream>>,

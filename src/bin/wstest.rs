@@ -67,8 +67,7 @@ impl State {
                     display: gen_name(),
                     userid: gen_id(),
                     color: gen_color(),
-                })
-                .collect::<Vec<_>>()
+                }).collect::<Vec<_>>()
         };
 
         Self { names }

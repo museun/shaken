@@ -1,10 +1,10 @@
 #![allow(dead_code)]
+use crate::{bot, config, message};
+
 use std::collections::VecDeque;
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-
-use crate::{bot, config, message};
 
 pub fn init_logger() {
     let _ = env_logger::Builder::from_default_env()
@@ -19,16 +19,22 @@ pub struct Environment {
     pub user_id: String,
 }
 
-impl Environment {
-    pub fn new() -> Self {
-        use crate::{bot::Bot, config::Config, conn::Conn};
+impl Default for Environment {
+    fn default() -> Self {
+        use crate::{bot::Bot, config::Config};
         let conn = Arc::new(TestConn::new());
         Self {
             conn: Arc::clone(&conn),
-            bot: Bot::new(Conn::TestConn(Arc::clone(&conn)), &Config::default()),
+            bot: Bot::new(Arc::clone(&conn), &Config::default()),
             config: Config::default(),
             user_id: "1004".into(),
         }
+    }
+}
+
+impl Environment {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     // although this is going thru a mutex, might as well do a mutable borrow to keep the surprises low
@@ -43,7 +49,7 @@ impl Environment {
 
     pub fn step(&self) {
         let msg = {
-            match self.bot.conn.read() {
+            match self.conn.read() {
                 Some(line) => message::Message::parse(&line),
                 None => return,
             }

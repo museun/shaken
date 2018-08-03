@@ -35,7 +35,7 @@ impl Shaken {
             let bot = match TcpConn::new(&address) {
                 Ok(conn) => {
                     sleep = 0;
-                    Bot::new(Conn::TcpConn(conn), &config)
+                    Bot::new(conn, &config)
                 }
                 Err(err) => {
                     error!("error: {}", err);

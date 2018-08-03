@@ -32,6 +32,8 @@ pub use crate::testing::Environment;
 
 mod humanize;
 mod message;
+
+#[macro_use]
 mod util;
 
 mod twitch;

@@ -41,3 +41,13 @@ pub fn get_timestamp() -> u64 {
         .unwrap();
     ts.as_secs() * 1000 + u64::from(ts.subsec_nanos()) / 1_000_000
 }
+
+#[macro_export]
+macro_rules! bail {
+    ($e:expr) => {
+        match $e {
+            Some(item) => item,
+            None => return,
+        }
+    };
+}
