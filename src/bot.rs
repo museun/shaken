@@ -144,7 +144,8 @@ impl Bot {
                         trace!("got our caps");
                         let user = User {
                             display: msg.tags["display-name"].to_string(),
-                            color: RGB::from("fc0fc0"), //msg.tags.get("color")
+                            //msg.tags.get("color")
+                            color: RGB::from("fc0fc0"), // TODO get this from the config
                             userid: msg.tags["user-id"].to_string(),
                         };
 
@@ -173,6 +174,7 @@ impl Bot {
                         // make a clone because we're mutating it
                         let mut env = env.clone();
                         // trim the command
+                        // TODO parse these recursively
                         env.data = env.data[s.len()..].trim().to_string();
                         f(&self, &env);
                     }
@@ -202,7 +204,7 @@ impl Bot {
 
     pub fn user_info(&self) -> User {
         let inner = self.inner.lock();
-        inner.user.clone()
+        inner.user.clone() // TODO: why is this a clone?
     }
 
     pub fn reply(&self, env: &Envelope, msg: &str) {
@@ -227,7 +229,7 @@ impl Bot {
     }
 
     pub fn join(&self, ch: &str) {
-        self.conn.write(&format!("JOIN {}", ch))
+        self.send(&format!("JOIN {}", ch))
     }
 
     pub fn send(&self, data: &str) {
@@ -242,7 +244,7 @@ impl Bot {
     }
 
     pub fn get_commands(&self) -> Vec<String> {
-        let mut vec = vec![];
+        let mut vec = vec![]; // TODO pre-allocate this
         for hn in self.handlers.0.read().iter() {
             if let Handler::Command(cmd, _) = hn {
                 vec.push(cmd.to_string());
