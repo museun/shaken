@@ -1,6 +1,6 @@
 use parking_lot::RwLock;
-use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use rand::prelude::*;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use std::{fs, str};
@@ -10,13 +10,10 @@ use crate::{bot, config, humanize::*, message, twitch::*};
 pub struct IdleThing {
     inner: RwLock<Inner>,
     twitch: TwitchClient,
-    interval: AtomicUsize,
 }
 
 struct Inner {
     state: IdleThingState,
-    tick: Instant,
-    seen: HashSet<String>,
     limit: HashMap<String, Instant>,
 }
 
@@ -25,12 +22,9 @@ impl IdleThing {
         let this = Arc::new(Self {
             inner: RwLock::new(Inner {
                 state: IdleThingState::load(&config),
-                tick: Instant::now(),
-                seen: HashSet::new(),
                 limit: HashMap::new(),
             }),
             twitch: TwitchClient::new(),
-            interval: AtomicUsize::new(config.idlething.interval),
         });
 
         let next = Arc::clone(&this);
@@ -48,74 +42,18 @@ impl IdleThing {
         let next = Arc::clone(&this);
         bot.on_passive(move |bot, env| next.on_message(bot, env));
 
-        let next = Arc::clone(&this);
-        bot.on_tick(move |bot| next.on_tick(bot));
-
         this
-    }
-
-    fn on_tick(&self, bot: &bot::Bot) {
-        let now = Instant::now();
-        let then = { self.inner.read().tick };
-        let interval = self.interval.load(Ordering::Relaxed) as u64;
-        if now - then < Duration::from_secs(interval) {
-            return;
-        }
-
-        {
-            self.inner.write().tick = now;
-        }
-
-        let user = bot.user_info();
-        let ch = &bot.channel;
-
-        trace!("getting names for #{}", &ch);
-
-        if let Some(names) = get_names_for(&ch) {
-            let mut v = Vec::with_capacity(names.chatter_count);
-            v.extend(names.chatters.moderators);
-            v.extend(names.chatters.staff);
-            v.extend(names.chatters.admins);
-            v.extend(names.chatters.global_mods);
-            v.extend(names.chatters.viewers);
-
-            // remove the bot from the list
-            if let Some(n) = v.iter().position(|s| s.eq_ignore_ascii_case(&user.display)) {
-                v.remove(n);
-            }
-
-            trace!("names for {}: {:?}", &ch, &v);
-            if let Some(users) = self.twitch.get_users(&v) {
-                let mut set = HashSet::new();
-
-                for user in &users {
-                    set.insert(user.id.to_string());
-                }
-
-                let mut inner = self.inner.write();
-                let set = {
-                    let inner = self.inner.read();
-                    let diff = inner.seen.difference(&set);
-                    diff.clone().map(|s| s.to_string()).collect::<Vec<_>>() // awful
-                };
-
-                trace!("ids: {:?}", &set);
-                inner.state.tick(&set);
-            }
-        }
-
-        self.inner.write().state.save();
     }
 
     fn invest_command(&self, bot: &bot::Bot, env: &message::Envelope) {
         let who = bail!(env.get_id());
 
-        if self.check_limit(&who) {
+        if self.check_rate_limit(&who) {
             debug!("{} has been rate limited", who);
             return;
         }
 
-        let num = match Self::parse_number(&env.data) {
+        let num = match self.get_credits_from_str(&env.data, &who) {
             Some(num) => num,
             None => {
                 bot.reply(&env, "thats not a number I understand");
@@ -151,7 +89,7 @@ impl IdleThing {
                 }
             },
             Err(IdleThingError::NotEnoughCredits { have, want }) => format!(
-                "you don't have enough. you have {} but you want to invest {} credits",
+                "you don't have enough. you have {}, but you want to invest {} credits",
                 have.comma_separate(),
                 want.comma_separate()
             ),
@@ -168,7 +106,7 @@ impl IdleThing {
         let (mut target, data) = match env.data.split_whitespace().take(1).next() {
             Some(target) => (target, &env.data[target.len()..]),
             None => {
-                bot.reply(&env, "who do you want to give points to?");
+                bot.reply(&env, "who do you want to give credits to?");
                 return;
             }
         };
@@ -196,10 +134,12 @@ impl IdleThing {
             return;
         }
 
-        let num = match Self::parse_number(data.trim()) {
+        trace!("seeing if '{}' is a valid amounte", &data);
+
+        let num = match self.get_credits_from_str(&data, &who) {
             Some(num) => num,
             None => {
-                bot.reply(&env, "how much is that?");
+                bot.reply(&env, "thats not a number I understand");
                 return;
             }
         };
@@ -250,14 +190,12 @@ impl IdleThing {
 
     fn check_command(&self, bot: &bot::Bot, env: &message::Envelope) {
         let who = bail!(env.get_id());
-
-        if let Some(credits) = self.inner.read().state.get_credits_for(&who) {
-            bot.reply(
+        match self.inner.read().state.get_credits_for(&who) {
+            Some(credits) if credits > 0 => bot.reply(
                 &env,
                 &format!("you have {} credits", credits.comma_separate()),
-            )
-        } else {
-            bot.reply(&env, "you have no credits")
+            ),
+            _ => bot.reply(&env, "you have no credits"),
         }
     }
 
@@ -285,17 +223,7 @@ impl IdleThing {
         if let Some(who) = env.get_id() {
             let mut inner = self.inner.write();
             inner.state.increment(&who);
-            inner.seen.insert(who.to_string());
         }
-    }
-
-    fn check_limit(&self, who: &str) -> bool {
-        if let Some(t) = self.inner.read().limit.get(&who.to_string()) {
-            if Instant::now() - *t < Duration::from_secs(60) {
-                return true;
-            }
-        }
-        false
     }
 
     fn lookup_id_for(&self, name: &str) -> Option<String> {
@@ -322,14 +250,76 @@ impl IdleThing {
         }
         None
     }
+
     fn rate_limit(&self, who: &str) {
         let who = who.to_string();
         self.inner.write().limit.insert(who, Instant::now());
     }
 
-    fn parse_number(data: &str) -> Option<usize> {
+    fn check_rate_limit(&self, who: &str) -> bool {
+        if let Some(t) = self.inner.read().limit.get(&who.to_string()) {
+            if Instant::now() - *t < Duration::from_secs(60) {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn parse_number_or_context(data: &str) -> Option<NumType> {
+        const CONTEXTS: [&str; 3] = ["all", "half", "random"];
+
         let num: String = data.chars().take_while(char::is_ascii_digit).collect();
-        num.parse::<usize>().ok()
+        if let Ok(num) = num.parse::<usize>() {
+            return Some(NumType::Num(num));
+        }
+
+        if let Some(part) = data.split_whitespace().take(1).next() {
+            for ctx in &CONTEXTS {
+                if &part == ctx {
+                    return Some(part.into());
+                }
+            }
+        }
+
+        None
+    }
+
+    fn get_credits_from_str(&self, data: &str, id: &str) -> Option<usize> {
+        let data = data.trim();
+
+        let num = Self::parse_number_or_context(&data)?;
+        let credits = {
+            let inner = self.inner.read();
+            let state = &inner.state;
+            let credits = state.get_credits_for(&id);
+            trace!("got {:?} credits for {}", credits, id);
+            credits
+        }?;
+
+        Some(match num {
+            NumType::Num(num) => num,
+            NumType::All => credits,
+            NumType::Half => credits / 2,
+            NumType::Random => thread_rng().gen_range(1, credits),
+        })
+    }
+}
+
+enum NumType {
+    Num(usize),
+    All,
+    Half,
+    Random,
+}
+
+impl From<&str> for NumType {
+    fn from(s: &str) -> Self {
+        match s {
+            "all" => NumType::All,
+            "half" => NumType::Half,
+            "random" => NumType::Random,
+            _ => unreachable!(),
+        }
     }
 }
 
@@ -410,17 +400,6 @@ impl IdleThingState {
         trace!("saving IdleThing to {}", IDLE_STORE)
     }
 
-    // I don't like this function
-    pub fn tick<S: AsRef<str>>(&mut self, names: &[S]) {
-        let (idle_value, starting) = (self.idle_value, self.starting);
-        for name in names.iter().map(|s| s.as_ref().to_string()) {
-            self.state
-                .entry(name)
-                .and_modify(|p| *p += idle_value)
-                .or_insert(starting);
-        }
-    }
-
     pub fn give(&mut self, name: &str, credits: Credit) -> Credit {
         self.state
             .entry(name.into())
@@ -446,15 +425,6 @@ impl IdleThingState {
     pub fn increment(&mut self, name: &str) -> Credit {
         let line_value = self.line_value;
         self.give(name, line_value)
-    }
-
-    pub fn insert(&mut self, name: &str) {
-        let starting = self.starting;
-
-        match self.state.insert(name.to_owned(), starting) {
-            Some(old) => warn!("{} already existed ({})", &name, old),
-            None => debug!("new nick added: {}", &name),
-        }
     }
 
     fn invest_success(
@@ -502,8 +472,6 @@ impl IdleThingState {
         have: usize,
         want: usize,
     ) -> Result<Donation, IdleThingError> {
-        use rand::prelude::*;
-
         if have == 0 || want > have {
             Err(IdleThingError::NotEnoughCredits { have, want })?
         }
@@ -537,11 +505,9 @@ impl IdleThingState {
         }
     }
 
-    // returns None if no value, or a 0
+    // returns None if no value
     pub fn get_credits_for(&self, name: &str) -> Option<Credit> {
-        self.state
-            .get(name)
-            .and_then(|c| if *c == 0 { None } else { Some(*c) })
+        self.state.get(name).or(Some(&0)).and_then(|c| Some(*c))
     }
 
     pub fn to_sorted(&self) -> Vec<(String, Credit)> {
@@ -575,12 +541,14 @@ mod tests {
             "@test: thats not a number I understand"
         );
 
+        warn!("{:#?}", _module.inner.read().state);
+
         env.push_privmsg("!invest 10");
         env.step();
 
         assert_eq!(
             env.pop_env().unwrap().data,
-            "@test: you don't have enough. you have 0 but you want to invest 10 credits"
+            "@test: you don't have enough. you have 0, but you want to invest 10 credits"
         );
 
         {
@@ -606,7 +574,7 @@ mod tests {
 
         assert_eq!(
             env.pop_env().unwrap().data,
-            "@test: who do you want to give points to?"
+            "@test: who do you want to give credits to?"
         );
 
         env.push_privmsg("!give test");
@@ -667,36 +635,6 @@ mod tests {
     #[test]
     #[ignore] // this requires too much twitch stuff
     fn test_on_message() {}
-
-    #[test]
-    fn test_default_insert() {
-        let mut ch = IdleThingState::default();
-        let names = vec!["foo", "bar", "baz", "quux"];
-        for name in &names {
-            ch.insert(&name)
-        }
-        for name in &names {
-            assert_eq!(ch.get_credits_for(&name), None);
-        }
-        assert_eq!(ch.get_credits_for("test"), None);
-
-        mem::forget(ch); // don't serialize to disk
-    }
-
-    #[test]
-    fn test_tick() {
-        let mut ch = IdleThingState::default();
-        ch.insert("foo");
-        ch.insert("bar");
-
-        ch.tick(&["foo", "baz", "quux"]);
-        assert_eq!(ch.get_credits_for("foo"), Some(1)); // was already there when the tick happened
-        assert_eq!(ch.get_credits_for("bar"), None); // not there when the tick happened
-        assert_eq!(ch.get_credits_for("baz"), None); // new when the tick happened
-        assert_eq!(ch.get_credits_for("quux"), None); // new when the tick happened
-
-        mem::forget(ch); // don't serialize to disk
-    }
 
     #[test]
     fn test_invest() {

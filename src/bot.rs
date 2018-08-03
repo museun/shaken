@@ -47,7 +47,8 @@ impl Inspected {
     }
 
     pub fn write(&self, data: &str) {
-        self.output.write().push_back(data.into())
+        let mut output = self.output.write();
+        output.push_back(data.into())
     }
 }
 
