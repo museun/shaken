@@ -374,19 +374,13 @@ impl fmt::Display for InvestUser {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (success, failure) = self.invest;
 
-        let mut percentage = (failure as f64) / (success as f64) * 100.0;
-        if !percentage.is_normal() {
-            percentage = 0.0;
-        }
-
         write!(
             f,
-            "reached a max of {} credits, out of {} total credits with {} successes and {} failures ({:.2}%).",
+            "reached a max of {} credits, out of {} total credits with {} successes and {} failures.",
             self.max.comma_separate(),
             self.total.comma_separate(),
             success.comma_separate(),
             failure.comma_separate(),
-            percentage,
         )
     }
 }
