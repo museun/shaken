@@ -822,8 +822,8 @@ mod tests {
             Err(InvestError::NotEnoughCredits { have: 0, want: 10 })
         ); // not seen before. so zero credits
 
-        assert_eq!(ch.increment("foo"), 5); // starts at 0, so +5
-        assert_eq!(ch.increment("foo"), 10); // then +5
+        assert_eq!(ch.increment("foo", &IncrementType::Line), 5); // starts at 0, so +5
+        assert_eq!(ch.increment("foo", &IncrementType::Line), 10); // then +5
 
         assert_eq!(
             ch.invest("test", 10),

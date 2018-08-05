@@ -2,12 +2,14 @@ use crate::{bot::Bot, color::RGB, config, message::Envelope};
 
 use crossbeam_channel as channel;
 use parking_lot::Mutex;
+use tungstenite as ws;
+
 use std::collections::HashMap;
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, ToSocketAddrs};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use tungstenite as ws;
 
 #[derive(Debug, Clone, Serialize)]
 struct Message {
@@ -47,6 +49,7 @@ impl Display {
         });
 
         Self::drain_to_client(&rx, config.websocket.address.clone());
+        Self::serve_directory("./web/dist");
 
         let next = Arc::clone(&this);
         bot.set_inspect(move |me, s| {
@@ -238,6 +241,42 @@ impl Display {
                     debug!("turned it into a websocket");
                     let rx = rx.clone();
                     Self::handle_connection(stream, &rx);
+                }
+            }
+        });
+    }
+
+    fn serve_directory(path: &str) {
+        // XXX: Here be dragons
+
+        use std::fs::File;
+        use tiny_http::{Method, Response, Server};
+
+        fn file_response(path: &str, file: &str) -> Option<Response<File>> {
+            // TODO use Path join
+            let file = format!("{}{}", path, file);
+            let resp = Response::from_file(File::open(&file).ok()?);
+            Some(resp)
+        }
+
+        let path = path.to_string();
+
+        thread::spawn(move || {
+            let server = Server::http("localhost:51002").expect("to bind to address");
+            for req in server.incoming_requests() {
+                trace!("{:?} {:?}", req.method(), req.url());
+
+                match (req.method(), req.url().to_string()) {
+                    (&Method::Get, file) => {
+                        if let Some(resp) = file_response(&path, &file) {
+                            warn!("responding");
+                            let _ = req.respond(resp);
+                        }
+                    }
+                    _ => {
+                        // maybe log this
+                        let _ = req.respond(Response::empty(415));
+                    }
                 }
             }
         });

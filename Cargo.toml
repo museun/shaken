@@ -24,3 +24,5 @@ parking_lot = "0.6.3"
 scoped_threadpool = "0.1.9"
 
 tungstenite = "0.6.0"
+tiny_http = "0.6.0"
+ascii = "0.8.0"
