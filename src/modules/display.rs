@@ -5,8 +5,7 @@ use parking_lot::Mutex;
 use tungstenite as ws;
 
 use std::collections::HashMap;
-use std::net::{TcpListener, TcpStream, ToSocketAddrs};
-use std::path::PathBuf;
+use std::net::{TcpListener, TcpStream};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -269,7 +268,6 @@ impl Display {
                 match (req.method(), req.url().to_string()) {
                     (&Method::Get, file) => {
                         if let Some(resp) = file_response(&path, &file) {
-                            warn!("responding");
                             let _ = req.respond(resp);
                         }
                     }
