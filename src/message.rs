@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::fmt;
+use std::ops::Range;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Envelope {
@@ -39,6 +40,155 @@ impl Envelope {
                 warn!("no user-id attached to that message");
                 None
             }
+        }
+    }
+
+    pub fn get_emotes(&self) -> Option<Vec<Kappa>> {
+        match self.tags.get("emotes") {
+            Some(emotes) => Some(Kappa::new(emotes)),
+            None => {
+                warn!("no emotes attached to that message");
+                None
+            }
+        }
+    }
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Kappa {
+    pub ranges: Vec<Range<usize>>, // probably should be a u8
+    pub id: usize,
+}
+
+impl Kappa {
+    pub fn new(s: &str) -> Vec<Self> {
+        // could count the commas to pre-size the vector
+        let mut kappas = vec![];
+        /*
+"emotes": "25:0-4,6-10,12-16",
+"emotes": "25:0-4"
+"emotes": "730149:21-31/394848:33-39/615529:41-50/764743:52-58/1059947:0-9/1028980:11-19",
+"emotes": "25:0-4,6-10/33:12-19",
+"emotes": "25:0-4,15-19/33:6-13",
+"emotes": "33:0-7/25:9-13,15-19",
+*/
+        fn get_ranges(tail: &str) -> Option<Vec<Range<usize>>> {
+            let mut vec = vec![];
+            for s in tail.split_terminator(',') {
+                let (start, end) = {
+                    let mut s = s.split_terminator('-');
+                    (s.next()?, s.next()?)
+                };
+                vec.push(Range {
+                    start: start.parse::<usize>().ok()?,
+                    end: end.parse::<usize>().ok()?,
+                });
+            }
+            Some(vec)
+        }
+
+        fn get_parts(emote: &str) -> Option<(&str, &str)> {
+            let mut s = emote.split_terminator(':');
+            Some((s.next()?, s.next()?))
+        }
+
+        for emote in s.split_terminator('/') {
+            if let Some((head, tail)) = get_parts(emote) {
+                if let Some(ranges) = get_ranges(&tail) {
+                    kappas.push(Kappa {
+                        id: head.parse::<usize>().expect("twitch to be not-wrong"),
+                        ranges,
+                    });
+                }
+            }
+        }
+
+        kappas
+    }
+}
+
+#[cfg(test)]
+mod kappa_test {
+    use super::*;
+    #[test]
+    fn test_make_kappas() {
+        let inputs = &[
+            (
+                "25:0-4,6-10,12-16",
+                vec![Kappa {
+                    id: 25,
+                    ranges: vec![
+                        Range { start: 0, end: 4 },
+                        Range { start: 6, end: 10 },
+                        Range { start: 12, end: 16 },
+                    ],
+                }],
+            ),
+            (
+                "25:0-4",
+                vec![Kappa {
+                    id: 25,
+                    ranges: vec![Range { start: 0, end: 4 }],
+                }],
+            ),
+            (
+                "1077966:0-6/25:8-12",
+                vec![
+                    Kappa {
+                        id: 1077966,
+                        ranges: vec![Range { start: 0, end: 6 }],
+                    },
+                    Kappa {
+                        id: 25,
+                        ranges: vec![Range { start: 8, end: 12 }],
+                    },
+                ],
+            ),
+            (
+                "25:0-4,6-10/33:12-19",
+                vec![
+                    Kappa {
+                        id: 25,
+                        ranges: vec![Range { start: 0, end: 4 }, Range { start: 6, end: 10 }],
+                    },
+                    Kappa {
+                        id: 33,
+                        ranges: vec![Range { start: 12, end: 19 }],
+                    },
+                ],
+            ),
+            (
+                "25:0-4,15-19/33:6-13",
+                vec![
+                    Kappa {
+                        id: 25,
+                        ranges: vec![Range { start: 0, end: 4 }, Range { start: 15, end: 19 }],
+                    },
+                    Kappa {
+                        id: 33,
+                        ranges: vec![Range { start: 6, end: 13 }],
+                    },
+                ],
+            ),
+            (
+                "33:0-7/25:9-13,15-19",
+                vec![
+                    Kappa {
+                        id: 33,
+                        ranges: vec![Range { start: 0, end: 7 }],
+                    },
+                    Kappa {
+                        id: 25,
+                        ranges: vec![Range { start: 9, end: 13 }, Range { start: 15, end: 19 }],
+                    },
+                ],
+            ),
+        ];
+
+        for (input, expect) in inputs {
+            let kappas = Kappa::new(&input);
+            assert_eq!(kappas.len(), expect.len());
+            assert_eq!(kappas, *expect);
         }
     }
 }
