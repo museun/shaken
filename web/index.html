@@ -4,8 +4,55 @@
 <head>
     <meta charset="UTF-8">
     <title>shaken</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/reconnecting-websocket/1.0.0/reconnecting-websocket.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css?family=PT+Sans');
+        body {
+            background: rgba(20, 21, 25, 100);
+            margin: 0px;
+        }
+
+        #chat {
+            border-color: red;
+            border-style: solid;
+            border-width: 1px;
+            width: 643px;
+            height: 350px;
+            padding: 2px;
+            margin-top: 2px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            color: white;
+            font-family: 'PT Sans', sans-serif;
+            font-size: 14px;
+            overflow: hidden;
+        }
+
+        .message {
+            display: grid;
+            grid-template-columns: minmax(5ch, 15ch) auto;
+            grid-gap: 2ch;
+            padding-top: 0.20rem;
+            padding-bottom: 0.20rem;
+        }
+
+        .name {
+            text-align: right;
+            text-overflow: ellipsis;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .data {
+            text-align: left;
+            margin-right: 1ch;
+        }
+    </style>
+    <script src="//unpkg.com/vue"></script>
+    <script src="//unpkg.com/reconnecting-websocket@4.0.0-rc5/dist/reconnecting-websocket-iife.min.js"></script>
 </head>
 
 <body>
@@ -17,8 +64,40 @@
             <div class="data">{{ line.data }}</div>
         </div>
     </div>
-</body>
 
-<script src="index.js" />
+    <script type="text/javascript">
+        const MAX = 64;
+        var lines = [];
+
+        const socket = new ReconnectingWebSocket("ws://localhost:51001");
+        socket.addEventListener('open', function (event) {
+            socket.send(JSON.stringify("42")); // this should be a real handshake
+        });
+
+        socket.addEventListener('message', function (event) {
+            let data = JSON.parse(event.data);
+            if (lines.length >= MAX) {
+                lines.shift();
+            }
+
+            let pos = lines.findIndex((el) => {
+                return el.timestamp < data.timestamp;
+            });
+
+            if (pos == -1 || pos == 0) {
+                lines.push(data);
+            } else {
+                lines.splice(pos, 0, data);
+            }
+
+            console.log(`<${data.display}> ${data.data}`);
+        });
+
+        var app = new Vue({
+            el: '#chat',
+            data: function () { return { lines: lines } },
+        });
+    </script>
+</body>
 
 </html>
