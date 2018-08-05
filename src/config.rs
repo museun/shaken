@@ -32,6 +32,7 @@ pub struct Invest {
     pub line_value: usize,
     pub interval: usize,
     pub chance: f64,
+    pub kappas: Vec<[usize; 2]>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -61,6 +62,7 @@ impl Default for Config {
                 line_value: 5,
                 chance: 1.0 / 2.0,
                 interval: 60,
+                kappas: vec![[5, 1], [3, 3], [1, 1]],
             },
             websocket: WebSocket {
                 address: "localhost:51000".into(),

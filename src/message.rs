@@ -45,7 +45,13 @@ impl Envelope {
 
     pub fn get_emotes(&self) -> Option<Vec<Kappa>> {
         match self.tags.get("emotes") {
-            Some(emotes) => Some(Kappa::new(emotes)),
+            Some(emotes) => {
+                if emotes.is_empty() {
+                    None
+                } else {
+                    Some(Kappa::new(emotes))
+                }
+            }
             None => {
                 warn!("no emotes attached to that message");
                 None

@@ -27,6 +27,7 @@ impl Invest {
             twitch: TwitchClient::new(),
         });
 
+        // TODO get rid of this garbage
         let next = Arc::clone(&this);
         bot.on_command("!invest", move |bot, env| next.invest_command(bot, env));
 
@@ -243,19 +244,20 @@ impl Invest {
             return;
         }
 
-        if let Some(who) = env.get_id() {
-            let mut inner = self.inner.write();
-            inner.state.increment(&who);
-        }
+        let who = bail!(env.get_id());
+
+        let mut inner = self.inner.write();
+        inner.state.increment(&who, &IncrementType::Line);
+
+        if let Some(kappas) = env.get_emotes() {
+            let ty = IncrementType::Emote(kappas.len());
+            inner.state.increment(&who, &ty);
+        };
     }
 
     fn lookup_id_for(&self, name: &str) -> Option<String> {
-        if let Some(list) = self.twitch.get_users(&[name]) {
-            if let Some(item) = list.get(0) {
-                return Some(item.id.to_string());
-            }
-        }
-        None
+        let list = self.twitch.get_users(&[name])?;
+        Some(list.get(0)?.id.to_string())
     }
 
     fn lookup_display_for<S, V>(&self, ids: V) -> Option<Vec<(String, String)>>
@@ -412,6 +414,9 @@ struct InvestState {
 
     #[serde(skip)]
     line_value: usize,
+
+    #[serde(skip)]
+    emote_value: Vec<[usize; 2]>,
 }
 
 impl Default for InvestState {
@@ -420,6 +425,7 @@ impl Default for InvestState {
             starting: 0,
             line_value: 5,
             chance: 1.0 / 2.0,
+            emote_value: vec![[0, 0]],
 
             total: 0,
             state: Default::default(),
@@ -432,6 +438,11 @@ impl Drop for InvestState {
         debug!("saving InvestState to {}", INVEST_STORE);
         self.save();
     }
+}
+
+enum IncrementType {
+    Line,
+    Emote(usize), // count (for decay)
 }
 
 impl InvestState {
@@ -448,6 +459,7 @@ impl InvestState {
         this.starting = config.invest.starting;
         this.line_value = config.invest.line_value;
         this.chance = config.invest.chance;
+        this.emote_value = config.invest.kappas.to_vec();
         this
     }
 
@@ -511,9 +523,22 @@ impl InvestState {
         credits
     }
 
-    pub fn increment(&mut self, id: &str) -> Credit {
-        let line_value = self.line_value;
-        self.give(id, line_value)
+    pub fn increment(&mut self, id: &str, ty: &IncrementType) -> Credit {
+        let value = || -> usize {
+            match ty {
+                IncrementType::Line => self.line_value,
+                IncrementType::Emote(e) => {
+                    for a in &self.emote_value {
+                        if *e <= a[1] {
+                            return a[0];
+                        }
+                    }
+                    0
+                }
+            }
+        }();
+
+        self.give(id, value)
     }
 
     fn invest_success(&mut self, id: &str, have: Credit, want: Credit) -> InvestResult {

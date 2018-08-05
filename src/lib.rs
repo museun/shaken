@@ -1,5 +1,6 @@
 #![feature(rust_2018_preview)]
 #![feature(unboxed_closures)]
+// #![allow(unreadable_literal)]
 
 // doesn't rust 2018 remove the need for this?
 #[macro_use]
