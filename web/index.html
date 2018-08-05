@@ -5,15 +5,14 @@
     <meta charset="UTF-8">
     <title>shaken</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/reconnecting-websocket/1.0.0/reconnecting-websocket.min.js"></script>
 </head>
 
 <body>
     <div id="chat" class="container">
         <div class="message" v-for="line in lines">
-            <div class="display">
-                <div class="name" :style="{color:`rgb(${line.color[0]}, ${line.color[1]} , ${line.color[2]})`}">
-                    {{line.display}}
-                </div>
+            <div class="name" :style="{color:`rgb(${line.color[0]}, ${line.color[1]} , ${line.color[2]})`}">
+                {{line.display}}
             </div>
             <div class="data">{{ line.data }}</div>
         </div>

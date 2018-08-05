@@ -10,9 +10,7 @@ var app = new Vue({
 
 const MAX = 64;
 
-// is this const a problem?
-
-const socket = new WebSocket("ws://localhost:51000");
+const socket = new ReconnectingWebSocket("ws://localhost:51001");
 socket.addEventListener('open', function (event) {
     socket.send(JSON.stringify("42")); // this should be a real handshake
 });
