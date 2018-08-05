@@ -1,4 +1,9 @@
-use crate::{bot::Bot, color::RGB, config, message::Envelope};
+use crate::{
+    bot::Bot,
+    color::RGB,
+    config,
+    message::{Envelope, Kappa},
+};
 
 use crossbeam_channel as channel;
 use parking_lot::Mutex;
@@ -17,6 +22,7 @@ struct Message {
     pub color: RGB,
     pub display: String,
     pub data: String,
+    pub kappas: Vec<Kappa>,
 }
 
 pub struct Display {
@@ -48,7 +54,6 @@ impl Display {
         });
 
         Self::drain_to_client(&rx, config.websocket.address.clone());
-        Self::serve_directory("./web/dist");
 
         let next = Arc::clone(&this);
         bot.set_inspect(move |me, s| {
@@ -61,13 +66,14 @@ impl Display {
                     color: me.color.clone(),
                     display: me.display.to_string(),
                     data: s.to_string(),
+                    kappas: vec![],
                 };
 
                 if next.queue.is_full() {
-                    debug!("queue is full, dropping one");
+                    trace!("queue is full, dropping one");
                     let _ = next.buf.recv();
                 }
-                debug!("queue at: {}", next.queue.len());
+                trace!("queue at: {}", next.queue.len());
                 next.queue.send(msg);
             }
 
@@ -120,6 +126,13 @@ impl Display {
             .or_else(|| Some(nick))?;
 
         {
+            let kappas = env
+                .tags
+                .get("emotes")
+                .and_then(|e| Some(Kappa::new(&e)))
+                .or_else(|| Some(vec![]))
+                .expect("to get kappas or empty");
+
             let ts = crate::util::get_timestamp();
             // all this cloning
             let msg = Message {
@@ -128,13 +141,14 @@ impl Display {
                 color: color.clone(),
                 display: display.to_string(),
                 data: env.data.to_string(),
+                kappas,
             };
 
             if self.queue.is_full() {
-                debug!("queue is full, dropping one");
+                trace!("queue is full, dropping one");
                 let _ = self.buf.recv();
             }
-            debug!("queue at: {}", self.queue.len());
+            trace!("queue at: {}", self.queue.len());
             self.queue.send(msg);
         }
 
@@ -142,7 +156,6 @@ impl Display {
             return None;
         }
         println!("<{}> {}", color.format(&display), &env.data);
-
         None
     }
 
@@ -240,41 +253,6 @@ impl Display {
                     debug!("turned it into a websocket");
                     let rx = rx.clone();
                     Self::handle_connection(stream, &rx);
-                }
-            }
-        });
-    }
-
-    fn serve_directory(path: &str) {
-        // XXX: Here be dragons
-
-        use std::fs::File;
-        use tiny_http::{Method, Response, Server};
-
-        fn file_response(path: &str, file: &str) -> Option<Response<File>> {
-            // TODO use Path join
-            let file = format!("{}{}", path, file);
-            let resp = Response::from_file(File::open(&file).ok()?);
-            Some(resp)
-        }
-
-        let path = path.to_string();
-
-        thread::spawn(move || {
-            let server = Server::http("localhost:51002").expect("to bind to address");
-            for req in server.incoming_requests() {
-                trace!("{:?} {:?}", req.method(), req.url());
-
-                match (req.method(), req.url().to_string()) {
-                    (&Method::Get, file) => {
-                        if let Some(resp) = file_response(&path, &file) {
-                            let _ = req.respond(resp);
-                        }
-                    }
-                    _ => {
-                        // maybe log this
-                        let _ = req.respond(Response::empty(415));
-                    }
                 }
             }
         });

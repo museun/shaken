@@ -27,7 +27,7 @@
             justify-content: flex-end;
             color: white;
             font-family: 'PT Sans', sans-serif;
-            font-size: 14px;
+            font-size: 16px;
             overflow: hidden;
         }
 
@@ -35,8 +35,10 @@
             display: grid;
             grid-template-columns: minmax(5ch, 15ch) auto;
             grid-gap: 2ch;
-            padding-top: 0.20rem;
-            padding-bottom: 0.20rem;
+            grid-auto-rows: 1fr;
+            padding-top: 0.10rem;
+            padding-bottom: 0.10rem;
+            align-items: baseline;
         }
 
         .name {
@@ -50,18 +52,23 @@
             text-align: left;
             margin-right: 1ch;
         }
+
+        .emote {
+            vertical-align: middle;
+            transform: scale(0.66);
+        }
     </style>
-    <script src="//unpkg.com/vue"></script>
-    <script src="//unpkg.com/reconnecting-websocket@4.0.0-rc5/dist/reconnecting-websocket-iife.min.js"></script>
+    <script src="https://unpkg.com/vue"></script>
+    <script src="https://unpkg.com/reconnecting-websocket@4.0.0-rc5/dist/reconnecting-websocket-iife.min.js"></script>
 </head>
 
 <body>
     <div id="chat" class="container">
         <div class="message" v-for="line in lines">
             <div class="name" :style="{color:`rgb(${line.color[0]}, ${line.color[1]} , ${line.color[2]})`}">
-                {{line.display}}
+                {{ line.display }}
             </div>
-            <div class="data">{{ line.data }}</div>
+            <div class="data" v-html="line.data"></div>
         </div>
     </div>
 
@@ -69,33 +76,37 @@
         const MAX = 64;
         var lines = [];
 
-        const socket = new ReconnectingWebSocket("ws://localhost:51001");
+        var app = new Vue({
+            el: '#chat',
+            data: function () { return { lines: lines } },
+        });
+
+        var place_kappas = (line) => {
+            const tmpl = (_, id) => `<img class='emote' src='http://static-cdn.jtvnw.net/emoticons/v1/${id}/1.0'/>`;
+            let data = line.data; let n = 0;
+            line.kappas.forEach((k) => {
+                k.ranges.forEach((r) => {
+                    let s = tmpl`${k.id}`;
+                    data = data.replace(data.substring(r.start + n, r.end + n + 1), s);
+                    n += s.length - ((r.end + 1) - r.start); //Math.ceil(Math.log10(k.id + 1))
+                });
+                console.log(data);
+            });
+            line.data = data;
+        };
+
+        const socket = new ReconnectingWebSocket("ws://localhost:51000");
         socket.addEventListener('open', function (event) {
             socket.send(JSON.stringify("42")); // this should be a real handshake
         });
 
         socket.addEventListener('message', function (event) {
             let data = JSON.parse(event.data);
-            if (lines.length >= MAX) {
-                lines.shift();
-            }
-
-            let pos = lines.findIndex((el) => {
-                return el.timestamp < data.timestamp;
-            });
-
-            if (pos == -1 || pos == 0) {
-                lines.push(data);
-            } else {
-                lines.splice(pos, 0, data);
-            }
-
-            console.log(`<${data.display}> ${data.data}`);
-        });
-
-        var app = new Vue({
-            el: '#chat',
-            data: function () { return { lines: lines } },
+            place_kappas(data);
+            if (lines.length >= MAX) { lines.shift(); }
+            let pos = lines.findIndex((el) => { return el.timestamp < data.timestamp; });
+            if (pos == -1 || pos == 0) { lines.push(data); }
+            else { lines.splice(pos, 0, data); }
         });
     </script>
 </body>

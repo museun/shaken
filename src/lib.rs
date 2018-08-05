@@ -22,8 +22,6 @@ extern crate curl;
 
 extern crate rand;
 
-extern crate ascii; // for tiny_http
-extern crate tiny_http;
 extern crate tungstenite;
 extern crate url;
 

@@ -60,7 +60,7 @@ impl Envelope {
     }
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone, Serialize)]
 pub struct Kappa {
     pub ranges: Vec<Range<usize>>, // probably should be a u8
     pub id: usize,
