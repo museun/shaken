@@ -20,7 +20,7 @@
             justify-content: flex-end;
             color: white;
             font-family: 'PT Sans', sans-serif;
-            font-size: 10px;
+            font-size: 16px;
             overflow: hidden;
         }
 
@@ -83,7 +83,6 @@
                     data = data.replace(data.substring(r.start + n, r.end + n + 1), s);
                     n += s.length - ((r.end + 1) - r.start); //Math.ceil(Math.log10(k.id + 1))
                 });
-                console.log(data);
             });
             line.data = data;
         };
