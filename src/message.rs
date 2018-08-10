@@ -70,14 +70,6 @@ impl Kappa {
     pub fn new(s: &str) -> Vec<Self> {
         // could count the commas to pre-size the vector
         let mut kappas = vec![];
-        /*
-"emotes": "25:0-4,6-10,12-16",
-"emotes": "25:0-4"
-"emotes": "730149:21-31/394848:33-39/615529:41-50/764743:52-58/1059947:0-9/1028980:11-19",
-"emotes": "25:0-4,6-10/33:12-19",
-"emotes": "25:0-4,15-19/33:6-13",
-"emotes": "33:0-7/25:9-13,15-19",
-*/
         fn get_ranges(tail: &str) -> Option<Vec<Range<usize>>> {
             let mut vec = vec![];
             for s in tail.split_terminator(',') {
@@ -141,7 +133,7 @@ mod kappa_test {
                 "1077966:0-6/25:8-12",
                 vec![
                     Kappa {
-                        id: 1077966,
+                        id: 107_7966,
                         ranges: vec![Range { start: 0, end: 6 }],
                     },
                     Kappa {

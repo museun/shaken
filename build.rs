@@ -1,3 +1,5 @@
+#![feature(rust_2018_preview)]
+
 use std::process;
 fn main() {
     if let Some((rev, branch)) = git_version() {
