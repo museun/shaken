@@ -157,7 +157,7 @@ mod tests {
     use crate::testing::*;
 
     #[test]
-    fn test_speak_command() {
+    fn speak_command() {
         let env = Environment::new();
         let _module = Shakespeare::new(&env.bot, &env.config);
 
@@ -177,7 +177,7 @@ mod tests {
 
     // this always bypasses the roll
     #[test]
-    fn test_auto_speak() {
+    fn auto_speak() {
         let mut env = Environment::new();
         env.config.shakespeare.bypass = 0;
         let _module = Shakespeare::new(&env.bot, &env.config);
@@ -192,7 +192,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_mentions() {
+    fn check_mentions() {
         let env = Environment::new();
         let _module = Shakespeare::new(&env.bot, &env.config);
 

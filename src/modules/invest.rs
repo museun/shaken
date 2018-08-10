@@ -624,8 +624,20 @@ mod tests {
     use crate::testing::*;
     use std::mem;
 
+    fn failure(m: &Invest) {
+        m.inner.write().state.chance = 1.0;
+    }
+
+    fn success(m: &Invest) {
+        m.inner.write().state.chance = 0.0;
+    }
+
+    fn give(m: &Invest, n: usize) {
+        m.inner.write().state.give("1004", n);
+    }
+
     #[test]
-    fn test_invest_command() {
+    fn invest_command() {
         let env = Environment::new();
         let _module = Invest::new(&env.bot, &env.config);
 
@@ -637,8 +649,6 @@ mod tests {
             "@test: thats not a number I understand"
         );
 
-        warn!("{:#?}", _module.inner.read().state);
-
         env.push_privmsg("!invest 10");
         env.step();
 
@@ -647,21 +657,29 @@ mod tests {
             "@test: you don't have enough. you have 0, but you want to invest 10 credits"
         );
 
-        {
-            _module.inner.write().state.give("1004", 1000);
-        }
+        give(&_module, 1000);
+        success(&_module);
 
         env.push_privmsg("!invest 500");
         env.step();
 
         assert_eq!(
             env.pop_env().unwrap().data,
-            "@test: failure! 1,000 -> 500. try again in a minute"
+            "@test: success! 1,000 -> 1,500"
+        );
+
+        failure(&_module);
+        env.push_privmsg("!invest 500");
+        env.step();
+
+        assert_eq!(
+            env.pop_env().unwrap().data,
+            "@test: failure! 1,500 -> 1,000. try again in a minute"
         );
     }
 
     #[test]
-    fn test_give_command() {
+    fn give_command() {
         let env = Environment::new();
         let _module = Invest::new(&env.bot, &env.config);
 
@@ -683,9 +701,7 @@ mod tests {
 
         assert_eq!(env.pop_env().unwrap().data, "@test: what are you doing?");
 
-        {
-            _module.inner.write().state.give("1004", 1000);
-        }
+        give(&_module, 1000);
 
         env.push_privmsg("!give shaken_bot 10");
         env.step();
@@ -705,7 +721,7 @@ mod tests {
     }
 
     #[test]
-    fn test_check_command() {
+    fn check_command() {
         let env = Environment::new();
         let _module = Invest::new(&env.bot, &env.config);
 
@@ -714,9 +730,7 @@ mod tests {
 
         assert_eq!(env.pop_env().unwrap().data, "@test: you have no credits");
 
-        {
-            _module.inner.write().state.give("1004", 1000);
-        }
+        give(&_module, 1000);
 
         env.push_privmsg("!check");
         env.step();
@@ -726,42 +740,28 @@ mod tests {
 
     #[test]
     #[ignore] // this requires too much twitch stuff
-    fn test_top5_command() {}
+    fn top5_command() {}
 
     #[test]
     #[ignore] // this requires too much twitch stuff
-    fn test_on_message() {}
+    fn on_message() {}
 
     #[test]
-    fn test_stats_commande() {
+    fn stats_command() {
         let env = Environment::new();
         let module = Invest::new(&env.bot, &env.config);
 
-        init_logger();
-
         env.push_privmsg("!stats");
         env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 0 credits, out of 0 total credits with 0 successes and 0 failures (0.00%).. and I've 'collected' 0 credits");
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 0 credits, out of 0 total credits with 0 successes and 0 failures.. and I've 'collected' 0 credits");
         assert_eq!(env.pop_env(), None);
-
-        fn failure(m: &Invest) {
-            m.inner.write().state.chance = 1.0;
-        }
-
-        fn success(m: &Invest) {
-            m.inner.write().state.chance = 0.0;
-        }
-
-        fn give(m: &Invest, n: usize) {
-            m.inner.write().state.give("1004", n);
-        }
 
         failure(&module);
         give(&module, 1000);
 
         env.push_privmsg("!stats");
         env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 0 failures (0.00%).. and I've 'collected' 0 credits");
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 0 failures.. and I've 'collected' 0 credits");
 
         env.push_privmsg("!invest 500");
         env.step();
@@ -769,7 +769,7 @@ mod tests {
 
         env.push_privmsg("!stats");
         env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 1 failures (0.00%).. and I've 'collected' 500 credits");
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 1 failures.. and I've 'collected' 500 credits");
 
         env.push_privmsg("!invest 300");
         env.step();
@@ -777,7 +777,7 @@ mod tests {
 
         env.push_privmsg("!stats");
         env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 2 failures (0.00%).. and I've 'collected' 800 credits");
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 2 failures.. and I've 'collected' 800 credits");
 
         success(&module);
 
@@ -787,7 +787,7 @@ mod tests {
 
         env.push_privmsg("!stats");
         env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,200 total credits with 1 successes and 2 failures (200.00%).. and I've 'collected' 800 credits");
+        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,200 total credits with 1 successes and 2 failures.. and I've 'collected' 800 credits");
 
         env.push_privmsg("!invest all");
         env.step();
@@ -814,7 +814,7 @@ mod tests {
     }
 
     #[test]
-    fn test_invest() {
+    fn invest() {
         let mut ch = InvestState::default();
 
         assert_eq!(

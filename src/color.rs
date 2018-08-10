@@ -155,7 +155,7 @@ impl HSL {
 mod tests {
     use super::*;
     #[test]
-    fn test_hsl() {
+    fn hsl() {
         let colors = &[
             (RGB((0, 0, 0)), HSL((0.0, 0.0, 0.0)), "black"),
             (RGB((255, 255, 255)), HSL((0.0, 0.0, 100.0)), "white"),
@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn test_write() {
+    fn write() {
         println!("{}", HSL::from_color(&RGB::from("#ff00ff")));
     }
 }

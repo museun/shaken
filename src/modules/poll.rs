@@ -337,7 +337,7 @@ mod tests {
     use crate::testing::*;
 
     #[test]
-    fn test_poll() {
+    fn poll() {
         let mut env = Environment::new();
         let poll = Poll::new(&env.bot, &env.config);
 
@@ -370,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn test_poll_start() {
+    fn poll_start() {
         let mut env = Environment::new();
         let poll = Poll::new(&env.bot, &env.config);
 
@@ -417,7 +417,7 @@ mod tests {
     }
 
     #[test]
-    fn test_poll_vote() {
+    fn poll_vote() {
         let mut env = Environment::new();
         let poll = Poll::new(&env.bot, &env.config);
 
@@ -451,7 +451,7 @@ mod tests {
     }
 
     #[test]
-    fn test_poll_stop() {
+    fn poll_stop() {
         let mut env = Environment::new();
         let poll = Poll::new(&env.bot, &env.config);
 

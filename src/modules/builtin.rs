@@ -210,7 +210,7 @@ mod tests {
     use crate::testing::*;
 
     #[test]
-    fn test_autojoin_raw() {
+    fn autojoin_raw() {
         let env = Environment::new();
         let _module = Builtin::new(&env.bot, &env.config);
 
@@ -221,7 +221,7 @@ mod tests {
     }
 
     #[test]
-    fn test_ping_raw() {
+    fn ping_raw() {
         let env = Environment::new();
         let _module = Builtin::new(&env.bot, &env.config);
 
@@ -232,7 +232,7 @@ mod tests {
     }
 
     #[test]
-    fn test_version_command() {
+    fn version_command() {
         let env = Environment::new();
         let _module = Builtin::new(&env.bot, &env.config);
 
@@ -248,7 +248,7 @@ mod tests {
     }
 
     #[test]
-    fn test_shaken_command() {
+    fn shaken_command() {
         let env = Environment::new();
         let _module = Builtin::new(&env.bot, &env.config);
 
@@ -262,7 +262,7 @@ mod tests {
     }
 
     #[test]
-    fn test_commands_command() {
+    fn commands_command() {
         let env = Environment::new();
         let _module = Builtin::new(&env.bot, &env.config);
 
@@ -279,13 +279,13 @@ mod tests {
 
     #[test]
     #[ignore]
-    fn test_viewers_command() {
+    fn viewers_command() {
         // this requires connecting to twitch. would need mocking
     }
 
     #[test]
     #[ignore]
-    fn test_uptime_command() {
+    fn uptime_command() {
         // this requires connecting to twitch
         // also requires obs is running
         // would need mocking

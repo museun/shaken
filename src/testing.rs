@@ -154,7 +154,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_conn_read() {
+    fn conn_read() {
         let conn = TestConn::new();
         assert!(conn.read().is_none());
 
@@ -172,7 +172,7 @@ mod tests {
     }
 
     #[test]
-    fn test_conn_write() {
+    fn conn_write() {
         let conn = TestConn::new();
         assert!(conn.pop().is_none());
 

@@ -109,7 +109,7 @@ impl Kappa {
 mod kappa_test {
     use super::*;
     #[test]
-    fn test_make_kappas() {
+    fn make_kappas() {
         let inputs = &[
             (
                 "25:0-4,6-10,12-16",
