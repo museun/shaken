@@ -10,48 +10,6 @@ use scoped_threadpool::Pool;
 use std::collections::VecDeque;
 use std::time;
 
-pub enum Handler {
-    Command(
-        &'static str,
-        Box<Fn(&Bot, &Envelope) + Send + Sync + 'static>,
-    ),
-    Passive(Box<Fn(&Bot, &Envelope) + Send + Sync + 'static>),
-    Raw(
-        &'static str,
-        Box<Fn(&Bot, &Message) + Send + Sync + 'static>,
-    ),
-    Tick(Box<Fn(&Bot) + Send + Sync + 'static>),
-}
-
-struct Handlers(RwLock<Vec<Handler>>);
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct User {
-    pub display: String,
-    pub color: RGB,
-    pub userid: String,
-}
-
-struct Inspected {
-    output: RwLock<VecDeque<String>>,
-    inspect: Mutex<Box<Fn(&User, &str) + Send + Sync + 'static>>, // only 1 write
-}
-
-impl Inspected {
-    pub fn inspect(&self, me: &User) {
-        let inspect = self.inspect.lock();
-        let mut list = self.output.write();
-        for el in list.drain(..) {
-            inspect(&me, &el);
-        }
-    }
-
-    pub fn write(&self, data: &str) {
-        let mut output = self.output.write();
-        output.push_back(data.into())
-    }
-}
-
 pub(crate) struct Inner {
     pub(crate) user: User,
     pub(crate) owners: Vec<String>,
@@ -310,5 +268,47 @@ impl Bot {
 
     fn add_handler(&self, hn: Handler) {
         self.handlers.0.write().push(hn)
+    }
+}
+
+pub enum Handler {
+    Command(
+        &'static str,
+        Box<Fn(&Bot, &Envelope) + Send + Sync + 'static>,
+    ),
+    Passive(Box<Fn(&Bot, &Envelope) + Send + Sync + 'static>),
+    Raw(
+        &'static str,
+        Box<Fn(&Bot, &Message) + Send + Sync + 'static>,
+    ),
+    Tick(Box<Fn(&Bot) + Send + Sync + 'static>),
+}
+
+struct Handlers(RwLock<Vec<Handler>>);
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct User {
+    pub display: String,
+    pub color: RGB,
+    pub userid: String,
+}
+
+struct Inspected {
+    output: RwLock<VecDeque<String>>,
+    inspect: Mutex<Box<Fn(&User, &str) + Send + Sync + 'static>>, // only 1 write
+}
+
+impl Inspected {
+    pub fn inspect(&self, me: &User) {
+        let inspect = self.inspect.lock();
+        let mut list = self.output.write();
+        for el in list.drain(..) {
+            inspect(&me, &el);
+        }
+    }
+
+    pub fn write(&self, data: &str) {
+        let mut output = self.output.write();
+        output.push_back(data.into())
     }
 }
