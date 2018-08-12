@@ -3,6 +3,7 @@ use crate::color::RGB;
 use std::collections::HashMap;
 use std::ops::Range;
 
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct Tags(HashMap<String, String>);
 
 impl Tags {
