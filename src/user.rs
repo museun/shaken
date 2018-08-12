@@ -70,11 +70,22 @@ impl UserStore {
     }
 
     pub fn create_user(conn: &Connection, user: &User) {
+        let color = user.color.to_string();
+
         match conn.execute(
-            "INSERT OR IGNORE INTO Users (ID, Display, Color)  VALUES (?,?,?)",
-            &[&user.userid, &user.display, &user.color.to_string()],
+            r#"INSERT OR IGNORE INTO Users (ID, Display, Color) VALUES (?, ?, ?)"#,
+            &[&user.userid, &user.display, &color],
         ) {
+            Ok(row) if row == 0 => debug!("user({:?}) already exists", user),
             Ok(row) => debug!("added user({:?}) at {}", user, row),
+            Err(err) => error!("cannot insert user({:?}) into table: {}", user, err),
+        };
+
+        match conn.execute(
+            r#"UPDATE Users SET (Display, Color) = (?, ?) where ID = ?"#,
+            &[&user.display, &color, &user.userid],
+        ) {
+            Ok(row) => debug!("updated user({:?}) at {}", user, row),
             Err(err) => error!("cannot insert user({:?}) into table: {}", user, err),
         };
     }
@@ -84,7 +95,7 @@ const USER_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS Users (
     ID INTEGER PRIMARY KEY NOT NULL UNIQUE, -- twitch ID
     Display TEXT NOT NULL,                  -- twitch display name
-    Color TEXT                              -- their selected color (twitch, or custom. #RRGGBB)
+    Color TEXT NOT NULL                     -- their selected color (twitch, or custom. #RRGGBB)
 );
 "#;
 
@@ -95,6 +106,10 @@ mod tests {
 
     #[test]
     fn test_get_user() {
+        let _ = env_logger::Builder::from_default_env()
+            .default_format_timestamp(false)
+            .try_init();
+
         let conn = Connection::open_in_memory().unwrap();
         UserStore::init_table(&conn);
 
@@ -142,5 +157,36 @@ mod tests {
 
         let user = UserStore::get_user_by_name(&conn, "not_test");
         assert_eq!(user, None);
+
+        UserStore::create_user(
+            &conn,
+            &User {
+                display: "TEST".into(),
+                color: RGB::from("#abcabc"),
+                userid: 1004,
+            },
+        );
+
+        // let mut s = conn.prepare("select * from Users").unwrap();
+        // let iter = s
+        //     .query_map(&[], |row| User {
+        //         userid: row.get(0),
+        //         display: row.get(1),
+        //         color: RGB::from(&row.get::<_, String>(2)),
+        //     }).unwrap();
+
+        // for user in iter {
+        //     warn!("{:?}", user);
+        // }
+
+        let user = UserStore::get_user_by_name(&conn, "test");
+        assert_eq!(
+            user,
+            Some(User {
+                display: "TEST".into(),
+                color: RGB::from("#abcabc"),
+                userid: 1004,
+            })
+        );
     }
 }
