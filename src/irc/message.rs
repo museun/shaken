@@ -1,10 +1,12 @@
-use std::collections::HashMap;
 use std::fmt;
+// whats the right way to do this in Rust 2018?
+use super::super::Tags;
+use irc::prefix::Prefix;
 
 // TODO get rid of all of these string allocations
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct Message {
-    pub tags: HashMap<String, String>,
+    pub tags: Tags,
     pub prefix: Option<Prefix>,
     pub command: String,
     pub args: Vec<String>,
@@ -17,7 +19,7 @@ impl Message {
         let (input, tags) = if !input.starts_with(':') && !input.starts_with("PING") {
             Self::parse_tags(&input)
         } else {
-            (input, HashMap::new())
+            (input, Tags::default())
         };
 
         let prefix = Prefix::parse(&input);
@@ -47,18 +49,12 @@ impl Message {
         }
     }
 
-    // make sure it has caps before sending to this function
-    fn parse_tags(input: &str) -> (&str, HashMap<String, String>) {
-        let mut map = HashMap::new();
+    // TODO: make sure it has caps before sending to this function
+    fn parse_tags(input: &str) -> (&str, Tags) {
         let pos = input.find(' ').unwrap();
         let sub = &input[..pos];
-        for part in sub.split_terminator(';') {
-            if let Some(index) = part.find('=') {
-                let (k, v) = (&part[..index], &part[index + 1..]);
-                map.insert(k.into(), v.into());
-            }
-        }
-        (&input[pos + 1..], map)
+        let tags = Tags::new(&sub);
+        (&input[pos + 1..], tags)
     }
 }
 
@@ -78,56 +74,6 @@ impl fmt::Display for Message {
                 "({}) <{}> {:?}: {}",
                 &self.command, prefix, self.args, data
             ),
-        }
-    }
-}
-
-#[derive(Debug, PartialEq, Clone)]
-pub enum Prefix {
-    User {
-        nick: String,
-        user: String,
-        host: String,
-    },
-    Server {
-        host: String,
-    },
-}
-
-impl Prefix {
-    pub fn parse(input: &str) -> Option<Self> {
-        if !input.starts_with(':') {
-            // XXX: will this be a problem?
-            return None;
-        }
-
-        let s = input[1..input.find(' ')?].trim();
-        match s.find('!') {
-            Some(pos) => {
-                let nick = &s[..pos];
-                let at = s.find('@')?;
-                let user = &s[pos + 1..at];
-                let host = &s[at + 1..];
-                Some(Prefix::User {
-                    nick: nick.into(),
-                    user: user.into(),
-                    host: host.into(),
-                })
-            }
-            None => Some(Prefix::Server { host: s.into() }),
-        }
-    }
-}
-
-impl fmt::Display for Prefix {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            Prefix::User {
-                ref nick,
-                ref user,
-                ref host,
-            } => writeln!(f, "{}!{}@{}", nick, user, host),
-            Prefix::Server { ref host } => writeln!(f, "{}", host),
         }
     }
 }

@@ -1,5 +1,8 @@
 mod message;
-pub use self::message::{Message, Prefix};
+pub use self::message::Message;
+
+mod prefix;
+pub use self::prefix::Prefix;
 
 mod conn;
 // TODO this should only expose a Conn
