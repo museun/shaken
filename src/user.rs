@@ -1,5 +1,6 @@
-use crate::color::RGB;
+#![allow(dead_code)] // go away clippy
 
+use crate::color::RGB;
 use rusqlite::Connection;
 
 #[derive(Clone, PartialEq, Debug)]
@@ -82,8 +83,8 @@ impl UserStore {
 const USER_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS Users (
     ID INTEGER PRIMARY KEY NOT NULL UNIQUE, -- twitch ID
-    Display TEXT NOT NULL,               -- twitch display name
-    Color TEXT                           -- their selected color (twitch, or custom. #RRGGBB)
+    Display TEXT NOT NULL,                  -- twitch display name
+    Color TEXT                              -- their selected color (twitch, or custom. #RRGGBB)
 );
 "#;
 
@@ -94,10 +95,6 @@ mod tests {
 
     #[test]
     fn test_get_user() {
-        // let _ = env_logger::Builder::from_default_env()
-        //     .default_format_timestamp(false)
-        //     .try_init();
-
         let conn = Connection::open_in_memory().unwrap();
         UserStore::init_table(&conn);
 
@@ -142,5 +139,8 @@ mod tests {
                 userid: 1004,
             })
         );
+
+        let user = UserStore::get_user_by_name(&conn, "not_test");
+        assert_eq!(user, None);
     }
 }
