@@ -82,8 +82,8 @@ impl UserStore {
         };
 
         match conn.execute(
-            r#"UPDATE Users SET (Display, Color) = (?, ?) where ID = ?"#,
-            &[&user.display, &color, &user.userid],
+            r#"UPDATE Users SET Display = ? where ID = ?"#,
+            &[&user.display, &user.userid],
         ) {
             Ok(row) => debug!("updated user({:?}) at {}", user, row),
             Err(err) => error!("cannot insert user({:?}) into table: {}", user, err),
@@ -106,10 +106,6 @@ mod tests {
 
     #[test]
     fn test_get_user() {
-        let _ = env_logger::Builder::from_default_env()
-            .default_format_timestamp(false)
-            .try_init();
-
         let conn = Connection::open_in_memory().unwrap();
         UserStore::init_table(&conn);
 
@@ -167,24 +163,12 @@ mod tests {
             },
         );
 
-        // let mut s = conn.prepare("select * from Users").unwrap();
-        // let iter = s
-        //     .query_map(&[], |row| User {
-        //         userid: row.get(0),
-        //         display: row.get(1),
-        //         color: RGB::from(&row.get::<_, String>(2)),
-        //     }).unwrap();
-
-        // for user in iter {
-        //     warn!("{:?}", user);
-        // }
-
         let user = UserStore::get_user_by_name(&conn, "test");
         assert_eq!(
             user,
             Some(User {
                 display: "TEST".into(),
-                color: RGB::from("#abcabc"),
+                color: RGB::from("#f0f0f0"),
                 userid: 1004,
             })
         );
