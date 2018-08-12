@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use curl::easy::{Easy, List};
 
 pub struct TwitchClient {
@@ -99,9 +98,9 @@ impl TwitchClient {
         }
 
         let value = serde_json::from_slice::<serde_json::Value>(&vec)
-            .map_err(|e| {
-                error!("parse json: {}", e);
-                e
+            .map_err(|err| {
+                error!("parse json: {}", err);
+                err
             }).ok()?;
 
         let value = value
@@ -109,13 +108,21 @@ impl TwitchClient {
             .or_else(|| {
                 error!("cannot get 'data' from json value");
                 None
-            })?.clone();
+            })?.clone(); // why is this being cloned?
 
         serde_json::from_value(value)
             .map_err(|e| {
                 error!("cannot convert : {}", e);
                 e
             }).ok()
+    }
+
+    pub fn get_names_for<S: AsRef<str>>(ch: S) -> Option<Names> {
+        let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch.as_ref());
+        if let Some(resp) = crate::util::http_get(&url) {
+            return serde_json::from_str::<Names>(&resp).ok();
+        }
+        None
     }
 }
 
@@ -165,12 +172,4 @@ pub struct Chatters {
 pub struct Names {
     pub chatter_count: usize,
     pub chatters: Chatters,
-}
-
-pub fn get_names_for<S: AsRef<str>>(ch: S) -> Option<Names> {
-    let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch.as_ref());
-    if let Some(resp) = crate::util::http_get(&url) {
-        return serde_json::from_str::<Names>(&resp).ok();
-    }
-    None
 }
