@@ -72,6 +72,7 @@ impl Default for Config {
 }
 
 impl Config {
+    // TODO: make this a get() and retrieve from a cache
     pub fn load() -> Self {
         let data = fs::read_to_string(CONFIG_FILE)
             .map_err(|e| {
