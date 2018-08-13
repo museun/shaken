@@ -181,7 +181,7 @@ mod tests {
     }
 
     #[test]
-    fn make_jraw_command() {
+    fn make_raw_command() {
         let raw = raw!("PING irc.localhost");
         assert_eq!(
             raw,

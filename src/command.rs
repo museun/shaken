@@ -3,7 +3,6 @@
 pub struct Command {
     name: String,
     help: String,
-    subs: Vec<Box<Command>>,
 }
 
 impl Command {
@@ -20,7 +19,6 @@ impl Command {
 pub struct CommandBuilder {
     name: Option<String>,
     help: Option<String>,
-    subs: Vec<Command>,
 }
 
 impl CommandBuilder {
@@ -38,20 +36,11 @@ impl CommandBuilder {
         self
     }
 
-    pub fn children<V>(mut self, v: V) -> Self
-    where
-        V: AsRef<[Command]>,
-    {
-        self.subs.clone_from_slice(v.as_ref());
-        self
-    }
-
     pub fn build(self) -> Command {
         // TODO assert all this stuff
         Command {
             name: self.name.unwrap(),
             help: self.help.or_else(|| Some("".into())).unwrap(),
-            subs: self.subs.into_iter().map(Box::new).collect(),
         }
     }
 }

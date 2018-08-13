@@ -1,3 +1,5 @@
+use crate::Command;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Request<'a> {
     name: &'a str,      // head
