@@ -56,6 +56,11 @@ impl Message {
         let tags = Tags::new(&sub);
         (&input[pos + 1..], tags)
     }
+
+    /// this panics if there is no target
+    pub fn target(&self) -> &str {
+        &self.args.first().expect("should have a target")
+    }
 }
 
 impl fmt::Display for Message {
