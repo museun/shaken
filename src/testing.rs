@@ -46,6 +46,14 @@ impl<'a> Environment<'a> {
                 userid: 1000,
             },
         );
+        UserStore::create_user(
+            &db,
+            &User {
+                display: "shaken_bot".into(),
+                color: color::RGB::from("#f0f0f0"),
+                userid: 42,
+            },
+        );
 
         Self {
             conn: Rc::clone(&conn),

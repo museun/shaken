@@ -24,7 +24,10 @@ impl Shaken {
     pub fn start(config: &Config) {
         let address = format!("{}:{}", &config.twitch.address, &config.twitch.port);
 
-        let mods: Vec<Box<Module>> = vec![Box::new(Builtin::new())];
+        let mods: Vec<Box<Module>> = vec![
+            Box::new(Builtin::new()),     //
+            Box::new(Shakespeare::new()), //
+        ];
 
         let mut sleep = 0;
         loop {

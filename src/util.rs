@@ -105,10 +105,10 @@ where
     crate::util::join_with(list.iter(), " ")
 }
 
-// REFACTOR: make this non-blocking. or a specific timeout
 pub fn http_get<S: AsRef<str>>(url: S) -> Option<String> {
     let mut vec = Vec::new();
     let mut easy = Easy::new();
+    easy.connect_timeout(::std::time::Duration::from_secs(5)).expect("to set timeout");
     easy.url(url.as_ref()).ok()?;
     {
         let mut transfer = easy.transfer();

@@ -3,24 +3,18 @@
 
 #[macro_use]
 extern crate log;
-
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate rusqlite;
 extern crate serde_json;
 extern crate toml;
-
-extern crate rusqlite;
-
 #[macro_use]
 extern crate crossbeam_channel;
-// extern crate parking_lot;
-
 extern crate chrono;
 extern crate curl;
-
+extern crate parking_lot;
 extern crate rand;
-
 extern crate tungstenite;
 extern crate url;
 

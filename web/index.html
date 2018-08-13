@@ -84,7 +84,7 @@
                     n += s.length - ((r.end + 1) - r.start); //Math.ceil(Math.log10(k.id + 1))
                 });
             });
-            line.data = data;
+            return data;
         };
 
         const socket = new ReconnectingWebSocket("ws://localhost:51000");
@@ -94,7 +94,9 @@
 
         socket.addEventListener('message', function (event) {
             let data = JSON.parse(event.data);
-            place_kappas(data);
+            // TODO sanitize the html before placing the Kappas
+            data.data = place_kappas(data);
+
             if (lines.length >= MAX) { lines.shift(); }
             let pos = lines.findIndex((el) => { return el.timestamp < data.timestamp; });
             if (pos == -1 || pos == 0) { lines.push(data); }
