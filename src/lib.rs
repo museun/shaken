@@ -1,8 +1,6 @@
 #![feature(rust_2018_preview)]
-#![feature(unboxed_closures)]
-// #![allow(unreadable_literal)]
+#![allow(dead_code, unused_variables)] // fuck off clippy
 
-// doesn't rust 2018 remove the need for this?
 #[macro_use]
 extern crate log;
 
@@ -12,41 +10,48 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate toml;
 
-#[macro_use]
-extern crate crossbeam_channel;
-extern crate parking_lot;
-extern crate scoped_threadpool; // do I need this?
+extern crate rusqlite;
+
+// #[macro_use]
+// extern crate crossbeam_channel;
+// extern crate parking_lot;
 
 extern crate chrono;
 extern crate curl;
 
 extern crate rand;
 
-extern crate tungstenite;
+// extern crate tungstenite;
 extern crate url;
 
-mod color;
-pub use crate::color::{HSL, RGB};
-
-mod testing;
-pub use crate::testing::Environment;
-
-mod humanize;
-mod message;
-
 #[macro_use]
-mod util;
-
-mod twitch;
-
-mod modules;
-pub use crate::modules::*;
-
-mod bot;
-pub use crate::bot::{Bot, User};
+pub mod util;
+pub mod color;
+pub mod db;
+pub mod twitch;
 
 mod config;
-pub use crate::config::Config;
+mod tags;
 
-mod conn;
-pub use crate::conn::{Conn, TcpConn};
+// mod modules;
+// pub use crate::modules::*;
+
+mod bot;
+mod irc;
+
+mod command;
+mod module;
+mod request;
+mod response;
+mod user;
+
+pub use crate::config::Config;
+pub use crate::tags::Tags;
+
+pub use crate::bot::Bot;
+// TODO don't glob these
+pub use crate::command::*;
+pub use crate::module::*;
+pub use crate::request::*;
+pub use crate::response::*;
+pub use crate::user::*;
