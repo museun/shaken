@@ -135,7 +135,7 @@ fn split<S: AsRef<str>>(raw: S) -> Vec<String> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct TestConn {
     read: RefCell<VecDeque<String>>,
     write: RefCell<VecDeque<String>>,
