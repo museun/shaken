@@ -12,7 +12,12 @@ pub fn get_connection() -> Connection {
 
 #[cfg(test)]
 pub fn get_connection() -> Connection {
-    let conn = Connection::open_in_memory().unwrap();
+    use rusqlite;
+
+    let conn = Connection::open_with_flags(
+        "file::memory:?cache=shared",
+        rusqlite::OpenFlags::SQLITE_OPEN_URI | rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
+    ).unwrap();
     UserStore::init_table(&conn);
     conn
 }
