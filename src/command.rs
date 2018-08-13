@@ -1,46 +1,30 @@
+use crate::{Module, Request, Response};
+
 // this is used so modules can express their commands
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct Command {
+pub struct Command<T>
+where
+    T: Module,
+{
     name: String,
-    help: String,
+    func: fn(&T, &Request) -> Option<Response>,
 }
 
-impl Command {
+impl<T> Command<T>
+where
+    T: Module,
+{
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    pub fn help(&self) -> &str {
-        &self.help
-    }
-}
-
-#[derive(Default)]
-pub struct CommandBuilder {
-    name: Option<String>,
-    help: Option<String>,
-}
-
-impl CommandBuilder {
-    pub fn new() -> Self {
-        CommandBuilder::default()
-    }
-
-    pub fn name(mut self, name: &str) -> Self {
-        self.name = Some(name.into());
-        self
-    }
-
-    pub fn help(mut self, help: &str) -> Self {
-        self.help = Some(help.into());
-        self
-    }
-
-    pub fn build(self) -> Command {
-        // TODO assert all this stuff
-        Command {
-            name: self.name.unwrap(),
-            help: self.help.or_else(|| Some("".into())).unwrap(),
+    pub fn new(name: &str, func: fn(&T, &Request) -> Option<Response>) -> Self {
+        Self {
+            name: name[1..].into(),
+            func,
         }
+    }
+
+    pub fn call(&self, recv: &T, req: &Request) -> Option<Response> {
+        (self.func)(recv, req)
     }
 }

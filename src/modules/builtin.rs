@@ -1,87 +1,76 @@
-use crate::{bot::*, config, humanize::*, message, twitch, util};
+use crate::{irc::Message, twitch, util::*, Config};
+use crate::{response, Command, Module, Request, Response};
 
 use chrono::prelude::*;
-use std::sync::Arc;
 
 pub struct Builtin {
     twitch: twitch::TwitchClient,
+    channel: String,
+    commands: Vec<Command<Builtin>>,
+}
+
+impl Module for Builtin {
+    fn command(&self, req: &Request) -> Option<Response> {
+        for cmd in &self.commands {
+            if let Some(req) = req.search(cmd.name()) {
+                return cmd.call(&self, &req);
+            }
+        }
+
+        None
+    }
+
+    fn event(&self, msg: &Message) -> Option<Response> {
+        match msg.command() {
+            "001" => response::join(&self.channel),
+            "PING" => raw!("PONG :{}", &msg.data),
+            _ => None,
+        }
+    }
+}
+
+macro_rules! maybe {
+    ($e:expr) => {
+        if $e {
+            return reply!("the stream doesn't seem to be live");
+        }
+    };
 }
 
 impl Builtin {
-    pub fn new(bot: &Bot, _config: &config::Config) -> Arc<Self> {
-        let this = Arc::new(Self {
+    pub fn new() -> Self {
+        let commands = vec![
+            Command::new("!version", Builtin::version_command),
+            Command::new("!shaken", Builtin::shaken_command),
+            Command::new("!viewers", Builtin::viewers_command),
+            Command::new("!uptime", Builtin::uptime_command),
+            // crate::simple_command("!uptime"),  //
+        ];
+
+        Self {
             twitch: twitch::TwitchClient::new(),
-        });
-
-        let next = Arc::clone(&this);
-        bot.on_raw("PING", move |bot, msg| next.ping_raw(bot, msg));
-
-        let next = Arc::clone(&this);
-        bot.on_raw("001", move |bot, msg| next.autojoin_raw(bot, msg));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!version", move |bot, env| next.version_command(bot, env));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!shaken", move |bot, env| next.shaken_command(bot, env));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!commands", move |bot, env| next.commands_command(bot, env));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!viewers", move |bot, env| next.viewers_command(bot, env));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!uptime", move |bot, env| next.uptime_command(bot, env));
-
-        this
+            commands,
+            channel: Config::load().twitch.channel.to_string(),
+        }
     }
 
-    fn autojoin_raw(&self, bot: &Bot, _msg: &message::Message) {
-        bot.join(&format!("#{}", &bot.channel));
-    }
-
-    fn ping_raw(&self, bot: &Bot, msg: &message::Message) {
-        bot.send(&format!("PONG :{}", &msg.data))
-    }
-
-    fn version_command(&self, bot: &Bot, env: &message::Envelope) {
+    fn version_command(&self, _req: &Request) -> Option<Response> {
         let rev = option_env!("SHAKEN_GIT_REV").unwrap();
         let branch = option_env!("SHAKEN_GIT_BRANCH").unwrap();
 
-        let msg = format!(
+        reply!(
             "https://github.com/museun/shaken ({} on '{}' branch)",
-            rev, branch
-        );
-
-        bot.say(&env, &msg);
+            rev,
+            branch
+        )
     }
 
-    fn shaken_command(&self, bot: &Bot, env: &message::Envelope) {
-        bot.say(
-            &env,
-            "I try to impersonate The Bard, by being trained on all of his works.",
-        );
+    fn shaken_command(&self, _req: &Request) -> Option<Response> {
+        say!("I try to impersonate The Bard, by being trained on all of his works.")
     }
 
-    fn commands_command(&self, bot: &Bot, env: &message::Envelope) {
-        let commands = bot.get_commands();
-        let commands = util::join_with(commands.iter(), " ");
-        bot.say(&env, &format!("available commands: {}", commands));
-    }
-
-    fn viewers_command(&self, bot: &Bot, env: &message::Envelope) {
-        // have to duplicate it because of its scoping. still cleaner this way
-        macro_rules! maybe {
-            ($e:expr) => {
-                if $e {
-                    bot.say(&env, "the stream doesn't seem to be live");
-                    return;
-                }
-            };
-        }
-
-        let streams = self.twitch.get_streams(&[&bot.channel]);
+    fn viewers_command(&self, _req: &Request) -> Option<Response> {
+        let streams = self.twitch.get_streams(&[&self.channel]);
         maybe!(streams.is_none());
 
         let streams = streams.unwrap();
@@ -91,23 +80,13 @@ impl Builtin {
         maybe!(stream.live.is_empty() || stream.live == "");
 
         let viewers = stream.viewer_count.comma_separate();
-        bot.say(&env, &format!("viewers: {}", viewers));
+        reply!("viewers: {}", viewers)
     }
 
-    fn uptime_command(&self, bot: &Bot, env: &message::Envelope) {
-        // have to duplicate it because of its scoping. still cleaner this way
-        macro_rules! maybe {
-            ($e:expr) => {
-                if $e {
-                    bot.say(&env, "the stream doesn't seem to be live");
-                    return;
-                }
-            };
-        }
-
+    fn uptime_command(&self, _req: &Request) -> Option<Response> {
         let timecode = Self::get_uptime_from_obs();
 
-        let streams = self.twitch.get_streams(&[&bot.channel]);
+        let streams = self.twitch.get_streams(&[&self.channel]);
         maybe!(streams.is_none());
 
         let streams = streams.unwrap();
@@ -139,11 +118,11 @@ impl Builtin {
                 map[i] = (map[i].0, part.parse::<u64>().unwrap());
             }
 
-            let timecode = crate::humanize::format_time_map(&map);
+            let timecode = crate::util::format_time_map(&map);
             msg.push_str(&format!(", obs says: {}", &timecode));
         }
 
-        bot.say(&env, &msg);
+        say!("{}", msg)
     }
 
     fn get_uptime_from_obs() -> Option<String> {
@@ -196,10 +175,13 @@ impl Builtin {
         });
 
         use crossbeam_channel::after;
-        let timeout = ::std::time::Duration::from_millis(150);
+        let timeout = ::std::time::Duration::from_millis(3000);
         select!{
                 recv(rx, msg) => msg,
-                recv(after(timeout)) => None,
+                recv(after(timeout)) =>{
+                    warn!("timed out when trying to get the uptime from obs");
+                    None
+                },
         }
     }
 }
@@ -210,85 +192,82 @@ mod tests {
     use crate::testing::*;
 
     #[test]
-    fn autojoin_raw() {
-        let env = Environment::new();
-        let _module = Builtin::new(&env.bot, &env.config);
+    fn autojoin() {
+        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let mut env = Environment::new();
+        env.add(&builtin);
 
-        env.conn.push(":test.localhost 001 museun :Welcome to IRC");
+        env.push_raw(":test.localhost 001 museun :Welcome to IRC");
         env.step();
-
-        assert_eq!(env.conn.pop(), Some("JOIN #museun".into()))
+        assert_eq!(env.pop_raw(), Some("JOIN museun".into()));
     }
 
     #[test]
-    fn ping_raw() {
-        let env = Environment::new();
-        let _module = Builtin::new(&env.bot, &env.config);
+    fn autopong() {
+        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let mut env = Environment::new();
+        env.add(&builtin);
 
-        env.conn.push("PING :foobar");
+        env.push_raw("PING :foobar");
         env.step();
-
-        assert_eq!(env.conn.pop(), Some("PONG :foobar".into()))
-    }
-
-    #[test]
-    fn version_command() {
-        let env = Environment::new();
-        let _module = Builtin::new(&env.bot, &env.config);
-
-        env.push_privmsg("!version");
-        env.step();
-
-        assert!(
-            env.pop_env()
-                .unwrap()
-                .data
-                .starts_with("https://github.com/museun/shaken")
-        );
+        assert_eq!(env.pop_raw(), Some("PONG :foobar".into()));
     }
 
     #[test]
     fn shaken_command() {
-        let env = Environment::new();
-        let _module = Builtin::new(&env.bot, &env.config);
+        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let mut env = Environment::new();
+        env.add(&builtin);
 
-        env.push_privmsg("!shaken");
+        env.push("!shaken");
         env.step();
-
         assert_eq!(
-            env.pop_env().unwrap().data,
-            "I try to impersonate The Bard, by being trained on all of his works."
+            env.pop(),
+            Some("I try to impersonate The Bard, by being trained on all of his works.".into())
         );
     }
 
     #[test]
-    fn commands_command() {
-        let env = Environment::new();
-        let _module = Builtin::new(&env.bot, &env.config);
+    fn version_command() {
+        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let mut env = Environment::new();
+        env.add(&builtin);
 
-        env.push_privmsg("!commands");
+        env.push("!version");
         env.step();
 
         assert!(
-            env.pop_env()
+            env.pop()
                 .unwrap()
-                .data
-                .starts_with("available commands:")
+                .starts_with("@test: https://github.com/museun/shaken")
         );
     }
 
     #[test]
-    #[ignore]
+    #[ignore] // this requires mocking a twitch response
     fn viewers_command() {
-        // this requires connecting to twitch. would need mocking
+        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let mut env = Environment::new();
+        env.add(&builtin);
+
+        env.push("!viewers");
+        env.step();
+
+        warn!("{:#?}", env.pop());
     }
 
     #[test]
-    #[ignore]
+    #[ignore] // this requires mocking a twitch response, and an obs response
     fn uptime_command() {
-        // this requires connecting to twitch
-        // also requires obs is running
-        // would need mocking
+        init_logger();
 
+        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let mut env = Environment::new();
+        env.add(&builtin);
+
+        env.push("!uptime");
+        env.step();
+
+        warn!("{:#?}", env.pop());
     }
 }

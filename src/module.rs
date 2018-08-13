@@ -1,8 +1,8 @@
 use crate::irc::Message;
-use crate::{Command, Request, Response};
+use crate::{Request, Response};
 
 pub trait Module {
-    fn command(&self, cmd: &Request) -> Option<Response> {
+    fn command(&self, req: &Request) -> Option<Response> {
         None
     }
 
@@ -12,9 +12,5 @@ pub trait Module {
 
     fn event(&self, msg: &Message) -> Option<Response> {
         None
-    }
-
-    fn commands(&self) -> Vec<Command> {
-        vec![]
     }
 }

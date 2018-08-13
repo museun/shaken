@@ -17,14 +17,13 @@ impl<'a> Request<'a> {
         }
     }
 
-    /// Searches for the first instance of the subcommand, returning it as the name, with the rest as the args
-    pub fn search(&self, cmd: &str) -> Option<Request<'a>> {
-        if self.name == cmd {
+    pub fn search(&self, query: &str) -> Option<Request<'a>> {
+        if self.name == query {
             return Some(self.clone());
         }
 
         for (depth, arg) in self.args.iter().enumerate() {
-            if *arg == cmd {
+            if *arg == query {
                 let req = Request {
                     name: arg,
                     args: self.args.iter().skip(depth + 1).map(|s| *s).collect(),

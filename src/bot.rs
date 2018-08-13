@@ -3,7 +3,7 @@ use crate::{color::RGB, db, Module, Request, Response, User, UserStore};
 
 pub struct Bot<'a> {
     conn: Conn,
-    modules: Vec<&'a Box<Module>>,
+    modules: Vec<&'a Box<dyn Module>>,
     // TODO this might have to be a closure
     inspect: fn(&Message, &Response),
 }
@@ -22,7 +22,7 @@ impl<'a> Bot<'a> {
         }
     }
 
-    pub fn add(&mut self, m: &'a Box<Module>) {
+    pub fn add(&mut self, m: &'a Box<dyn Module>) {
         self.modules.push(m)
     }
 
@@ -54,17 +54,13 @@ impl<'a> Bot<'a> {
 
     pub fn run(&self) {
         trace!("starting run loop");
-        while let Some(resps) = self.step() {
-            resps
-                .iter()
-                .inspect(|s| trace!("writing response: {}", s))
-                .for_each(|m| self.send(m));
+        loop {
+            self.step();
         }
-        trace!("ending run loop");
     }
 
-    pub fn step(&self) -> Option<Vec<String>> {
-        let msg = Message::parse(self.conn.read()?.as_ref());
+    pub fn step(&self) {
+        let msg = Message::parse(bail!(self.conn.read()).as_ref());
         Self::add_user_from_msg(&msg);
 
         let mut out = vec![];
@@ -84,14 +80,14 @@ impl<'a> Bot<'a> {
             }
         }
 
-        let responses = out.into_iter().filter_map(|r| {
-            r.and_then(|r| {
-                (self.inspect)(&msg, &r);
-                r.build(&msg)
-            })
-        });
-
-        Some(responses.collect())
+        out.into_iter()
+            .filter_map(|r| {
+                r.and_then(|r| {
+                    (self.inspect)(&msg, &r);
+                    r.build(&msg)
+                })
+            }).inspect(|s| trace!("writing response: {}", s))
+            .for_each(|m| self.send(&m));
     }
 
     fn add_user_from_msg(msg: &Message) {

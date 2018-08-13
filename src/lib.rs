@@ -12,8 +12,8 @@ extern crate toml;
 
 extern crate rusqlite;
 
-// #[macro_use]
-// extern crate crossbeam_channel;
+#[macro_use]
+extern crate crossbeam_channel;
 // extern crate parking_lot;
 
 extern crate chrono;
@@ -21,37 +21,42 @@ extern crate curl;
 
 extern crate rand;
 
-// extern crate tungstenite;
+extern crate tungstenite;
 extern crate url;
 
 #[macro_use]
 pub mod util;
 pub mod color;
 pub mod db;
+pub mod irc;
 pub mod twitch;
 
+mod testing;
+
+#[macro_use]
+pub mod response;
+pub use crate::response::*;
+
+mod modules;
+pub use crate::modules::*;
+
 mod config;
-mod tags;
-
-// mod modules;
-// pub use crate::modules::*;
-
-mod bot;
-pub mod irc;
-
-mod command;
-mod module;
-mod request;
-mod response;
-mod user;
-
 pub use crate::config::Config;
+
+mod tags;
 pub use crate::tags::Tags;
 
+mod bot;
 pub use crate::bot::Bot;
-// TODO don't glob these
+
+mod command;
 pub use crate::command::*;
+
+mod module;
 pub use crate::module::*;
+
+mod request;
 pub use crate::request::*;
-pub use crate::response::*;
+
+mod user;
 pub use crate::user::*;

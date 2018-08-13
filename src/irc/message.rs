@@ -61,6 +61,10 @@ impl Message {
     pub fn target(&self) -> &str {
         &self.args.first().expect("should have a target")
     }
+
+    pub fn command(&self) -> &str {
+        &self.command
+    }
 }
 
 impl fmt::Display for Message {

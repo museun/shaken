@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines};
 use std::net::{self, TcpStream, ToSocketAddrs};
+use std::rc::Rc;
 use std::{fmt, str};
 
 pub enum ConnError {
@@ -20,7 +21,7 @@ impl fmt::Display for ConnError {
 
 pub enum Conn {
     TcpConn(TcpConn),
-    TestConn(TestConn),
+    TestConn(Rc<TestConn>),
 }
 
 impl Conn {
@@ -45,9 +46,9 @@ impl From<TcpConn> for Conn {
     }
 }
 
-impl From<TestConn> for Conn {
-    fn from(conn: TestConn) -> Self {
-        Conn::TestConn(conn)
+impl From<Rc<TestConn>> for Conn {
+    fn from(conn: Rc<TestConn>) -> Self {
+        Conn::TestConn(Rc::clone(&conn))
     }
 }
 
@@ -142,8 +143,8 @@ pub struct TestConn {
 }
 
 impl TestConn {
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new() -> Rc<Self> {
+        Rc::new(Self::default())
     }
 
     pub fn read(&self) -> Option<String> {

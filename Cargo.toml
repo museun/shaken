@@ -22,6 +22,6 @@ curl = "0.4.12"
 url = "1.7.1"
 tungstenite = "0.6.0"
 
-rusqlite = {version = "0.13.0", features = ["bundled", "chrono"]}
+rusqlite = { version = "0.13.0", features = ["bundled", "chrono"]}
 # r2d2_sqlite = "0.5.0"
 # r2d2 = "0.8.2"

@@ -51,21 +51,21 @@ impl Response {
 #[macro_export]
 macro_rules! reply {
     ($($arg:tt)*) => {
-        Response::Reply{data: format!($($arg)*)}
+        Some(Response::Reply{data: format!($($arg)*)})
     };
 }
 
 #[macro_export]
 macro_rules! say {
     ($($arg:tt)*) => {
-        Response::Say{data: format!($($arg)*)}
+        Some(Response::Say{data: format!($($arg)*)})
     }
 }
 
 #[macro_export]
 macro_rules! action {
     ($($arg:tt)*) => {
-        Response::Action{data: format!($($arg)*)}
+        Some(Response::Action{data: format!($($arg)*)})
     };
 }
 
@@ -76,16 +76,16 @@ pub enum IrcCommand {
     // what else can we do on twitch?
 }
 
-pub fn join(ch: &str) -> Response {
-    Response::Command {
+pub fn join(ch: &str) -> Option<Response> {
+    Some(Response::Command {
         cmd: IrcCommand::Join { channel: ch.into() },
-    }
+    })
 }
 
 #[macro_export]
 macro_rules! raw {
     ($($arg:tt)*) => {
-        Response::Command{cmd: IrcCommand::Raw{ data: format!($($arg)*) }}
+       Some(Response::Command{cmd: $crate::IrcCommand::Raw{ data: format!($($arg)*) }})
     };
 }
 
@@ -118,15 +118,15 @@ mod tests {
         let reply = reply!("this is a {}", 42);
         assert_eq!(
             reply,
-            Response::Reply {
+            Some(Response::Reply {
                 data: "this is a 42".into()
-            }
+            })
         );
 
         let msg = make_test_message();
         let _db = make_test_user(); // so the db doesn't get dropped before build() is called
 
-        let output = reply.build(&msg);
+        let output = reply.unwrap().build(&msg);
         assert_eq!(
             output,
             Some("PRIVMSG #test :@TestUser: this is a 42".into())
@@ -138,12 +138,12 @@ mod tests {
         let say = say!("this is a {}", 42);
         assert_eq!(
             say,
-            Response::Say {
+            Some(Response::Say {
                 data: "this is a 42".into()
-            }
+            })
         );
 
-        let output = say.build(&make_test_message());
+        let output = say.unwrap().build(&make_test_message());
         assert_eq!(output, Some("PRIVMSG #test :this is a 42".into()));
     }
 
@@ -152,12 +152,12 @@ mod tests {
         let action = action!("this is a {}", 42);
         assert_eq!(
             action,
-            Response::Action {
+            Some(Response::Action {
                 data: "this is a 42".into()
-            }
+            })
         );
 
-        let output = action.build(&make_test_message());
+        let output = action.unwrap().build(&make_test_message());
         assert_eq!(
             output,
             Some("PRIVMSG #test :\x01ACTION this is a 42\x01".into())
@@ -169,14 +169,14 @@ mod tests {
         let join = join("#testchannel");
         assert_eq!(
             join,
-            Response::Command {
+            Some(Response::Command {
                 cmd: IrcCommand::Join {
                     channel: "#testchannel".into()
                 }
-            }
+            })
         );
 
-        let output = join.build(&make_test_message());
+        let output = join.unwrap().build(&make_test_message());
         assert_eq!(output, Some("JOIN #testchannel".into()));
     }
 
@@ -185,14 +185,14 @@ mod tests {
         let raw = raw!("PING irc.localhost");
         assert_eq!(
             raw,
-            Response::Command {
+            Some(Response::Command {
                 cmd: IrcCommand::Raw {
                     data: "PING irc.localhost".into()
                 }
-            }
+            })
         );
 
-        let output = raw.build(&make_test_message());
+        let output = raw.unwrap().build(&make_test_message());
         assert_eq!(output, Some("PING irc.localhost".into()));
     }
 }
