@@ -37,7 +37,7 @@ mod tags;
 // pub use crate::modules::*;
 
 mod bot;
-mod irc;
+pub mod irc;
 
 mod command;
 mod module;

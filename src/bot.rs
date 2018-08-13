@@ -1,14 +1,14 @@
 use crate::irc::{Conn, Message};
 use crate::{color::RGB, db, Module, Request, Response, User, UserStore};
 
-pub struct Bot {
+pub struct Bot<'a> {
     conn: Conn,
-    modules: Vec<Box<Module>>,
+    modules: Vec<&'a Box<Module>>,
     // TODO this might have to be a closure
     inspect: fn(&Message, &Response),
 }
 
-impl Bot {
+impl<'a> Bot<'a> {
     /// just clone the connection
     pub fn new<C>(conn: C) -> Self
     where
@@ -22,8 +22,8 @@ impl Bot {
         }
     }
 
-    pub fn add<M: Module + 'static>(&mut self, m: M) {
-        self.modules.push(Box::new(m))
+    pub fn add(&mut self, m: &'a Box<Module>) {
+        self.modules.push(m)
     }
 
     pub fn set_inspect(&mut self, f: fn(&Message, &Response)) {

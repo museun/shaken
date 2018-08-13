@@ -24,6 +24,15 @@ impl Shaken {
     pub fn start(config: &Config) {
         let address = format!("{}:{}", &config.twitch.address, &config.twitch.port);
 
+        // let _builtin = Builtin::new(&bot, &config);
+        // let _display = Display::new(&bot, &config);
+
+        // let _shakespeare = Shakespeare::new(&bot, &config);
+        // let _invest = Invest::new(&bot, &config);
+        // let _poll = Poll::new(&bot, &config);
+
+        let mods: Vec<Box<Module>> = vec![];
+
         let mut sleep = 0;
         loop {
             if sleep > 0 {
@@ -32,10 +41,12 @@ impl Shaken {
             }
 
             info!("trying to connect to {}", address);
-            let bot = match TcpConn::new(&address) {
+
+            // XXX: this should timeout
+            let mut bot = match irc::TcpConn::new(&address) {
                 Ok(conn) => {
                     sleep = 0;
-                    Bot::new(conn, &config)
+                    Bot::new(conn)
                 }
                 Err(err) => {
                     error!("error: {}", err);
@@ -44,12 +55,11 @@ impl Shaken {
                 }
             };
 
-            let _builtin = Builtin::new(&bot, &config);
-            let _display = Display::new(&bot, &config);
+            for module in &mods {
+                bot.add(module);
+            }
 
-            let _shakespeare = Shakespeare::new(&bot, &config);
-            let _invest = Invest::new(&bot, &config);
-            let _poll = Poll::new(&bot, &config);
+            bot.register(&config.twitch.name);
 
             info!("connected and running");
             bot.run(); // this blocks
