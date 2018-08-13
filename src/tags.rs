@@ -42,8 +42,8 @@ impl Tags {
         self.get("display-name")
     }
 
-    pub fn get_userid(&'a self) -> Option<&'a str> {
-        self.get("user-id")
+    pub fn get_userid(&'a self) -> Option<i64> {
+        self.get("user-id")?.parse::<i64>().ok()
     }
 
     pub fn get<S>(&'a self, s: S) -> Option<&'a str>
