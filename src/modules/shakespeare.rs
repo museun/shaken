@@ -85,7 +85,6 @@ impl Shakespeare {
         }
 
         for part in msg.data.split_whitespace() {
-            warn!("part: '{}'", part);
             if part.starts_with('@') && trim_then_check(&part, &user.display) {
                 trace!("got a mention, trying to speak");
                 return self.speak_command();

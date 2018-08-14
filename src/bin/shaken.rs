@@ -27,11 +27,12 @@ impl Shaken {
 
         let builtin = &Builtin::new();
         let shakespeare = &Shakespeare::new();
+        let display = &Display::new();
 
-        // Vec<dyn Module>
         let mods: Vec<&dyn Module> = vec![
             builtin,     //
             shakespeare, //
+            display,     //
         ];
 
         let mut sleep = 0;
@@ -42,8 +43,6 @@ impl Shaken {
             }
 
             info!("trying to connect to {}", address);
-
-            // XXX: this should timeout
             let mut bot = match irc::TcpConn::new(&address) {
                 Ok(conn) => {
                     sleep = 0;

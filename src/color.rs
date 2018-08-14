@@ -6,7 +6,7 @@ pub struct RGB((u8, u8, u8));
 impl fmt::Display for RGB {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let (r, g, b) = self.0;
-        write!(f, "#{:2X}{:2X}{:2X}", r, g, b)
+        write!(f, "#{:02X}{:02X}{:02X}", r, g, b)
     }
 }
 
@@ -183,5 +183,11 @@ mod tests {
     #[test]
     fn write() {
         println!("{}", HSL::from_color(&RGB::from("#ff00ff")));
+    }
+
+    #[test]
+    fn to_string() {
+        let color = RGB::from("fc0fc0");
+        assert_eq!("#FC0FC0".to_string(), color.to_string())
     }
 }

@@ -21,7 +21,7 @@ impl Module for Builtin {
 
     fn event(&self, msg: &Message) -> Option<Response> {
         match msg.command() {
-            "001" => response::join(&self.channel),
+            "001" => response::join(&format!("#{}", self.channel)),
             "PING" => raw!("PONG :{}", &msg.data),
             _ => None,
         }

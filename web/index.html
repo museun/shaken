@@ -51,8 +51,8 @@
             transform: scale(0.66);
         }
     </style>
-    <script src="https://unpkg.com/vue"></script>
-    <script src="https://unpkg.com/reconnecting-websocket@4.0.0-rc5/dist/reconnecting-websocket-iife.min.js"></script>
+    <script src="//unpkg.com/vue"></script>
+    <script src="//unpkg.com/reconnecting-websocket@4.0.0-rc5/dist/reconnecting-websocket-iife.min.js"></script>
 </head>
 
 <body>
@@ -87,7 +87,7 @@
             return data;
         };
 
-        const socket = new ReconnectingWebSocket("ws://localhost:51000");
+        const socket = new ReconnectingWebSocket("ws://localhost:42000");
         socket.addEventListener('open', function (event) {
             socket.send(JSON.stringify("42")); // this should be a real handshake
         });

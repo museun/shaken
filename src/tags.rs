@@ -27,7 +27,7 @@ impl Tags {
                     None
                 }
             }).or_else(|| {
-                warn!("no emotes attached to that message");
+                debug!("no emotes attached to that message");
                 None
             })
     }

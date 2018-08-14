@@ -1,4 +1,4 @@
-use crate::irc::{Conn, Message};
+use crate::irc::{Conn, Message, Prefix};
 use crate::*;
 
 pub struct Bot<'a> {
@@ -61,10 +61,24 @@ impl<'a> Bot<'a> {
 
     pub fn step(&self) {
         let msg = Message::parse(bail!(self.conn.read()).as_ref());
-        let id = Self::add_user_from_msg(&msg);
+        trace!("< {:?}", msg);
 
         let mut out = vec![];
-        let req = Request::try_parse(id, &msg.data);
+        let req = if &msg.command[..] == "PRIVMSG" {
+            if let Some(Prefix::User { .. }) = msg.prefix {
+                let id = Self::add_user_from_msg(&msg);
+                trace!("< ({}) {:?}", id, msg);
+                Request::try_parse(id, &msg.data)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        trace!("<< {:?}", req);
+
+        trace!("dispatching to modules");
         for module in &self.modules {
             match &msg.command[..] {
                 "PRIVMSG" => {
@@ -79,7 +93,9 @@ impl<'a> Bot<'a> {
                 _ => out.push(module.event(&msg)),
             }
         }
+        trace!("done dispatching to modules");
 
+        trace!("collecting to send");
         out.into_iter()
             .filter_map(|r| {
                 r.and_then(|r| {
@@ -88,6 +104,7 @@ impl<'a> Bot<'a> {
                 })
             }).inspect(|s| trace!("writing response: {}", s))
             .for_each(|m| self.send(&m));
+        trace!("done sending");
     }
 
     fn add_user_from_msg(msg: &Message) -> i64 {
@@ -112,7 +129,10 @@ impl<'a> Bot<'a> {
             _ => return -1,
         }.unwrap();
 
+        trace!("trying to add user {:?}", user);
         let conn = crate::database::get_connection();
-        UserStore::create_user(&conn, &user)
+        let id = UserStore::create_user(&conn, &user);
+        trace!("added user {:?}: {}", user, id);
+        id
     }
 }

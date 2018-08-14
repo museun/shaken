@@ -105,7 +105,7 @@ const USER_TABLE: &str = r#"
 CREATE TABLE IF NOT EXISTS Users (
     ID INTEGER PRIMARY KEY NOT NULL UNIQUE, -- twitch ID
     Display TEXT NOT NULL,                  -- twitch display name
-    Color TEXT NOT NULL                     -- their selected color (twitch, or custom. #RRGGBB)
+    Color BLOB NOT NULL                     -- their selected color (twitch, or custom. #RRGGBB)
 );
 "#;
 
