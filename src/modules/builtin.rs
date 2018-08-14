@@ -1,7 +1,5 @@
 use crate::{irc::Message, twitch::TwitchClient, util::*, *};
 
-//use tungstenite;
-
 use chrono::prelude::*;
 
 pub struct Builtin {
@@ -192,9 +190,9 @@ mod tests {
 
     #[test]
     fn autojoin() {
-        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let builtin = &Builtin::new();
         let mut env = Environment::new();
-        env.add(&builtin);
+        env.add(builtin);
 
         env.push_raw(":test.localhost 001 museun :Welcome to IRC");
         env.step();
@@ -203,9 +201,9 @@ mod tests {
 
     #[test]
     fn autopong() {
-        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let builtin = &Builtin::new();
         let mut env = Environment::new();
-        env.add(&builtin);
+        env.add(builtin);
 
         env.push_raw("PING :foobar");
         env.step();
@@ -214,9 +212,9 @@ mod tests {
 
     #[test]
     fn shaken_command() {
-        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let builtin = &Builtin::new();
         let mut env = Environment::new();
-        env.add(&builtin);
+        env.add(builtin);
 
         env.push("!shaken");
         env.step();
@@ -228,9 +226,9 @@ mod tests {
 
     #[test]
     fn version_command() {
-        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let builtin = &Builtin::new();
         let mut env = Environment::new();
-        env.add(&builtin);
+        env.add(builtin);
 
         env.push("!version");
         env.step();
@@ -245,9 +243,9 @@ mod tests {
     #[test]
     #[ignore] // this requires mocking a twitch response
     fn viewers_command() {
-        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let builtin = &Builtin::new();
         let mut env = Environment::new();
-        env.add(&builtin);
+        env.add(builtin);
 
         env.push("!viewers");
         env.step();
@@ -258,11 +256,9 @@ mod tests {
     #[test]
     #[ignore] // this requires mocking a twitch response, and an obs response
     fn uptime_command() {
-        init_logger();
-
-        let builtin: Box<dyn Module> = Box::new(Builtin::new());
+        let builtin = &Builtin::new();
         let mut env = Environment::new();
-        env.add(&builtin);
+        env.add(builtin);
 
         env.push("!uptime");
         env.step();

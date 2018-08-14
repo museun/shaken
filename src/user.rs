@@ -23,7 +23,7 @@ impl UserStore {
                 "SELECT ID, Display, Color FROM Users WHERE DISPLAY = ? COLLATE NOCASE LIMIT 1",
             ).expect("valid sql");
 
-        Self::get_user(name, stmt)
+        Self::get_user(&name, stmt)
     }
 
     pub fn get_user_by_id(conn: &Connection, id: i64) -> Option<User> {
@@ -32,7 +32,7 @@ impl UserStore {
             .prepare("SELECT ID, Display, Color FROM Users WHERE ID = ? LIMIT 1")
             .expect("valid sql");
 
-        Self::get_user(id, stmt)
+        Self::get_user(&id, stmt)
     }
 
     pub fn get_user_by_name(conn: &Connection, name: &str) -> Option<User> {
@@ -42,15 +42,15 @@ impl UserStore {
                 "SELECT ID, Display, Color FROM Users WHERE DISPLAY = ? COLLATE NOCASE LIMIT 1",
             ).expect("valid sql");
 
-        Self::get_user(name, stmt)
+        Self::get_user(&name, stmt)
     }
 
-    fn get_user<'a, T>(q: T, mut stmt: rusqlite::Statement<'a>) -> Option<User>
+    fn get_user<T>(q: &T, mut stmt: rusqlite::Statement) -> Option<User>
     where
         T: ::std::fmt::Display + rusqlite::types::ToSql,
     {
         let mut iter = stmt
-            .query_map(&[&q], |row| User {
+            .query_map(&[q], |row| User {
                 userid: row.get(0),
                 display: row.get(1),
                 color: RGB::from(&row.get::<_, String>(2)),
@@ -67,7 +67,7 @@ impl UserStore {
         None
     }
 
-    pub fn update_color_for_id(conn: &Connection, id: i64, color: RGB) {
+    pub fn update_color_for_id(conn: &Connection, id: i64, color: &RGB) {
         match conn.execute(
             r#"UPDATE Users SET Color = ? where ID = ?"#,
             &[&color.to_string(), &id],
@@ -97,7 +97,7 @@ impl UserStore {
             Err(err) => error!("cannot insert user({:?}) into table: {}", user, err),
         };
 
-        return user.userid;
+        user.userid
     }
 }
 
@@ -113,7 +113,6 @@ CREATE TABLE IF NOT EXISTS Users (
 mod tests {
     use super::*;
     use rusqlite::Connection;
-    use crate::testing::*;
 
     #[test]
     fn userstore_stuff() {
@@ -193,12 +192,11 @@ mod tests {
             },
         );
 
-        init_logger();
-        UserStore::update_color_for_id(&conn, 1005, RGB::from("#FFFFFF"));
+        UserStore::update_color_for_id(&conn, 1005, &crate::color::RGB::from("#FFFFFF"));
         let user = UserStore::get_user_by_id(&conn, 1005);
         assert_eq!(user, None);
 
-        UserStore::update_color_for_id(&conn, 1004, RGB::from("#FFFFFF"));
+        UserStore::update_color_for_id(&conn, 1004, &crate::color::RGB::from("#FFFFFF"));
         let user = UserStore::get_user_by_id(&conn, 1004);
         assert_eq!(
             user,

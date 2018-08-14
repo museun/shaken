@@ -3,7 +3,7 @@ use crate::*;
 
 pub struct Bot<'a> {
     conn: Conn,
-    modules: Vec<&'a Box<dyn Module>>,
+    modules: Vec<&'a dyn Module>,
     // TODO this might have to be a closure
     inspect: fn(&Message, &Response),
 }
@@ -22,7 +22,7 @@ impl<'a> Bot<'a> {
         }
     }
 
-    pub fn add(&mut self, m: &'a Box<dyn Module>) {
+    pub fn add(&mut self, m: &'a dyn Module) {
         self.modules.push(m)
     }
 

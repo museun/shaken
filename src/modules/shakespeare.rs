@@ -140,9 +140,9 @@ mod tests {
 
     #[test]
     fn speak_command() {
-        let shakespeare: Box<dyn Module> = Box::new(Shakespeare::new());
+        let shakespeare = &Shakespeare::new();
         let mut env = Environment::new();
-        env.add(&shakespeare);
+        env.add(shakespeare);
 
         env.push("!speak");
         env.step();
@@ -161,14 +161,12 @@ mod tests {
     // this always bypasses the roll
     #[test]
     fn auto_speak() {
-        let ss = Shakespeare::new();
+        let shakespeare = &Shakespeare::new();
         {
-            ss.0.borrow_mut().bypass = 0;
+            shakespeare.0.borrow_mut().bypass = 0;
         }
-        let shakespeare: Box<dyn Module> = Box::new(ss);
-
         let mut env = Environment::new();
-        env.add(&shakespeare);
+        env.add(shakespeare);
 
         env.push("testing this out");
         env.step();
@@ -181,9 +179,9 @@ mod tests {
 
     #[test]
     fn check_mentions() {
-        let shakespeare: Box<dyn Module> = Box::new(Shakespeare::new());
+        let shakespeare = &Shakespeare::new();
         let mut env = Environment::new();
-        env.add(&shakespeare);
+        env.add(shakespeare);
 
         env.push("hey @shaken_bot");
         env.step();

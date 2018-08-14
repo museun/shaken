@@ -134,8 +134,8 @@ impl HSL {
 
         // TODO find error tolerance for this
         let h = match match max {
-            x if x == r => b2 - g2,
-            x if x == g => (1.0 / 3.0) + r2 - b2,
+            x if (x - r).abs() < 0.001 => b2 - g2,
+            x if (x - g).abs() < 0.001 => (1.0 / 3.0) + r2 - b2,
             _ => (2.0 / 3.0) + g2 - r2,
         } {
             h if h < 0.0 => h + 1.0,

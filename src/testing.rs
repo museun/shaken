@@ -51,7 +51,7 @@ impl<'a> Environment<'a> {
         &self.db
     }
 
-    pub fn add(&mut self, m: &'a Box<dyn Module>) {
+    pub fn add(&mut self, m: &'a dyn Module) {
         self.bot.add(m)
     }
 

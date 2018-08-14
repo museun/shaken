@@ -1,8 +1,8 @@
 mod builtin;
-//pub use crate::builtin::*;
+pub use self::builtin::*;
 
 mod shakespeare;
-//pub use crate::shakespeare::*;
+pub use self::shakespeare::*;
 
 // mod display;
 // pub use crate::display::*;

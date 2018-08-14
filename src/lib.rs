@@ -57,4 +57,4 @@ pub mod testing;
 pub mod twitch;
 
 pub mod modules;
-pub use crate::modules::*;
+pub use modules::*;

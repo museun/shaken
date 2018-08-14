@@ -12,7 +12,7 @@ impl<'a> Request<'a> {
             return None;
         }
 
-        if data.starts_with('!') {
+        if data.starts_with('!') && data.len() > 1 {
             let mut parts = data.split_whitespace();
             Some(Request {
                 name: parts.next()?,
@@ -39,6 +39,10 @@ impl<'a> Request<'a> {
     pub fn search(&self, query: &str) -> Option<Request<'a>> {
         if self.name == query {
             return Some(self.clone());
+        }
+
+        if query == "!" {
+            return None;
         }
 
         for (depth, arg) in self.args.iter().enumerate() {
@@ -68,7 +72,7 @@ mod tests {
             req,
             Some(Request {
                 sender: 0,
-                name: "this",
+                name: "!this",
                 args: vec!["is", "a", "test"]
             })
         );
@@ -79,7 +83,7 @@ mod tests {
             req,
             Some(Request {
                 sender: 0,
-                name: "hello",
+                name: "!hello",
                 args: vec![]
             })
         );
@@ -101,17 +105,17 @@ mod tests {
             req,
             Some(Request {
                 sender: 0,
-                name: "this",
+                name: "!this",
                 args: vec![]
             })
         );
 
-        let req = req.unwrap().search("this");
+        let req = req.unwrap().search("!this");
         assert_eq!(
             req,
             Some(Request {
                 sender: 0,
-                name: "this",
+                name: "!this",
                 args: vec![]
             })
         );
@@ -128,7 +132,7 @@ mod tests {
             req,
             Some(Request {
                 sender: 0,
-                name: "this",
+                name: "!this",
                 args: vec!["is", "a", "test"]
             })
         );

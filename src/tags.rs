@@ -38,15 +38,15 @@ impl Tags {
             .or_else(|| Some(RGB::from((255, 255, 255))))
     }
 
-    pub fn get_display(&'a self) -> Option<&'a str> {
+    pub fn get_display(&self) -> Option<&str> {
         self.get("display-name")
     }
 
-    pub fn get_userid(&'a self) -> Option<i64> {
+    pub fn get_userid(&self) -> Option<i64> {
         self.get("user-id")?.parse::<i64>().ok()
     }
 
-    pub fn get<S>(&'a self, s: S) -> Option<&'a str>
+    pub fn get<S>(&self, s: S) -> Option<&str>
     where
         S: AsRef<str>,
     {
