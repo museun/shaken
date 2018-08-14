@@ -39,11 +39,17 @@ impl Tags {
     }
 
     pub fn get_display(&self) -> Option<&str> {
-        self.get("display-name")
+        self.get("display-name").or_else(|| {
+            debug!("cannot get display-name for {:?}", self);
+            None
+        })
     }
 
     pub fn get_userid(&self) -> Option<i64> {
-        self.get("user-id")?.parse::<i64>().ok()
+        self.get("user-id")?.parse::<i64>().ok().or_else(|| {
+            debug!("cannot get user-id for {:?}", self);
+            None
+        })
     }
 
     pub fn get<S>(&self, s: S) -> Option<&str>

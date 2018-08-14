@@ -31,7 +31,7 @@ impl Module for Display {
     }
 
     fn passive(&self, msg: &IrcMessage) -> Option<Response> {
-        return self.handle_passive(msg);
+        self.handle_passive(msg)
     }
 }
 
@@ -84,7 +84,7 @@ impl Display {
             color: user.color,
             display: user.display,
             data: msg.data.clone(),
-            kappas: msg.tags.get_kappas()?,
+            kappas: msg.tags.get_kappas().or_else(|| Some(vec![])).unwrap(),
         };
 
         if self.queue.is_full() {
@@ -124,6 +124,7 @@ impl Display {
             }
         };
 
+        trace!("waiting for handshake");
         // TODO make this a proper handshake
         match socket.read_message() {
             Ok(_msg) => (),
@@ -134,9 +135,9 @@ impl Display {
         };
 
         let tick = channel::tick(Duration::from_millis(1000));
-
         let read = |msg, socket: &mut ws::WebSocket<TcpStream>| {
             let json = serde_json::to_string(&msg).expect("well-formed structs");
+            trace!("writing: {}", json);
             socket.write_message(ws::Message::Text(json)).is_ok()
         };
 

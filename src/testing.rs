@@ -62,7 +62,7 @@ impl<'a> Environment<'a> {
     }
 
     pub fn step(&self) {
-        self.bot.step()
+        let _ = self.bot.step();
     }
 
     pub fn push(&self, data: &str) {

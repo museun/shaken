@@ -54,30 +54,25 @@ impl<'a> Bot<'a> {
 
     pub fn run(&self) {
         trace!("starting run loop");
-        loop {
-            self.step();
-        }
+        while let Some(_) = self.step() {}
+        trace!("ending the run loop");
     }
 
-    pub fn step(&self) {
-        let msg = Message::parse(bail!(self.conn.read()).as_ref());
-        trace!("< {:?}", msg);
-
-        let mut out = vec![];
-        let req = if &msg.command[..] == "PRIVMSG" {
+    fn try_make_request(msg: &Message) -> Option<Request> {
+        if &msg.command[..] == "PRIVMSG" {
             if let Some(Prefix::User { .. }) = msg.prefix {
                 let id = Self::add_user_from_msg(&msg);
-                trace!("< ({}) {:?}", id, msg);
-                Request::try_parse(id, &msg.data)
-            } else {
-                None
+                return Request::try_parse(id, &msg.data);
             }
-        } else {
-            None
-        };
+        }
+        None
+    }
 
-        trace!("<< {:?}", req);
+    pub fn step(&self) -> Option<()> {
+        let msg = Message::parse(self.conn.read()?.as_ref());
+        let req = Self::try_make_request(&msg);
 
+        let mut out = vec![];
         trace!("dispatching to modules");
         for module in &self.modules {
             match &msg.command[..] {
@@ -105,6 +100,8 @@ impl<'a> Bot<'a> {
             }).inspect(|s| trace!("writing response: {}", s))
             .for_each(|m| self.send(&m));
         trace!("done sending");
+
+        Some(())
     }
 
     fn add_user_from_msg(msg: &Message) -> i64 {

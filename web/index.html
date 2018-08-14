@@ -87,7 +87,7 @@
             return data;
         };
 
-        const socket = new ReconnectingWebSocket("ws://localhost:42000");
+        const socket = new ReconnectingWebSocket("ws://localhost:51000");
         socket.addEventListener('open', function (event) {
             socket.send(JSON.stringify("42")); // this should be a real handshake
         });
