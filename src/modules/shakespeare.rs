@@ -2,7 +2,7 @@ use rand::prelude::*;
 use std::cell::RefCell;
 use std::time; // this should be chrono time
 
-use crate::{irc::Message, *};
+use {irc::Message, *};
 
 pub struct Shakespeare(RefCell<Inner>);
 
@@ -17,8 +17,7 @@ struct Inner {
 
 impl Module for Shakespeare {
     fn command(&self, req: &Request) -> Option<Response> {
-        // trim the '!' off if you're not using Commands
-        if let Some(req) = req.search("speak") {
+        if let Some(req) = req.search("!speak") {
             return self.speak_command();
         }
         None
@@ -70,7 +69,7 @@ impl Shakespeare {
     }
 
     fn check_mentions(&self, msg: &Message) -> Option<Response> {
-        let conn = db::get_connection();
+        let conn = database::get_connection();
         let user = UserStore::get_bot(&conn, &self.0.borrow().name)?;
 
         fn trim_then_check(s: &str, nick: &str) -> bool {
@@ -116,7 +115,7 @@ impl Shakespeare {
         trace!("before conditional");
         #[cfg(not(test))]
         {
-            if let Some(data) = ::crate::util::http_get("http://localhost:7878/markov/next") {
+            if let Some(data) = util::http_get("http://localhost:7878/markov/next") {
                 trace!("generated a message");
                 self.0.borrow_mut().previous = Some(now);
                 Some(prune(&data).to_string() + ".")
@@ -136,7 +135,7 @@ impl Shakespeare {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::*;
+    use testing::*;
 
     #[test]
     fn speak_command() {

@@ -1,17 +1,10 @@
-use crate::{
-    bot::Bot,
-    color::RGB,
-    config,
-    message::{Envelope, Kappa},
-};
+use crate::{color::*, irc::Message as IrcMessage, tags::Kappa, *};
 
 use crossbeam_channel as channel;
-use parking_lot::Mutex;
 use tungstenite as ws;
 
 use std::collections::HashMap;
 use std::net::{TcpListener, TcpStream};
-use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -26,165 +19,125 @@ struct Message {
 }
 
 pub struct Display {
-    colors: Mutex<HashMap<String, RGB>>,
     queue: channel::Sender<Message>,
     buf: channel::Receiver<Message>,
 }
 
-impl Display {
-    pub fn new(bot: &Bot, config: &config::Config) -> Arc<Self> {
-        let colors = {
-            ::std::fs::File::open("colors.json")
-                .map_err(|_| None)
-                .and_then(|f| {
-                    serde_json::from_reader(&f).map_err(|e| {
-                        error!("cannot load colors: {}", e);
-                        None
-                    })
-                }).or_else::<HashMap<String, RGB>, _>(|_: Option<()>| Ok(HashMap::new()))
-                .unwrap()
-        };
-
-        let (tx, rx) = channel::bounded(16); // only buffer 16 messages
-
-        let this = Arc::new(Self {
-            colors: Mutex::new(colors),
-            queue: tx,
-            buf: rx.clone(),
-        });
-
-        Self::drain_to_client(&rx, config.websocket.address.clone());
-
-        let next = Arc::clone(&this);
-        bot.set_inspect(move |me, s| {
-            {
-                let ts = crate::util::get_timestamp();
-                // all this cloning
-                let msg = Message {
-                    userid: me.userid.to_string(),
-                    timestamp: ts as usize,
-                    color: me.color.clone(),
-                    display: me.display.to_string(),
-                    data: s.to_string(),
-                    kappas: vec![],
-                };
-
-                if next.queue.is_full() {
-                    trace!("queue is full, dropping one");
-                    let _ = next.buf.recv();
-                }
-                trace!("queue at: {}", next.queue.len());
-                next.queue.send(msg);
-            }
-
-            // disable @mention display
-            if s.starts_with('@') {
-                return;
-            }
-
-            let display = me.color.format(&me.display);
-            println!("<{}> {}", &display, &s)
-        });
-
-        let next = Arc::clone(&this);
-        bot.on_command("!color", move |bot, env| {
-            next.color_command(bot, env);
-        });
-
-        // --
-
-        let next = Arc::clone(&this);
-        bot.on_passive(move |bot, env| {
-            next.handle_passive(bot, env);
-        });
-
-        this
-    }
-
-    fn handle_passive(&self, _bot: &Bot, env: &Envelope) -> Option<()> {
-        fn get_color_for(map: &HashMap<String, RGB>, env: &'a Envelope) -> Option<RGB> {
-            map.get(env.get_id()?).cloned().or_else(|| {
-                env.tags
-                    .get("color")
-                    .and_then(|s| Some(RGB::from(s)))
-                    .or_else(|| Some(RGB::from((255, 255, 255))))
-            })
+impl Module for Display {
+    fn command(&self, req: &Request) -> Option<Response> {
+        if let Some(req) = req.search("!color") {
+            return self.color_command(req);
         }
-
-        let nick = env.get_nick()?;
-        trace!("tags: {:?}", env.tags);
-
-        let color = {
-            let map = self.colors.lock();
-            get_color_for(&map, &env)
-        }?;
-
-        let display = env
-            .tags
-            .get("display-name")
-            .and_then(|s| Some(s.as_ref()))
-            .or_else(|| Some(nick))?;
-
-        {
-            let kappas = env
-                .tags
-                .get("emotes")
-                .and_then(|e| Some(Kappa::new(&e)))
-                .or_else(|| Some(vec![]))
-                .expect("to get kappas or empty");
-
-            let ts = crate::util::get_timestamp();
-            // all this cloning
-            let msg = Message {
-                userid: env.get_id().unwrap().to_string(),
-                timestamp: ts as usize,
-                color: color.clone(),
-                display: display.to_string(),
-                data: env.data.to_string(),
-                kappas,
-            };
-
-            if self.queue.is_full() {
-                trace!("queue is full, dropping one");
-                let _ = self.buf.recv();
-            }
-            trace!("queue at: {}", self.queue.len());
-            self.queue.send(msg);
-        }
-
-        if env.data.starts_with('!') {
-            return None;
-        }
-        println!("<{}> {}", color.format(&display), &env.data);
         None
     }
 
-    fn color_command(&self, bot: &Bot, env: &Envelope) -> Option<()> {
-        let id = env.get_id()?;
+    fn passive(&self, msg: &IrcMessage) -> Option<Response> {
+        None
+    }
+}
 
-        let parts = env.data.split_whitespace().collect::<Vec<_>>();
-        let part = parts.get(0)?;
+// never forget .or_else::<HashMap<String, RGB>, _>(|_: Option<()>| Ok(HashMap::new()))
+
+impl Display {
+    pub fn new() -> Self {
+        let config = Config::load();
+
+        let (tx, rx) = channel::bounded(16); // only buffer 16 messages
+        Self::drain_to_client(&rx, config.websocket.address.clone());
+        Self {
+            queue: tx,
+            buf: rx.clone(),
+        }
+    }
+
+    fn color_command(&self, req: &Request) -> Option<Response> {
+        let id = req.sender();
+        let part = req.args().get(0)?;
 
         let color = RGB::from(*part);
         if color.is_dark() {
-            bot.reply(&env, "don't use that color");
-            return None;
+            return reply!("don't use that color");
         }
 
-        {
-            let mut colors = self.colors.lock();
-            colors.insert(id.to_string(), color);
-        }
-        {
-            let colors = self.colors.lock();
-            if let Ok(f) = ::std::fs::File::create("colors.json") {
-                let _ = serde_json::to_writer(&f, &*colors).map_err(|e| {
-                    error!("cannot save colors: {}", e);
-                });
-            }
-        }
-
+        let conn = db::get_connection();
+        UserStore::update_color_by_id(&conn, id);
         None
+    }
+
+    // fn handle_passive(&self, _bot: &Bot, env: &Envelope) -> Option<()> {
+    //     fn get_color_for(map: &HashMap<String, RGB>, env: &'a Envelope) -> Option<RGB> {
+    //         map.get(env.get_id()?).cloned().or_else(|| {
+    //             env.tags
+    //                 .get("color")
+    //                 .and_then(|s| Some(RGB::from(s)))
+    //                 .or_else(|| Some(RGB::from((255, 255, 255))))
+    //         })
+    //     }
+
+    //     let nick = env.get_nick()?;
+    //     trace!("tags: {:?}", env.tags);
+
+    //     let color = {
+    //         let map = self.colors.lock();
+    //         get_color_for(&map, &env)
+    //     }?;
+
+    //     let display = env
+    //         .tags
+    //         .get("display-name")
+    //         .and_then(|s| Some(s.as_ref()))
+    //         .or_else(|| Some(nick))?;
+
+    //     {
+    //         let kappas = env
+    //             .tags
+    //             .get("emotes")
+    //             .and_then(|e| Some(Kappa::new(&e)))
+    //             .or_else(|| Some(vec![]))
+    //             .expect("to get kappas or empty");
+
+    //         let ts = crate::util::get_timestamp();
+    //         // all this cloning
+    //         let msg = Message {
+    //             userid: env.get_id().unwrap().to_string(),
+    //             timestamp: ts as usize,
+    //             color: color.clone(),
+    //             display: display.to_string(),
+    //             data: env.data.to_string(),
+    //             kappas,
+    //         };
+
+    //         if self.queue.is_full() {
+    //             trace!("queue is full, dropping one");
+    //             let _ = self.buf.recv();
+    //         }
+    //         trace!("queue at: {}", self.queue.len());
+    //         self.queue.send(msg);
+    //     }
+
+    //     if env.data.starts_with('!') {
+    //         return None;
+    //     }
+    //     println!("<{}> {}", color.format(&display), &env.data);
+    //     None
+    // }
+
+    fn drain_to_client(rx: &channel::Receiver<Message>, addr: String) {
+        let rx = rx.clone();
+        thread::spawn(move || {
+            let listener = TcpListener::bind(&addr)
+                .unwrap_or_else(|_| panic!("must be able to bind to {}", &addr));
+            info!("websocket listening on: {}", addr);
+
+            for stream in listener.incoming() {
+                debug!("got a tcp conn for websocket");
+                if let Ok(stream) = stream {
+                    debug!("turned it into a websocket");
+                    let rx = rx.clone();
+                    Self::handle_connection(stream, &rx);
+                }
+            }
+        });
     }
 
     fn handle_connection(stream: TcpStream, rx: &channel::Receiver<Message>) {
@@ -239,22 +192,29 @@ impl Display {
             }
         }
     }
+}
 
-    fn drain_to_client(rx: &channel::Receiver<Message>, addr: String) {
-        let rx = rx.clone();
-        thread::spawn(move || {
-            let listener = TcpListener::bind(&addr)
-                .unwrap_or_else(|_| panic!("must be able to bind to {}", &addr));
-            info!("websocket listening on: {}", addr);
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use testing::*;
+    #[test]
+    fn color_command() {
+        let display: Box<dyn Module> = Box::new(Display::new());
+        let mut env = Environment::new();
+        env.add(&display);
 
-            for stream in listener.incoming() {
-                debug!("got a tcp conn for websocket");
-                if let Ok(stream) = stream {
-                    debug!("turned it into a websocket");
-                    let rx = rx.clone();
-                    Self::handle_connection(stream, &rx);
-                }
-            }
-        });
+        env.push("!color #111111");
+        env.step();
+
+        assert_eq!(env.pop(), Some("@test: don't use that color"));
+
+        env.push("!color #FFFFFF");
+        env.step();
+
+        let conn = env.get_db_conn();
+
+        let user = UserState::get_user_by_id(1000).unwrap()
+        assert_eq!(user.color, RGB::from("#FFFFFF"))
     }
 }

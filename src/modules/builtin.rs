@@ -1,5 +1,17 @@
-use crate::{irc::Message, twitch, util::*, Config};
-use crate::{response, Command, Module, Request, Response};
+use {
+    command::Command,
+    module::Module,
+    request::Request,
+    response::{self, Response},
+};
+use {
+    config::Config,
+    irc::Message,
+    twitch::{self, *},
+    util::*,
+};
+
+use tungstenite;
 
 use chrono::prelude::*;
 
@@ -118,7 +130,7 @@ impl Builtin {
                 map[i] = (map[i].0, part.parse::<u64>().unwrap());
             }
 
-            let timecode = crate::util::format_time_map(&map);
+            let timecode = ::util::format_time_map(&map);
             msg.push_str(&format!(", obs says: {}", &timecode));
         }
 
@@ -127,9 +139,7 @@ impl Builtin {
 
     fn get_uptime_from_obs() -> Option<String> {
         fn get_inner(tx: &crossbeam_channel::Sender<String>) -> Option<()> {
-            use tungstenite as ws;
-
-            let conn = ws::connect(::url::Url::parse("ws://localhost:45454").unwrap());
+            let conn = tungstenite::connect(::url::Url::parse("ws://localhost:45454").unwrap());
             if conn.is_err() {
                 return None;
             }
@@ -139,7 +149,7 @@ impl Builtin {
             // this should really be done by serde, but we're only going to send 1 message for now
             let msg = r#"{"request-type":"GetStreamingStatus", "message-id":"0"}"#.to_string();
             socket
-                .write_message(ws::Message::Text(msg))
+                .write_message(tungstenite::Message::Text(msg))
                 .expect("must be able to write this");
 
             let msg = socket
@@ -189,7 +199,7 @@ impl Builtin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::*;
+    use testing::*;
 
     #[test]
     fn autojoin() {

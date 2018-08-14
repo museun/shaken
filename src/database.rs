@@ -1,5 +1,5 @@
-use crate::UserStore;
 use rusqlite::Connection;
+use user::UserStore;
 
 const DB_PATH: &str = "shaken.db";
 
@@ -12,11 +12,11 @@ pub fn get_connection() -> Connection {
 
 #[cfg(test)]
 pub fn get_connection() -> Connection {
-    use rusqlite;
+    use rusqlite::OpenFlags;
 
     let conn = Connection::open_with_flags(
         "file::memory:?cache=shared",
-        rusqlite::OpenFlags::SQLITE_OPEN_URI | rusqlite::OpenFlags::SQLITE_OPEN_READ_WRITE,
+        OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE,
     ).unwrap();
     UserStore::init_table(&conn);
     conn

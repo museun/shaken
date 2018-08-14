@@ -1,7 +1,5 @@
-#![allow(dead_code)] // go away clippy
-
-use crate::color::RGB;
-use rusqlite::Connection;
+use color::RGB;
+use rusqlite::{self, Connection};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct User {
@@ -69,7 +67,17 @@ impl UserStore {
         None
     }
 
-    pub fn create_user(conn: &Connection, user: &User) {
+    pub fn update_color_for_id(conn: &Connection, id: i64, color: RGB) {
+        match conn.execute(
+            r#"UPDATE Users SET Color = ? where ID = ?"#,
+            &[&color.to_string(), &id],
+        ) {
+            Ok(row) => debug!("updated id ({}) at {}", id, row),
+            Err(err) => error!("cannot insert {} into table: {}", id, err),
+        };
+    }
+
+    pub fn create_user(conn: &Connection, user: &User) -> i64 {
         let color = user.color.to_string();
 
         match conn.execute(
@@ -88,6 +96,8 @@ impl UserStore {
             Ok(row) => debug!("updated user({:?}) at {}", user, row),
             Err(err) => error!("cannot insert user({:?}) into table: {}", user, err),
         };
+
+        return user.userid;
     }
 }
 
@@ -103,9 +113,10 @@ CREATE TABLE IF NOT EXISTS Users (
 mod tests {
     use super::*;
     use rusqlite::Connection;
+    use testing::*;
 
     #[test]
-    fn test_get_user() {
+    fn userstore_stuff() {
         let conn = Connection::open_in_memory().unwrap();
         UserStore::init_table(&conn);
 
@@ -169,6 +180,31 @@ mod tests {
             Some(User {
                 display: "TEST".into(),
                 color: RGB::from("#f0f0f0"),
+                userid: 1004,
+            })
+        );
+
+        UserStore::create_user(
+            &conn,
+            &User {
+                display: "TEST".into(),
+                color: RGB::from("#abcabc"),
+                userid: 1004,
+            },
+        );
+
+        init_logger();
+        UserStore::update_color_for_id(&conn, 1005, RGB::from("#FFFFFF"));
+        let user = UserStore::get_user_by_id(&conn, 1005);
+        assert_eq!(user, None);
+
+        UserStore::update_color_for_id(&conn, 1004, RGB::from("#FFFFFF"));
+        let user = UserStore::get_user_by_id(&conn, 1004);
+        assert_eq!(
+            user,
+            Some(User {
+                display: "TEST".into(),
+                color: RGB::from("#FFFFFF"),
                 userid: 1004,
             })
         );

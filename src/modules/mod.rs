@@ -1,14 +1,11 @@
 mod builtin;
-pub use self::builtin::*;
+pub use builtin::*;
 
 mod shakespeare;
-pub use self::shakespeare::*;
+pub use shakespeare::*;
 
 // mod display;
-// pub use self::display::*;
+// pub use crate::display::*;
 
 // mod invest;
 // pub use self::invest::*;
-
-// mod poll;
-// pub use self::poll::*;

@@ -102,13 +102,14 @@ where
         list.insert(len - 1, "and".into())
     }
 
-    crate::util::join_with(list.iter(), " ")
+    join_with(list.iter(), " ")
 }
 
 pub fn http_get<S: AsRef<str>>(url: S) -> Option<String> {
     let mut vec = Vec::new();
     let mut easy = Easy::new();
-    easy.connect_timeout(::std::time::Duration::from_secs(5)).expect("to set timeout");
+    easy.connect_timeout(::std::time::Duration::from_secs(5))
+        .expect("to set timeout");
     easy.url(url.as_ref()).ok()?;
     {
         let mut transfer = easy.transfer();

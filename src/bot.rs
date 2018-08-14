@@ -1,5 +1,8 @@
-use crate::irc::{Conn, Message};
-use crate::{color::RGB, db, Module, Request, Response, User, UserStore};
+use database::{self, *};
+use irc::{Conn, Message};
+use {
+    color::RGB, module::Module, request::Request, response::Response, user::User, user::UserStore,
+};
 
 pub struct Bot<'a> {
     conn: Conn,
@@ -61,10 +64,10 @@ impl<'a> Bot<'a> {
 
     pub fn step(&self) {
         let msg = Message::parse(bail!(self.conn.read()).as_ref());
-        Self::add_user_from_msg(&msg);
+        let id = Self::add_user_from_msg(&msg);
 
         let mut out = vec![];
-        let req = Request::try_parse(&msg.data);
+        let req = Request::try_parse(id, &msg.data);
         for module in &self.modules {
             match &msg.command[..] {
                 "PRIVMSG" => {
@@ -90,7 +93,7 @@ impl<'a> Bot<'a> {
             .for_each(|m| self.send(&m));
     }
 
-    fn add_user_from_msg(msg: &Message) {
+    fn add_user_from_msg(msg: &Message) -> i64 {
         macro_rules! expect {
             ($e:expr) => {
                 $e.expect("user tags to be well formed")
@@ -109,10 +112,10 @@ impl<'a> Bot<'a> {
                 color: RGB::from("fc0fc0"),
                 userid: expect!(msg.tags.get_userid()),
             }),
-            _ => return,
+            _ => return -1,
         }.unwrap();
 
-        let conn = db::get_connection();
-        UserStore::create_user(&conn, &user);
+        let conn = database::get_connection();
+        UserStore::create_user(&conn, &user)
     }
 }

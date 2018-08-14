@@ -1,6 +1,5 @@
 use std::fs;
 use std::io::{ErrorKind, Write};
-use toml;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {

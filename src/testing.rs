@@ -1,5 +1,5 @@
-use crate::irc::{Message, TestConn};
-use crate::{Bot, Module};
+use irc::{Message, TestConn};
+use {bot::Bot, module::Module};
 
 use rusqlite::Connection;
 use std::rc::Rc;
@@ -16,33 +16,18 @@ pub struct Environment<'a> {
     db: Connection,
 }
 
-// #[derive(Debug)]
-// pub struct TestResponse {
-//     pub data: &'a str,
-// }
-
-// impl From<Option<String>> for TestResponse {
-//     fn from(data: Option<String>) -> Self {
-//         let mut data = data.expect("to get a response");
-
-//         data.insert_str(0, ":test!user@irc.test ");
-//         let msg = Message::parse(&data);
-//         Self { data: msg.data }
-//     }
-// }
-
 impl<'a> Environment<'a> {
     pub fn new() -> Self {
         let conn = TestConn::new();
 
-        use crate::{color, db, User, UserStore};
+        use {color::RGB, database::{self,*}, user::User, user::UserStore};
         // db gets dropped
-        let db = db::get_connection();
+        let db = database::get_connection();
         UserStore::create_user(
             &db,
             &User {
                 display: "test".into(),
-                color: color::RGB::from("#f0f0f0"),
+                color: RGB::from("#f0f0f0"),
                 userid: 1000,
             },
         );
@@ -50,7 +35,7 @@ impl<'a> Environment<'a> {
             &db,
             &User {
                 display: "shaken_bot".into(),
-                color: color::RGB::from("#f0f0f0"),
+                color: RGB::from("#f0f0f0"),
                 userid: 42,
             },
         );
@@ -60,6 +45,10 @@ impl<'a> Environment<'a> {
             bot: Bot::new(conn),
             db,
         }
+    }
+
+    pub fn get_db_conn(&self) -> &Connection {
+        &self.db
     }
 
     pub fn add(&mut self, m: &'a Box<dyn Module>) {

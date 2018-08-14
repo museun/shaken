@@ -1,4 +1,4 @@
-use crate::{Module, Request, Response};
+use {module::Module, request::Request, response::Response};
 
 // this is used so modules can express their commands
 pub struct Command<T>
@@ -19,7 +19,7 @@ where
 
     pub fn new(name: &str, func: fn(&T, &Request) -> Option<Response>) -> Self {
         Self {
-            name: name[1..].into(),
+            name: name.into(),
             func,
         }
     }

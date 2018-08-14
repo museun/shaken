@@ -1,5 +1,8 @@
-use crate::{db, UserStore};
+use database::get_connection;
 use irc::{Message, Prefix};
+use user::UserStore;
+
+use rusqlite::{self, *};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Response {
@@ -11,12 +14,12 @@ pub enum Response {
 }
 
 impl Response {
-    crate fn build(&self, context: &Message) -> Option<String> {
+    pub(crate) fn build(&self, context: &Message) -> Option<String> {
         match self {
             Response::Reply { data } => {
                 if let Some(Prefix::User { ref nick, .. }) = context.prefix {
-                    let db = db::get_connection();
-                    if let Some(user) = UserStore::get_user_by_name(&db, &nick) {
+                    let conn = get_connection();
+                    if let Some(user) = UserStore::get_user_by_name(&conn, &nick) {
                         Some(format!(
                             "PRIVMSG {} :@{}: {}",
                             context.target(),
@@ -92,21 +95,21 @@ macro_rules! raw {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use irc::Message;
+    use database::{*,self};
+    use {color::RGB, irc::Message, user::User, user::UserStore};
 
     fn make_test_message() -> Message {
         Message::parse(":testuser!~user@localhost PRIVMSG #test :foobar")
     }
 
     fn make_test_user() -> rusqlite::Connection {
-        use crate::{color, db, User, UserStore};
         // db gets dropped
-        let conn = db::get_connection();
+        let conn = database::get_connection();
         UserStore::create_user(
             &conn,
             &User {
                 display: "TestUser".into(),
-                color: color::RGB::from("#f0f0f0"),
+                color: RGB::from("#f0f0f0"),
                 userid: 1004,
             },
         );

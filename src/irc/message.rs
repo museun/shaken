@@ -1,7 +1,7 @@
 use std::fmt;
-// whats the right way to do this in Rust 2018?
-use super::super::Tags;
-use irc::prefix::Prefix;
+
+use super::super::tags::Tags;
+use super::Prefix;
 
 // TODO get rid of all of these string allocations
 #[derive(Debug, PartialEq, Clone, Default)]
