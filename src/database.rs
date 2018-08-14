@@ -1,10 +1,9 @@
+use crate::*;
 use rusqlite::Connection;
-use user::UserStore;
-
-const DB_PATH: &str = "shaken.db";
 
 #[cfg(not(test))]
 pub fn get_connection() -> Connection {
+    const DB_PATH: &str = "shaken.db";
     let conn = Connection::open(DB_PATH).unwrap();
     UserStore::init_table(&conn);
     conn

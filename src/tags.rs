@@ -1,4 +1,4 @@
-use color::RGB;
+use crate::color::RGB;
 
 use std::collections::HashMap;
 use std::ops::Range;

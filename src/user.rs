@@ -1,4 +1,4 @@
-use color::RGB;
+use crate::color::RGB;
 use rusqlite::{self, Connection};
 
 #[derive(Clone, PartialEq, Debug)]
@@ -113,7 +113,7 @@ CREATE TABLE IF NOT EXISTS Users (
 mod tests {
     use super::*;
     use rusqlite::Connection;
-    use testing::*;
+    use crate::testing::*;
 
     #[test]
     fn userstore_stuff() {

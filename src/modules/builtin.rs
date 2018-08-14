@@ -1,22 +1,11 @@
-use {
-    command::Command,
-    module::Module,
-    request::Request,
-    response::{self, Response},
-};
-use {
-    config::Config,
-    irc::Message,
-    twitch::{self, *},
-    util::*,
-};
+use crate::{irc::Message, twitch::TwitchClient, util::*, *};
 
-use tungstenite;
+//use tungstenite;
 
 use chrono::prelude::*;
 
 pub struct Builtin {
-    twitch: twitch::TwitchClient,
+    twitch: TwitchClient,
     channel: String,
     commands: Vec<Command<Builtin>>,
 }
@@ -60,7 +49,7 @@ impl Builtin {
         ];
 
         Self {
-            twitch: twitch::TwitchClient::new(),
+            twitch: TwitchClient::new(),
             commands,
             channel: Config::load().twitch.channel.to_string(),
         }
@@ -130,7 +119,7 @@ impl Builtin {
                 map[i] = (map[i].0, part.parse::<u64>().unwrap());
             }
 
-            let timecode = ::util::format_time_map(&map);
+            let timecode = crate::util::format_time_map(&map);
             msg.push_str(&format!(", obs says: {}", &timecode));
         }
 
@@ -199,7 +188,7 @@ impl Builtin {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use testing::*;
+    use crate::testing::*;
 
     #[test]
     fn autojoin() {

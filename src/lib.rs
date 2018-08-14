@@ -1,5 +1,5 @@
 #![feature(rust_2018_preview)]
-//#![allow(dead_code, unused_variables)] // fuck off clippy
+#![allow(dead_code, unused_variables)] // fuck off clippy
 
 #[macro_use]
 extern crate log;
@@ -19,32 +19,42 @@ extern crate tungstenite;
 extern crate url;
 
 pub mod database;
+
 pub mod user;
-pub use user::*;
+pub use crate::user::*;
+
 pub mod module;
-pub use module::*;
+pub use crate::module::*;
 
 #[macro_use]
 pub mod response;
+pub use crate::response::*;
+
 #[macro_use]
 pub mod util;
 
 pub mod bot;
+pub use crate::bot::*;
+
 pub mod color;
+
 pub mod command;
+pub use crate::command::*;
+
 pub mod config;
+pub use crate::config::*;
+
 pub mod irc;
+
 pub mod request;
+pub use crate::request::*;
+
 pub mod tags;
+pub use crate::tags::*;
+
 pub mod testing;
+
 pub mod twitch;
 
-pub use bot::Bot;
-pub use command::*;
-pub use config::Config;
-pub use modules::*;
-pub use request::*;
-pub use response::*;
-pub use tags::Tags;
-
 pub mod modules;
+pub use crate::modules::*;

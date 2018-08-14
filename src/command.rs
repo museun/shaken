@@ -1,4 +1,4 @@
-use {module::Module, request::Request, response::Response};
+use crate::*;
 
 // this is used so modules can express their commands
 pub struct Command<T>

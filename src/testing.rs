@@ -1,5 +1,5 @@
-use irc::{Message, TestConn};
-use {bot::Bot, module::Module};
+use crate::irc::{Message, TestConn};
+use crate::*;
 
 use rusqlite::Connection;
 use std::rc::Rc;
@@ -20,9 +20,9 @@ impl<'a> Environment<'a> {
     pub fn new() -> Self {
         let conn = TestConn::new();
 
-        use {color::RGB, database::{self,*}, user::User, user::UserStore};
+        use crate::{color::RGB, user::User, user::UserStore};
         // db gets dropped
-        let db = database::get_connection();
+        let db = crate::database::get_connection();
         UserStore::create_user(
             &db,
             &User {

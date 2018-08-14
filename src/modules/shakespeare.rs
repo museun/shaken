@@ -2,7 +2,8 @@ use rand::prelude::*;
 use std::cell::RefCell;
 use std::time; // this should be chrono time
 
-use {irc::Message, *};
+use crate::irc::Message;
+use crate::*;
 
 pub struct Shakespeare(RefCell<Inner>);
 
@@ -17,7 +18,7 @@ struct Inner {
 
 impl Module for Shakespeare {
     fn command(&self, req: &Request) -> Option<Response> {
-        if let Some(req) = req.search("!speak") {
+        if let Some(_req) = req.search("!speak") {
             return self.speak_command();
         }
         None
@@ -89,17 +90,6 @@ impl Shakespeare {
     }
 
     fn generate(&self) -> Option<String> {
-        fn prune(s: &str) -> &str {
-            let mut pos = 0;
-            for c in s.chars().rev() {
-                if c.is_alphabetic() {
-                    break;
-                }
-                pos += 1
-            }
-            &s[..s.len() - pos]
-        }
-
         let now = time::Instant::now();
         if let Some(prev) = self.0.borrow().previous {
             if now.duration_since(prev) < self.0.borrow().limit {
@@ -115,7 +105,18 @@ impl Shakespeare {
         trace!("before conditional");
         #[cfg(not(test))]
         {
-            if let Some(data) = util::http_get("http://localhost:7878/markov/next") {
+            if let Some(data) = crate::util::http_get("http://localhost:7878/markov/next") {
+                fn prune(s: &str) -> &str {
+                    let mut pos = 0;
+                    for c in s.chars().rev() {
+                        if c.is_alphabetic() {
+                            break;
+                        }
+                        pos += 1
+                    }
+                    &s[..s.len() - pos]
+                }
+
                 trace!("generated a message");
                 self.0.borrow_mut().previous = Some(now);
                 Some(prune(&data).to_string() + ".")
@@ -135,7 +136,7 @@ impl Shakespeare {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use testing::*;
+    use crate::testing::*;
 
     #[test]
     fn speak_command() {

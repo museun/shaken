@@ -28,8 +28,8 @@ impl<'a> Request<'a> {
         self.name
     }
 
-    pub fn args(&self) -> Vec<&'a str> {
-        self.args
+    pub fn args(&self) -> &[&'a str] {
+        &self.args
     }
 
     pub fn sender(&self) -> i64 {

@@ -1,8 +1,5 @@
-use database::get_connection;
-use irc::{Message, Prefix};
-use user::UserStore;
-
-use rusqlite::{self, *};
+use crate::irc::{Message, Prefix};
+use crate::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Response {
@@ -18,7 +15,7 @@ impl Response {
         match self {
             Response::Reply { data } => {
                 if let Some(Prefix::User { ref nick, .. }) = context.prefix {
-                    let conn = get_connection();
+                    let conn = crate::database::get_connection();
                     if let Some(user) = UserStore::get_user_by_name(&conn, &nick) {
                         Some(format!(
                             "PRIVMSG {} :@{}: {}",
@@ -95,8 +92,7 @@ macro_rules! raw {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use database::{*,self};
-    use {color::RGB, irc::Message, user::User, user::UserStore};
+    use crate::irc::Message;
 
     fn make_test_message() -> Message {
         Message::parse(":testuser!~user@localhost PRIVMSG #test :foobar")
@@ -109,7 +105,7 @@ mod tests {
             &conn,
             &User {
                 display: "TestUser".into(),
-                color: RGB::from("#f0f0f0"),
+                color: color::RGB::from("#f0f0f0"),
                 userid: 1004,
             },
         );

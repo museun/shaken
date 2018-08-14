@@ -1,8 +1,5 @@
-use database::{self, *};
-use irc::{Conn, Message};
-use {
-    color::RGB, module::Module, request::Request, response::Response, user::User, user::UserStore,
-};
+use crate::irc::{Conn, Message};
+use crate::*;
 
 pub struct Bot<'a> {
     conn: Conn,
@@ -109,13 +106,13 @@ impl<'a> Bot<'a> {
             // this is /our/ user
             "GLOBALUSERSTATE" => Some(User {
                 display: expect!(msg.tags.get_display()).to_string(),
-                color: RGB::from("fc0fc0"),
+                color: color::RGB::from("fc0fc0"),
                 userid: expect!(msg.tags.get_userid()),
             }),
             _ => return -1,
         }.unwrap();
 
-        let conn = database::get_connection();
+        let conn = crate::database::get_connection();
         UserStore::create_user(&conn, &user)
     }
 }

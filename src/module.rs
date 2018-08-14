@@ -1,17 +1,16 @@
-use irc::Message;
-use request::Request;
-use response::Response;
+use crate::irc::Message;
+use crate::*;
 
 pub trait Module {
-    fn command(&self, req: &Request) -> Option<Response> {
+    fn command(&self, _req: &Request) -> Option<Response> {
         None
     }
 
-    fn passive(&self, msg: &Message) -> Option<Response> {
+    fn passive(&self, _msg: &Message) -> Option<Response> {
         None
     }
 
-    fn event(&self, msg: &Message) -> Option<Response> {
+    fn event(&self, _msg: &Message) -> Option<Response> {
         None
     }
 }
