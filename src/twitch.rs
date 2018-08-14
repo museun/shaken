@@ -4,6 +4,12 @@ pub struct TwitchClient {
     client_id: String,
 }
 
+impl Default for TwitchClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TwitchClient {
     pub fn new() -> Self {
         Self {

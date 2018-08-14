@@ -16,6 +16,12 @@ pub struct Environment<'a> {
     db: Connection,
 }
 
+impl<'a> Default for Environment<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> Environment<'a> {
     pub fn new() -> Self {
         let conn = TestConn::new();

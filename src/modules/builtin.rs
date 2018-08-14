@@ -36,6 +36,12 @@ macro_rules! maybe {
     };
 }
 
+impl Default for Builtin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Builtin {
     pub fn new() -> Self {
         let commands = vec![
