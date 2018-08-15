@@ -5,7 +5,7 @@ pub struct Bot<'a> {
     conn: Conn,
     modules: Vec<&'a dyn Module>,
     // TODO this might have to be a closure
-    inspect: fn(&Message, &Response),
+    inspect: Box<Fn(&Message, &Response) + 'a>,
 }
 
 impl<'a> Bot<'a> {
@@ -18,7 +18,7 @@ impl<'a> Bot<'a> {
         Self {
             conn,
             modules: vec![],
-            inspect: |_, _| {},
+            inspect: Box::new(|_, _| {}),
         }
     }
 
@@ -26,8 +26,11 @@ impl<'a> Bot<'a> {
         self.modules.push(m)
     }
 
-    pub fn set_inspect(&mut self, f: fn(&Message, &Response)) {
-        self.inspect = f
+    pub fn set_inspect<F>(&mut self, f: F)
+    where
+        F: Fn(&Message, &Response) + 'a,
+    {
+        self.inspect = Box::new(f)
     }
 
     pub fn register(&self, nick: &str) {

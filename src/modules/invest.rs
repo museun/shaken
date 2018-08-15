@@ -207,12 +207,7 @@ impl Invest {
             .enumerate()
             .map(|(i, iu)| {
                 let user = UserStore::get_user_by_id(&conn, iu.id).expect("user to exist");
-                format!(
-                    "(#{}) {}: {}",
-                    i + 1,
-                    &user.display,
-                    iu.current.commas()
-                )
+                format!("(#{}) {}: {}", i + 1, &user.display, iu.current.commas())
             }).collect::<Vec<_>>(); // this collect is needed
 
         reply!("{}", crate::util::join_with(list.iter(), ", "))

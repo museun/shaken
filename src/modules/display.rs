@@ -20,6 +20,7 @@ struct Message {
 pub struct Display {
     queue: channel::Sender<Message>,
     buf: channel::Receiver<Message>,
+    name: String,
 }
 
 impl Module for Display {
@@ -53,6 +54,26 @@ impl Display {
         Self {
             queue: tx,
             buf: rx.clone(),
+            name: config.twitch.name.clone(),
+        }
+    }
+
+    pub fn inspect(&self, msg: &IrcMessage, resp: &Response) {
+        if &msg.command[..] != "PRIVMSG" {
+            return;
+        }
+
+        if let Response::Command { .. } = resp {
+            return;
+        }
+
+        if let Some(out) = resp.build(&msg) {
+            let conn = crate::database::get_connection();
+            if let Some(user) = UserStore::get_bot(&conn, &self.name) {
+                let msg = IrcMessage::parse(&out);
+                println!("<{}> {}", user.color.format(&user.display), &msg.data);
+                self.push_message(user, &msg);
+            }
         }
     }
 
@@ -78,6 +99,11 @@ impl Display {
             println!("<{}> {}", user.color.format(&user.display), &msg.data);
         }
 
+        self.push_message(user, &msg);
+        None
+    }
+
+    fn push_message(&self, user: User, msg: &IrcMessage) {
         let ts = crate::util::get_timestamp();
         let display = Message {
             userid: user.userid.to_string(),
@@ -94,8 +120,6 @@ impl Display {
         }
         trace!("queue at: {}", self.queue.len());
         self.queue.send(display);
-
-        None
     }
 
     fn drain_to_client(rx: &channel::Receiver<Message>, addr: String) {

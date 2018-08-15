@@ -25,16 +25,16 @@ impl Shaken {
     pub fn start(config: &Config) {
         let address = format!("{}:{}", &config.twitch.address, &config.twitch.port);
 
-        let builtin = &Builtin::new();
-        let shakespeare = &Shakespeare::new();
-        let display = &Display::new();
-        let invest = &Invest::new();
+        let builtin = Builtin::new();
+        let shakespeare = Shakespeare::new();
+        let display = Display::new();
+        let invest = Invest::new();
 
         let mods: Vec<&dyn Module> = vec![
-            builtin,     //
-            shakespeare, //
-            display,     //
-            invest,
+            &builtin,     //
+            &shakespeare, //
+            &display,     //
+            &invest,
         ];
 
         let mut sleep = 0;
@@ -60,6 +60,8 @@ impl Shaken {
             for module in &mods {
                 bot.add(*module);
             }
+
+            bot.set_inspect(|m, r| display.inspect(m, r));
 
             bot.register(&config.twitch.name);
 
