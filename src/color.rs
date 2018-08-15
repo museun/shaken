@@ -132,7 +132,6 @@ impl HSL {
         let g2 = (((max - g) / 6.0) + (delta / 2.0)) / delta;
         let b2 = (((max - b) / 6.0) + (delta / 2.0)) / delta;
 
-        // TODO find error tolerance for this
         let h = match match max {
             x if (x - r).abs() < 0.001 => b2 - g2,
             x if (x - g).abs() < 0.001 => (1.0 / 3.0) + r2 - b2,
