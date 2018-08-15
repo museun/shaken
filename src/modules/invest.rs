@@ -10,11 +10,19 @@ use parking_lot::Mutex;
 use crate::*;
 use crate::{config, database::get_connection, irc::Message, twitch::TwitchClient, util::*};
 
+// fuck off clippy
+impl Default for Invest {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct Invest {
     config: config::Invest,
     twitch: TwitchClient,
     limit: Mutex<HashMap<i64, Instant>>,
     commands: Vec<Command<Invest>>,
+    every: Every,
 }
 
 impl Module for Invest {
@@ -29,14 +37,11 @@ impl Module for Invest {
     }
 
     fn passive(&self, msg: &Message) -> Option<Response> {
-        self.on_message(msg)
-    }
-}
-
-// fuck off clippy
-impl Default for Invest {
-    fn default() -> Self {
-        Self::new()
+        // for now
+        match &msg.command[..] {
+            "PRIVMSG" => self.on_message(msg),
+            _ => None,
+        }
     }
 }
 
@@ -53,12 +58,19 @@ impl Invest {
 
         InvestGame::ensure_table(&get_connection());
 
+        let (_, every) = every!(
+            |_, _| InvestGame::increment_all_active(&get_connection(), 1),
+            (),
+            60 * 1000
+        );
+
         let config = Config::load();
         Self {
             config: config.invest.clone(),
             twitch: TwitchClient::new(),
             limit: Mutex::new(HashMap::new()),
             commands,
+            every, // store this so the update loop stays alive
         }
     }
 
@@ -233,6 +245,7 @@ impl Invest {
 
         let id = msg.tags.get_userid()?;
         InvestGame::give(id, self.config.line_value);
+        InvestGame::set_active(id);
 
         if let Some(kappas) = msg.tags.get_kappas() {
             let len = kappas.len();
@@ -677,6 +690,17 @@ impl InvestGame {
 
         let _ = Self::update_user(&conn, &user);
         Some(user.current)
+    }
+
+    pub fn set_active(id: i64) {
+        const S: &str = r#"
+            UPDATE Invest
+            SET
+                Active = 1
+            WHERE ID = ?;
+        "#;
+        let conn = get_connection();
+        let _ = conn.execute(S, &[&id]);
     }
 
     pub fn update(user: &InvestUser) {

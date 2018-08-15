@@ -18,11 +18,14 @@ extern crate rand;
 extern crate tungstenite;
 extern crate url;
 
+// TODO remove most of these pubs
+
 pub mod database;
 
 pub mod user;
 pub use crate::user::*;
 
+#[macro_use]
 pub mod module;
 pub use crate::module::*;
 

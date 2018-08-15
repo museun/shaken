@@ -6,31 +6,39 @@ pub enum Response {
     Reply { data: String },
     Say { data: String },
     Action { data: String },
+    Whisper { data: String },
     Command { cmd: IrcCommand },
-    // TODO figure out how whispers work on twitch
 }
 
 impl Response {
     pub(crate) fn build(&self, context: &Message) -> Option<String> {
-        match self {
+        let res = match self {
             Response::Reply { data } => {
                 if let Some(Prefix::User { ref nick, .. }) = context.prefix {
                     let conn = crate::database::get_connection();
                     if let Some(user) = UserStore::get_user_by_name(&conn, &nick) {
-                        Some(format!(
-                            "PRIVMSG {} :@{}: {}",
-                            context.target(),
-                            user.display,
-                            data
-                        ))
+                        match &context.command[..] {
+                            "PRIVMSG" => Some(format!(
+                                "PRIVMSG {} :@{}: {}",
+                                context.target(),
+                                user.display,
+                                data
+                            )),
+                            "WHISPER" => Some(format!("PRIVMSG jtv :/w {} {}", user.display, data)),
+                            _ => {
+                                // these should be panics
+                                error!("invalid context: {:?}", context);
+                                None
+                            }
+                        }
                     } else {
                         // these should be panics
-                        error!("user wasn't in the user store");
+                        error!("user wasn't in the user store: {:?}", context.prefix);
                         None
                     }
                 } else {
                     // these should be panics
-                    warn!("cannot find a prefix on that message");
+                    warn!("cannot find a prefix: {:?}", context);
                     None
                 }
             }
@@ -40,11 +48,29 @@ impl Response {
                 context.target(),
                 data
             )),
+            Response::Whisper { data } => {
+                if let Some(Prefix::User { ref nick, .. }) = context.prefix {
+                    let conn = crate::database::get_connection();
+                    if let Some(user) = UserStore::get_user_by_name(&conn, &nick) {
+                        Some(format!("PRIVMSG jtv :/w {} {}", user.display, data))
+                    } else {
+                        // these should panic
+                        error!("user wasn't in the user store: {:?}", context.prefix);
+                        None
+                    }
+                } else {
+                    // these should panic
+                    warn!("cannot find a prefix: {:?}", context);
+                    None
+                }
+            }
             Response::Command { cmd } => match cmd {
                 IrcCommand::Join { channel } => Some(format!("JOIN {}", channel)),
                 IrcCommand::Raw { data } => Some(data.clone()),
             },
-        }
+        };
+        trace!("built: '{:?}' from {:?}", res, context);
+        res
     }
 }
 
@@ -66,6 +92,13 @@ macro_rules! say {
 macro_rules! action {
     ($($arg:tt)*) => {
         Some(Response::Action{data: format!($($arg)*)})
+    };
+}
+
+#[macro_export]
+macro_rules! whisper {
+    ($($arg:tt)*) => {
+        Some(Response::Whisper{data: format!($($arg)*)})
     };
 }
 

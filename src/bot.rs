@@ -63,12 +63,18 @@ impl<'a> Bot<'a> {
 
     fn try_make_request(msg: &Message) -> Option<Request> {
         let id = Self::add_user_from_msg(&msg);
-        if &msg.command[..] == "PRIVMSG" {
-            if let Some(Prefix::User { .. }) = msg.prefix {
-                return Request::try_parse(id, &msg.data);
+        trace!("trying to make request for: `{}` {:?}", id, msg);
+        match &msg.command[..] {
+            "PRIVMSG" | "WHISPER" => {
+                // sanity check
+                if let Some(Prefix::User { .. }) = msg.prefix {
+                    Request::try_parse(id, &msg.data)
+                } else {
+                    None
+                }
             }
+            _ => None,
         }
-        None
     }
 
     pub fn step(&self) -> Option<()> {
@@ -79,7 +85,7 @@ impl<'a> Bot<'a> {
         trace!("dispatching to modules");
         for module in &self.modules {
             match &msg.command[..] {
-                "PRIVMSG" => {
+                "PRIVMSG" | "WHISPER" => {
                     // try commands first
                     if let Some(req) = &req {
                         out.push(module.command(req))
@@ -115,7 +121,7 @@ impl<'a> Bot<'a> {
         };
 
         let user = match &msg.command[..] {
-            "PRIVMSG" => Some(User {
+            "PRIVMSG"|"WHISPER" => Some(User {
                 display: expect!(msg.tags.get_display()).to_string(),
                 color: expect!(msg.tags.get_color()),
                 userid: expect!(msg.tags.get_userid()),

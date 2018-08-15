@@ -1,6 +1,8 @@
 use std::fmt;
 
-use super::super::tags::Tags;
+// TODO figure this out
+//use super::super::tags::Tags;
+use super::super::*;
 use super::Prefix;
 
 // TODO get rid of all of these string allocations
@@ -57,9 +59,23 @@ impl Message {
         (&input[pos + 1..], tags)
     }
 
-    /// this panics if there is no target
+    /// this panics if the message state is bad
     pub fn target(&self) -> &str {
-        &self.args.first().expect("should have a target")
+        let target = self.args.first().expect("should have a target");
+
+        let user = UserStore::get_bot(
+            &crate::database::get_connection(),
+            &Config::load().twitch.name,
+        ).expect("to get our name");
+
+        if target.eq_ignore_ascii_case(&user.display) {
+            match self.prefix {
+                Some(Prefix::User { ref nick, .. }) => &nick,
+                _ => unreachable!(),
+            }
+        } else {
+            &target
+        }
     }
 
     pub fn command(&self) -> &str {

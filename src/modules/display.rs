@@ -32,7 +32,11 @@ impl Module for Display {
     }
 
     fn passive(&self, msg: &IrcMessage) -> Option<Response> {
-        self.handle_passive(msg)
+        // for now
+        match &msg.command[..] {
+            "PRIVMSG" => self.handle_passive(msg),
+            _ => None,
+        }
     }
 }
 
@@ -43,8 +47,6 @@ impl Default for Display {
 }
 
 // never forget .or_else::<HashMap<String, RGB>, _>(|_: Option<()>| Ok(HashMap::new()))
-
-// TODO use the bot.inspect to show the bots output on the display
 impl Display {
     pub fn new() -> Self {
         let config = Config::load();
@@ -63,9 +65,12 @@ impl Display {
             return;
         }
 
-        if let Response::Command { .. } = resp {
-            return;
-        }
+        match resp {
+            Response::Command { .. } | Response::Action { .. } | Response::Whisper { .. } => {
+                return;
+            }
+            _ => {}
+        };
 
         if let Some(out) = resp.build(&msg) {
             let conn = crate::database::get_connection();

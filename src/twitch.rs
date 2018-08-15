@@ -100,7 +100,10 @@ impl TwitchClient {
                 vec.extend_from_slice(data);
                 Ok(data.len())
             });
-            transfer.perform().ok()?;
+            transfer
+                .perform()
+                .map_err(|e| error!("cannot perform transfer: {}", e))
+                .ok()?;
         }
 
         let value = serde_json::from_slice::<serde_json::Value>(&vec)
@@ -126,7 +129,9 @@ impl TwitchClient {
     pub fn get_names_for<S: AsRef<str>>(ch: S) -> Option<Names> {
         let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch.as_ref());
         if let Some(resp) = crate::util::http_get(&url) {
-            return serde_json::from_str::<Names>(&resp).ok();
+            return serde_json::from_str::<Names>(&resp)
+                .map_err(|e| error!("cannot parse json: {}", e))
+                .ok();
         }
         None
     }
