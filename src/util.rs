@@ -4,14 +4,13 @@ use std::fmt::Write;
 use std::time::Duration;
 
 pub trait CommaSeparated {
-    fn comma_separate(&self) -> String;
+    fn commas(&self) -> String;
 }
 
-// TODO rename this method to be less annoying to type
 macro_rules! impl_comma {
     (for $($t:ty),+) => {
         $(impl CommaSeparated for $t {
-            fn comma_separate(&self) -> String {
+            fn commas(&self) -> String {
                 fn comma(n: $t, s: &mut String) {
                     if n < 1000 {
                         write!(s, "{}", n).unwrap();

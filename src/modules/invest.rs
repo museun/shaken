@@ -89,23 +89,23 @@ impl Invest {
         match InvestGame::invest(self.config.chance, id, num) {
             Ok(Investment::Success { old, new }) => reply!(
                 "success! you went from {} to {} (+{})",
-                old.comma_separate(),
-                new.comma_separate(),
-                (new - old).comma_separate()
+                old.commas(),
+                new.commas(),
+                (new - old).commas()
             ),
             Ok(Investment::Failure { old, new }) => {
                 self.rate_limit(id);
                 reply!(
                     "failure! you went from {} to {} (-{}). try again in a minute",
-                    old.comma_separate(),
-                    new.comma_separate(),
-                    (old - new).comma_separate(),
+                    old.commas(),
+                    new.commas(),
+                    (old - new).commas(),
                 )
             }
             Err(InvestError::NotEnoughCredits { have, want }) => reply!(
                 "you don't have enough. you have {} but you want to invest {}.",
-                have.comma_separate(),
-                want.comma_separate()
+                have.commas(),
+                want.commas()
             ),
             Err(_) => {
                 // what to do here?
@@ -159,7 +159,7 @@ impl Invest {
         };
 
         if num > user.current {
-            return reply!("you only have {} credits", user.current.comma_separate());
+            return reply!("you only have {} credits", user.current.commas());
         }
 
         let (c, d) = {
@@ -170,14 +170,14 @@ impl Invest {
 
         reply!(
             "they now have {} credits and you're down to {} credits",
-            c.comma_separate(),
-            d.comma_separate()
+            c.commas(),
+            d.commas()
         )
     }
 
     fn check_command(&self, req: &Request) -> Option<Response> {
         match InvestGame::find(req.sender()).unwrap().current {
-            credits if credits > 0 => reply!("you have {} credits", credits.comma_separate()),
+            credits if credits > 0 => reply!("you have {} credits", credits.commas()),
             _ => reply!("you don't have any credits"),
         }
     }
@@ -211,7 +211,7 @@ impl Invest {
                     "(#{}) {}: {}",
                     i + 1,
                     &user.display,
-                    iu.current.comma_separate()
+                    iu.current.commas()
                 )
             }).collect::<Vec<_>>(); // this collect is needed
 
@@ -223,11 +223,11 @@ impl Invest {
         let (user, total) = InvestGame::stats_for(id);
 
         reply!("you've reached a max of {} credits, out of {} total credits with {} successes and {} failures. and I've 'collected' {} credits from all of the failures.",
-            user.max.comma_separate(),
-            user.total.comma_separate(),
-            user.invest.0.comma_separate(),
-            user.invest.1.comma_separate(),
-            total.comma_separate()
+            user.max.commas(),
+            user.total.commas(),
+            user.invest.0.commas(),
+            user.invest.1.commas(),
+            total.commas()
         )
     }
 

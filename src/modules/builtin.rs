@@ -84,7 +84,7 @@ impl Builtin {
         let stream = &streams[0];
         maybe!(stream.live.is_empty() || stream.live == "");
 
-        let viewers = stream.viewer_count.comma_separate();
+        let viewers = stream.viewer_count.commas();
         reply!("viewers: {}", viewers)
     }
 
