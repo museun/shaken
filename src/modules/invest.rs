@@ -519,11 +519,9 @@ mod tests {
         env.step();
     }
 
-    
     #[test]
     #[ignore] // TODO test this
-    fn on_message() {
-    }
+    fn on_message() {}
 }
 
 const INVEST_TABLE: &str = r#"
@@ -871,4 +869,3 @@ impl InvestGame {
             .and_then(|_| Ok(()))
     }
 }
-

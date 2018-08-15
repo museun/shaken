@@ -202,7 +202,7 @@ mod tests {
 
         env.push_raw(":test.localhost 001 museun :Welcome to IRC");
         env.step();
-        assert_eq!(env.pop_raw(), Some("JOIN museun".into()));
+        assert_eq!(env.pop_raw(), Some("JOIN #museun".into()));
     }
 
     #[test]
