@@ -22,6 +22,17 @@ impl<'a> Default for Environment<'a> {
     }
 }
 
+// don't use 42 (bot) or 1000 (you)
+pub fn make_test_user(conn: &Connection, name: &str, id: i64) -> User {
+    let user = User {
+        display: name.into(),
+        userid: id,
+        color: crate::color::RGB::from("#ffffff"),
+    };
+    let _ = UserStore::create_user(&conn, &user);
+    user
+}
+
 impl<'a> Environment<'a> {
     pub fn new() -> Self {
         let conn = TestConn::new();

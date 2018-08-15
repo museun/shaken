@@ -59,9 +59,9 @@ impl<'a> Bot<'a> {
     }
 
     fn try_make_request(msg: &Message) -> Option<Request> {
+        let id = Self::add_user_from_msg(&msg);
         if &msg.command[..] == "PRIVMSG" {
             if let Some(Prefix::User { .. }) = msg.prefix {
-                let id = Self::add_user_from_msg(&msg);
                 return Request::try_parse(id, &msg.data);
             }
         }

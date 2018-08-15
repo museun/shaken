@@ -1,307 +1,250 @@
-use parking_lot::RwLock;
 use rand::prelude::*;
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
-use std::{fmt, str};
+use rusqlite::Connection;
 
-use crate::{bot, config, humanize::*, message, twitch::*};
+use std::collections::HashMap;
+use std::str;
+use std::time::{Duration, Instant};
+
+use parking_lot::Mutex;
+
+use crate::*;
+use crate::{config, database::get_connection, irc::Message, twitch::TwitchClient, util::*};
 
 pub struct Invest {
-    inner: RwLock<Inner>,
+    config: config::Invest,
     twitch: TwitchClient,
+    limit: Mutex<HashMap<i64, Instant>>,
+    commands: Vec<Command<Invest>>,
 }
 
-struct Inner {
-    state: InvestState,
-    limit: HashMap<String, Instant>,
+impl Module for Invest {
+    fn command(&self, req: &Request) -> Option<Response> {
+        for cmd in &self.commands {
+            if let Some(req) = req.search(cmd.name()) {
+                return cmd.call(&self, &req);
+            }
+        }
+
+        None
+    }
+
+    fn passive(&self, msg: &Message) -> Option<Response> {
+        self.on_message(msg)
+    }
+}
+
+// fuck off clippy
+impl Default for Invest {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Invest {
-    pub fn new(bot: &bot::Bot, config: &config::Config) -> Arc<Self> {
-        let this = Arc::new(Self {
-            inner: RwLock::new(Inner {
-                state: InvestState::load(&config),
-                limit: HashMap::new(),
-            }),
+    pub fn new() -> Self {
+        let commands = vec![
+            Command::new("!invest", Self::invest_command), //
+            Command::new("!give", Self::give_command),     //
+            Command::new("!check", Self::check_command),   //
+            Command::new("!top5", Self::top5_command),     //
+            Command::new("!top", Self::top5_command),      // defaults to 5
+            Command::new("!stats", Self::stats_command),   //
+        ];
+
+        InvestGame::ensure_table(&get_connection());
+
+        let config = Config::load();
+        Self {
+            config: config.invest.clone(),
             twitch: TwitchClient::new(),
-        });
-
-        // TODO get rid of this garbage
-        let next = Arc::clone(&this);
-        bot.on_command("!invest", move |bot, env| next.invest_command(bot, env));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!give", move |bot, env| next.give_command(bot, env));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!check", move |bot, env| next.check_command(bot, env));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!top5", move |bot, env| next.top_command(bot, env));
-
-        let next = Arc::clone(&this);
-        bot.on_command("!stats", move |bot, env| next.stats_command(bot, env));
-
-        let next = Arc::clone(&this);
-        bot.on_passive(move |bot, env| next.on_message(bot, env));
-
-        this
+            limit: Mutex::new(HashMap::new()),
+            commands,
+        }
     }
 
-    fn invest_command(&self, bot: &bot::Bot, env: &message::Envelope) {
-        let who = bail!(env.get_id());
-
-        #[cfg(not(test))]
-        {
-            if self.check_rate_limit(&who) {
-                debug!("{} has been rate limited", who);
-                return;
-            }
+    fn invest_command(&self, req: &Request) -> Option<Response> {
+        let id = req.sender();
+        if self.check_rate_limit(id) {
+            // they've been rate limited
+            return None;
         }
 
-        let num = match self.get_credits_from_str(&env.data, &who) {
-            Some(num) => num,
-            None => {
-                bot.reply(&env, "thats not a number I understand");
-                return;
-            }
-        };
-
-        if num == 0 {
-            bot.reply(&env, "zero what?");
-            return;
-        }
-
-        let state = {
-            let state = &mut self.inner.write().state;
-            state.invest(who, num)
-        };
-
-        let response = match state {
-            Ok(s) => match s {
-                Donation::Success { old, new } => format!(
-                    "success! {} -> {}",
-                    old.comma_separate(),
-                    new.comma_separate()
-                ),
-                Donation::Failure { old, new } => {
-                    // rate limit them after they've failed to invest
-                    self.rate_limit(who);
-                    format!(
-                        "failure! {} -> {}. try again in a minute",
-                        old.comma_separate(),
-                        new.comma_separate()
-                    )
+        let user = match InvestGame::find(id) {
+            // could use some guard patterns, but the borrowck isn't there yet
+            Some(user) => {
+                if user.current > 0 {
+                    user
+                } else {
+                    return reply!("you don't have any credits.");
                 }
-            },
-            Err(InvestError::NotEnoughCredits { have, want }) => format!(
-                "you don't have enough. you have {}, but you want to invest {} credits",
+            }
+            None => return reply!("you don't have any credits."),
+        };
+        let num = match Self::get_credits_from_args(user.current, req.args()) {
+            Some(num) if num == 0 => return reply!("zero what?"),
+            Some(num) => num,
+            None => return reply!("thats not a number I understand"),
+        };
+
+        match InvestGame::invest(self.config.chance, id, num) {
+            Ok(Investment::Success { old, new }) => reply!(
+                "success! you went from {} to {} (+{})",
+                old.comma_separate(),
+                new.comma_separate(),
+                (new - old).comma_separate()
+            ),
+            Ok(Investment::Failure { old, new }) => {
+                self.rate_limit(id);
+                reply!(
+                    "failure! you went from {} to {} (-{}). try again in a minute",
+                    old.comma_separate(),
+                    new.comma_separate(),
+                    (old - new).comma_separate(),
+                )
+            }
+            Err(InvestError::NotEnoughCredits { have, want }) => reply!(
+                "you don't have enough. you have {} but you want to invest {}.",
                 have.comma_separate(),
                 want.comma_separate()
             ),
-        };
-
-        bot.reply(&env, &response);
+            Err(_) => {
+                // what to do here?
+                None
+            }
+        }
     }
 
-    fn give_command(&self, bot: &bot::Bot, env: &message::Envelope) {
-        // TODO determine if these names should be case folded for simpler comparisons
-        let who = bail!(env.get_id());
-        let sender = bail!(env.get_nick());
+    fn give_command(&self, req: &Request) -> Option<Response> {
+        let conn = get_connection();
 
-        let (mut target, data) = match env.data.split_whitespace().take(1).next() {
-            Some(target) => (target, &env.data[target.len()..]),
+        let id = req.sender();
+        let sender = UserStore::get_user_by_id(&conn, id)?;
+        let user = InvestGame::find(id)?;
+        if user.current == 0 {
+            return reply!("you don't have any credits");
+        }
+
+        let (mut target, args) = match req.args().get(0) {
+            Some(target) => (*target, &req.args()[1..]),
             None => {
-                bot.reply(&env, "who do you want to give credits to?");
-                return;
+                return reply!("who do you want to give credits to?");
             }
         };
 
-        // trim the potential '@'
         if target.starts_with('@') {
             target = &target[1..]
         }
 
-        if target.eq_ignore_ascii_case(&bot.user_info().display) {
-            bot.reply(&env, "I don't want any credits.");
-            return;
+        if target.eq_ignore_ascii_case(&sender.display) {
+            return reply!("what are you doing?");
         }
 
-        let tid = match self.lookup_id_for(&target) {
-            Some(id) => id,
+        let me =
+            UserStore::get_bot(&conn, &Config::load().twitch.name).expect("to get bot user info");
+        if target.eq_ignore_ascii_case(&me.display) {
+            return reply!("I don't want any credits.");
+        }
+
+        let tid = match UserStore::get_user_by_name(&conn, &target) {
+            Some(user) => user,
             None => {
-                bot.reply(&env, "I don't know who that is");
-                return;
+                return reply!("I don't know who that is.");
             }
         };
 
-        if sender.eq_ignore_ascii_case(target) {
-            bot.reply(&env, "what are you doing?");
-            return;
-        }
-
-        trace!("seeing if '{}' is a valid amounte", &data);
-
-        let num = match self.get_credits_from_str(&data, &who) {
+        let num = match Self::get_credits_from_args(user.current, &args) {
+            Some(num) if num == 0 => return reply!("zero what?"),
             Some(num) => num,
-            None => {
-                bot.reply(&env, "thats not a number I understand");
-                return;
-            }
+            None => return reply!("thats not a number I understand"),
         };
 
-        if num == 0 {
-            bot.reply(&env, "zero what?");
-            return;
-        }
-
-        debug!("{} wants to give {} {} credits", who, tid, num);
-
-        let credits = match {
-            let inner = self.inner.read();
-            let state = &inner.state;
-            state.get_credits_for(&who)
-        } {
-            Some(credits) => credits,
-            None => {
-                bot.reply(&env, "you have no credits");
-                return;
-            }
-        };
-
-        if num > credits {
-            bot.reply(
-                &env,
-                &format!("you only have {} credits", credits.comma_separate()),
-            );
-            return;
+        if num > user.current {
+            return reply!("you only have {} credits", user.current.comma_separate());
         }
 
         let (c, d) = {
-            let mut state = &mut self.inner.write().state;
-            let c = state.give(&tid, num);
-            let d = state.take(&who, num);
+            let c = InvestGame::give(tid.userid, num).expect("give credits");
+            let d = InvestGame::take(user.id, num).expect("take credits");
             (c, d)
         };
 
-        bot.reply(
-            &env,
-            &format!(
-                "they now have {} credits and you have {}",
-                c.comma_separate(),
-                d.comma_separate()
-            ),
-        );
+        reply!(
+            "they now have {} credits and you're down to {} credits",
+            c.comma_separate(),
+            d.comma_separate()
+        )
     }
 
-    fn check_command(&self, bot: &bot::Bot, env: &message::Envelope) {
-        let who = bail!(env.get_id());
-        match self.inner.read().state.get_credits_for(&who) {
-            Some(credits) if credits > 0 => bot.reply(
-                &env,
-                &format!("you have {} credits", credits.comma_separate()),
-            ),
-            _ => bot.reply(&env, "you have no credits"),
+    fn check_command(&self, req: &Request) -> Option<Response> {
+        match InvestGame::find(req.sender()).unwrap().current {
+            credits if credits > 0 => reply!("you have {} credits", credits.comma_separate()),
+            _ => reply!("you don't have any credits"),
         }
     }
 
-    fn top_command(&self, bot: &bot::Bot, env: &message::Envelope) {
-        let sorted = { self.inner.write().state.to_sorted() };
+    fn top5_command(&self, req: &Request) -> Option<Response> {
+        let mut n = req
+            .args()
+            .iter()
+            .next()
+            .and_then(|s| s.parse::<u16>().ok())
+            .or_else(|| Some(5))
+            .unwrap();
 
-        if let Some(ids) =
-            self.lookup_display_for(sorted.iter().take(10).map(|(s, _)| s).collect::<Vec<_>>())
-        {
-            let mut list = vec![];
-            for (i, (name, id)) in ids.iter().enumerate().take(5) {
-                let pos = sorted.iter().position(|(i, _)| i == id).unwrap(); // check?
-                list.push(format!("(#{}) {}: {}", i + 1, name.clone(), sorted[pos].1));
-            }
-            let res = crate::util::join_with(list.iter(), ", ");
-            bot.reply(&env, &res);
-        }
-    }
-
-    fn stats_command(&self, bot: &bot::Bot, env: &message::Envelope) {
-        let who = bail!(env.get_id());
-
-        let total = { self.inner.read().state.total };
-
-        let mut inner = self.inner.write();
-        let user = inner.state.get(who);
-        bot.reply(
-            &env,
-            &format!(
-                "you've {}. and I've 'collected' {} credits",
-                user,
-                total.comma_separate()
-            ),
-        );
-    }
-
-    fn on_message(&self, _bot: &bot::Bot, env: &message::Envelope) {
-        if env.data.starts_with('!') || env.data.starts_with('@') {
-            return;
+        // sanity checks because I'm sure someone will do it
+        // clamp it between 5 and 10
+        if n > 10 {
+            n = 10
         }
 
-        let who = bail!(env.get_id());
-
-        let mut inner = self.inner.write();
-        inner.state.increment(&who, &IncrementType::Line);
-
-        if let Some(kappas) = env.get_emotes() {
-            let ty = IncrementType::Emote(kappas.len());
-            inner.state.increment(&who, &ty);
-        };
-    }
-
-    fn lookup_id_for(&self, name: &str) -> Option<String> {
-        let list = self.twitch.get_users(&[name])?;
-        Some(list.get(0)?.id.to_string())
-    }
-
-    fn lookup_display_for<S, V>(&self, ids: V) -> Option<Vec<(String, String)>>
-    where
-        S: AsRef<str>,
-        V: AsRef<[S]>,
-        S: ::std::fmt::Debug,
-    {
-        if let Some(list) = self.twitch.get_users_from_ids(ids.as_ref()) {
-            return Some(
-                list.iter()
-                    .map(|user| (user.display_name.clone(), user.id.clone()))
-                    .collect(),
-            );
-        }
-        None
-    }
-
-    fn rate_limit(&self, who: &str) {
-        let who = who.to_string();
-        self.inner.write().limit.insert(who, Instant::now());
-    }
-
-    fn check_rate_limit(&self, who: &str) -> bool {
-        if let Some(t) = self.inner.read().limit.get(&who.to_string()) {
-            if Instant::now() - *t < Duration::from_secs(60) {
-                return true;
-            }
-        }
-        false
-    }
-
-    fn parse_number_or_context(data: &str) -> Option<NumType> {
-        const CONTEXTS: [&str; 3] = ["all", "half", "random"];
-
-        let num: String = data.chars().take_while(char::is_ascii_digit).collect();
-        if let Ok(num) = num.parse::<usize>() {
-            return Some(NumType::Num(num));
+        if n < 5 {
+            n = 5
         }
 
-        if let Some(part) = data.split_whitespace().take(1).next() {
-            for ctx in &CONTEXTS {
-                if &part == ctx {
-                    return Some(part.into());
+        let conn = get_connection();
+        let list = InvestGame::get_top_n(n as i16, &SortBy::Current)
+            .iter()
+            .enumerate()
+            .map(|(i, iu)| {
+                let user = UserStore::get_user_by_id(&conn, iu.id).expect("user to exist");
+                format!(
+                    "(#{}) {}: {}",
+                    i + 1,
+                    &user.display,
+                    iu.current.comma_separate()
+                )
+            }).collect::<Vec<_>>(); // this collect is needed
+
+        reply!("{}", crate::util::join_with(list.iter(), ", "))
+    }
+
+    fn stats_command(&self, req: &Request) -> Option<Response> {
+        let id = req.sender();
+        let (user, total) = InvestGame::stats_for(id);
+
+        reply!("you've reached a max of {} credits, out of {} total credits with {} successes and {} failures. and I've 'collected' {} credits from all of the failures.",
+            user.max.comma_separate(),
+            user.total.comma_separate(),
+            user.invest.0.comma_separate(),
+            user.invest.1.comma_separate(),
+            total.comma_separate()
+        )
+    }
+
+    fn on_message(&self, msg: &Message) -> Option<Response> {
+        if msg.data.starts_with('!') || msg.data.starts_with('@') {
+            return None;
+        }
+
+        let id = msg.tags.get_userid()?;
+        InvestGame::give(id, self.config.line_value);
+
+        if let Some(kappas) = msg.tags.get_kappas() {
+            let len = kappas.len();
+            for a in &self.config.kappas {
+                if len <= a[1] {
+                    InvestGame::give(id, a[0]);
+                    return None;
                 }
             }
         }
@@ -309,32 +252,54 @@ impl Invest {
         None
     }
 
-    fn get_credits_from_str(&self, data: &str, id: &str) -> Option<usize> {
-        let data = data.trim();
-
-        let num = Self::parse_number_or_context(&data)?;
-        let credits = {
-            let inner = self.inner.read();
-            let state = &inner.state;
-            let credits = state.get_credits_for(&id);
-            trace!("got {:?} credits for {}", credits, id);
-            credits
-        }.or(Some(0))?;
-
-        Some(match num {
+    fn get_credits_from_args(credits: Credit, parts: &[&str]) -> Option<Credit> {
+        let data = parts.iter().next()?.trim();
+        Some(match parse_number_or_context(&data)? {
             NumType::Num(num) => num,
             NumType::All => credits,
             NumType::Half => credits / 2,
             NumType::Random => thread_rng().gen_range(1, credits),
         })
     }
+
+    fn rate_limit(&self, id: i64) {
+        self.limit.lock().insert(id, Instant::now());
+    }
+
+    fn check_rate_limit(&self, id: i64) -> bool {
+        if let Some(t) = self.limit.lock().get(&id) {
+            if Instant::now() - *t < Duration::from_secs(60) {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 enum NumType {
-    Num(usize),
+    Num(Credit),
     All,
     Half,
     Random,
+}
+
+fn parse_number_or_context(data: &str) -> Option<NumType> {
+    const CONTEXTS: [&str; 3] = ["all", "half", "random"];
+
+    let num: String = data.chars().take_while(char::is_ascii_digit).collect();
+    if let Ok(num) = num.parse::<usize>() {
+        return Some(NumType::Num(num));
+    }
+
+    if let Some(part) = data.split_whitespace().take(1).next() {
+        for ctx in &CONTEXTS {
+            if &part == ctx {
+                return Some(part.into());
+            }
+        }
+    }
+
+    None
 }
 
 impl From<&str> for NumType {
@@ -348,508 +313,562 @@ impl From<&str> for NumType {
     }
 }
 
-const INVEST_STORE: &str = "invest.json";
-type Credit = usize;
-
-#[derive(Deserialize, Serialize, Debug)]
-struct InvestUser {
-    id: String,
-    max: usize,
-    current: usize,
-    total: usize,
-    invest: (usize, usize), // success, failure
-}
-
-impl InvestUser {
-    pub fn new(id: &str) -> InvestUser {
-        InvestUser {
-            id: id.to_string(),
-            max: 0,
-            current: 0,
-            total: 0,
-            invest: (0, 0),
-        }
-    }
-}
-
-impl fmt::Display for InvestUser {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let (success, failure) = self.invest;
-
-        write!(
-            f,
-            "reached a max of {} credits, out of {} total credits with {} successes and {} failures.",
-            self.max.comma_separate(),
-            self.total.comma_separate(),
-            success.comma_separate(),
-            failure.comma_separate(),
-        )
-    }
-}
-
-#[derive(Debug, PartialEq)]
-enum InvestError {
-    NotEnoughCredits { have: Credit, want: Credit },
-    // a rate limit error?
-}
-
-#[derive(Debug, PartialEq)]
-enum Donation {
-    Success { old: Credit, new: Credit },
-    Failure { old: Credit, new: Credit },
-}
-
-type InvestResult = Result<Donation, InvestError>;
-
-#[derive(Debug, Deserialize, Serialize)]
-struct InvestState {
-    total: usize, // total lost
-    state: HashMap<String, InvestUser>,
-
-    #[serde(skip)]
-    chance: f64,
-
-    #[serde(skip)]
-    starting: usize,
-
-    #[serde(skip)]
-    line_value: usize,
-
-    #[serde(skip)]
-    emote_value: Vec<[usize; 2]>,
-}
-
-impl Default for InvestState {
-    fn default() -> Self {
-        Self {
-            starting: 0,
-            line_value: 5,
-            chance: 1.0 / 2.0,
-            emote_value: vec![[0, 0]],
-
-            total: 0,
-            state: Default::default(),
-        }
-    }
-}
-
-impl Drop for InvestState {
-    fn drop(&mut self) {
-        debug!("saving InvestState to {}", INVEST_STORE);
-        self.save();
-    }
-}
-
-enum IncrementType {
-    Line,
-    Emote(usize), // count (for decay)
-}
-
-impl InvestState {
-    #[cfg(not(test))]
-    pub fn load(config: &config::Config) -> Self {
-        use std::fs;
-        debug!("loading InvestState from: {}", INVEST_STORE);
-        let s = fs::read_to_string(INVEST_STORE)
-            .or_else(|_| {
-                debug!("loading default Invest");
-                serde_json::to_string_pretty(&InvestState::default())
-            }).expect("to get json");
-        let mut this: Self = serde_json::from_str(&s).expect("to deserialize struct");
-        this.starting = config.invest.starting;
-        this.line_value = config.invest.line_value;
-        this.chance = config.invest.chance;
-        this.emote_value = config.invest.kappas.to_vec();
-        this
-    }
-
-    #[cfg(test)]
-    pub fn load(_config: &config::Config) -> Self {
-        InvestState::default()
-    }
-
-    pub fn save(&self) {
-        #[cfg(not(test))]
-        {
-            use std::fs;
-            let f = fs::File::create(INVEST_STORE).expect("to create file");
-            serde_json::to_writer(&f, &self).expect("to serialize struct");
-            trace!("saving Invest to {}", INVEST_STORE)
-        }
-    }
-
-    pub fn get(&mut self, id: &str) -> &InvestUser {
-        self.state
-            .entry(id.into())
-            .or_insert_with(|| InvestUser::new(id))
-    }
-
-    pub fn give(&mut self, id: &str, credits: Credit) -> Credit {
-        self.state
-            .entry(id.into())
-            .and_modify(|c| {
-                c.current += credits;
-                c.total += credits;
-                if c.current > c.max {
-                    c.max = c.current;
-                }
-            }).or_insert_with(|| {
-                let mut user = InvestUser::new(id);
-                user.current = credits;
-                user.max = credits;
-                user.total = credits;
-                user
-            });
-
-        self.save();
-        let credits = self.state[id].current;
-        trace!("setting {}'s credits to {}", id, credits);
-        credits
-    }
-
-    pub fn take(&mut self, id: &str, credits: Credit) -> Credit {
-        self.state
-            .entry(id.into())
-            .and_modify(|c| c.current -= credits)
-            .or_insert_with(|| {
-                let mut user = InvestUser::new(id);
-                user.current = credits;
-                user
-            });
-
-        self.save();
-        let credits = self.state[id].current;
-        trace!("setting {}'s credits to {}", id, credits);
-        credits
-    }
-
-    pub fn increment(&mut self, id: &str, ty: &IncrementType) -> Credit {
-        let value = || -> usize {
-            match ty {
-                IncrementType::Line => self.line_value,
-                IncrementType::Emote(e) => {
-                    for a in &self.emote_value {
-                        if *e <= a[1] {
-                            return a[0];
-                        }
-                    }
-                    0
-                }
-            }
-        }();
-
-        self.give(id, value)
-    }
-
-    fn invest_success(&mut self, id: &str, have: Credit, want: Credit) -> InvestResult {
-        self.state.entry(id.into()).and_modify(|c| {
-            c.current += want;
-            c.total += want;
-            c.invest.0 += 1;
-            if c.current > c.max {
-                c.max = c.current
-            }
-        });
-
-        let amount = self.state[id].current;
-        debug!("donation was successful: {}, {} -> {}", id, have, amount);
-        Ok(Donation::Success {
-            old: have,
-            new: amount,
-        })
-    }
-
-    fn invest_failure(&mut self, id: &str, have: Credit, want: Credit) -> InvestResult {
-        self.state.entry(id.into()).and_modify(|c| {
-            if let Some(v) = c.current.checked_sub(want) {
-                c.current = v
-            } else {
-                c.current = 0;
-            };
-            c.invest.1 += 1;
-        });
-
-        let amount = self.state[id].current;
-        self.total += want;
-
-        debug!("donation was a failure: {}, {} -> {}", id, have, amount);
-        Ok(Donation::Failure {
-            old: have,
-            new: amount,
-        })
-    }
-
-    fn try_donation(&mut self, id: &str, have: usize, want: usize) -> InvestResult {
-        if have == 0 || want > have {
-            Err(InvestError::NotEnoughCredits { have, want })?
-        }
-
-        let res = if thread_rng().gen_bool(self.chance) {
-            self.invest_failure(id, have, want)
-        } else {
-            self.invest_success(id, have, want)
-        };
-
-        self.save();
-        res
-    }
-
-    pub fn invest(&mut self, id: &str, want: Credit) -> InvestResult {
-        if let Some(have) = self.get_credits_for(id) {
-            self.try_donation(id, have, want)
-        } else {
-            Err(InvestError::NotEnoughCredits { have: 0, want })
-        }
-    }
-
-    pub fn get_credits_for(&self, id: &str) -> Option<Credit> {
-        self.state.get(id).and_then(|c| Some(c.current))
-    }
-
-    pub fn to_sorted(&self) -> Vec<(String, Credit)> {
-        let mut sorted = self
-            .state
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.current))
-            .collect::<Vec<_>>();
-        sorted.sort_by(|l, r| r.1.cmp(&l.1));
-        // TODO: should also sort it by name if equal credits
-        sorted
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::testing::*;
-    use std::mem;
+    use testing::*;
 
-    fn failure(m: &Invest) {
-        m.inner.write().state.chance = 1.0;
-    }
+    fn dump(hd: &str, conn: &Connection) {
+        macro_rules! un {
+            ($e:expr, $n:expr) => {
+                $e.get::<_, i64>($n) as usize
+            };
+        }
 
-    fn success(m: &Invest) {
-        m.inner.write().state.chance = 0.0;
-    }
+        let mut stmt = conn
+            .prepare("SELECT * FROM Invest")
+            .expect("valid sql in ensure");
 
-    fn give(m: &Invest, n: usize) {
-        m.inner.write().state.give("1004", n);
+        let mut iter = stmt
+            .query_map(&[], |row| InvestUser {
+                id: row.get(0),
+                max: un!(row, 1),
+                current: un!(row, 2),
+                total: un!(row, 3),
+                invest: (un!(row, 4), un!(row, 5)),
+                active: row.get(6),
+            }).map_err(|e| error!("{}", e))
+            .expect("to get rows");
+
+        trace!("trying to dump database");
+
+        while let Some(Ok(row)) = iter.next() {
+            warn!("{} >> {:?}", hd, row)
+        }
     }
 
     #[test]
     fn invest_command() {
-        let env = Environment::new();
-        let _module = Invest::new(&env.bot, &env.config);
+        // to hold on to it.
+        let _conn = get_connection();
 
-        env.push_privmsg("!invest");
+        let mut invest = Invest::new();
+        invest.config.chance = 0.0;
+
+        let mut env = Environment::new();
+        env.add(&invest);
+
+        env.push("!invest 10");
         env.step();
+        assert_eq!(env.pop(), Some("@test: you don't have any credits.".into()));
 
+        InvestGame::give(1000, 100);
+        env.push("!invest 10");
+        env.step();
         assert_eq!(
-            env.pop_env().unwrap().data,
-            "@test: thats not a number I understand"
+            env.pop(),
+            Some("@test: success! you went from 100 to 110 (+10)".into())
         );
 
-        env.push_privmsg("!invest 10");
+        // borrowing is fun
+        let mut invest = Invest::new();
+        invest.config.chance = 1.0;
+
+        let mut env = Environment::new();
+        env.add(&invest);
+
+        env.push("!invest 10");
         env.step();
-
         assert_eq!(
-            env.pop_env().unwrap().data,
-            "@test: you don't have enough. you have 0, but you want to invest 10 credits"
+            env.pop(),
+            Some("@test: failure! you went from 110 to 100 (-10). try again in a minute".into())
         );
-
-        give(&_module, 1000);
-        success(&_module);
-
-        env.push_privmsg("!invest 500");
+        env.push("!invest 10");
         env.step();
-
-        assert_eq!(
-            env.pop_env().unwrap().data,
-            "@test: success! 1,000 -> 1,500"
-        );
-
-        failure(&_module);
-        env.push_privmsg("!invest 500");
-        env.step();
-
-        assert_eq!(
-            env.pop_env().unwrap().data,
-            "@test: failure! 1,500 -> 1,000. try again in a minute"
-        );
+        assert_eq!(env.pop(), None);
     }
 
     #[test]
     fn give_command() {
-        let env = Environment::new();
-        let _module = Invest::new(&env.bot, &env.config);
+        // to hold on to it.
+        let conn = get_connection();
 
-        env.push_privmsg("!give");
+        let invest = Invest::new();
+        let mut env = Environment::new();
+        env.add(&invest);
+
+        env.push("!give foo 10");
         env.step();
+        assert_eq!(env.pop(), Some("@test: you don't have any credits".into()));
 
+        InvestGame::give(1000, 100);
+        env.push("!give");
+        env.step();
         assert_eq!(
-            env.pop_env().unwrap().data,
-            "@test: who do you want to give credits to?"
+            env.pop(),
+            Some("@test: who do you want to give credits to?".into())
         );
 
-        env.push_privmsg("!give test");
+        env.push("!give test");
         env.step();
+        assert_eq!(env.pop(), Some("@test: what are you doing?".into()));
 
-        assert_eq!(env.pop_env().unwrap().data, "@test: what are you doing?");
-
-        env.push_privmsg("!give test 10");
+        env.push("!give shaken_bot");
         env.step();
+        assert_eq!(env.pop(), Some("@test: I don't want any credits.".into()));
 
-        assert_eq!(env.pop_env().unwrap().data, "@test: what are you doing?");
-
-        give(&_module, 1000);
-
-        env.push_privmsg("!give shaken_bot 10");
+        env.push("!give foo");
         env.step();
+        assert_eq!(env.pop(), Some("@test: I don't know who that is.".into()));
 
+        let _user = make_test_user(&conn, "foo", 1001);
+
+        env.push("!give foo");
+        env.step();
         assert_eq!(
-            env.pop_env().unwrap().data,
-            "@test: I don't want any credits."
+            env.pop(),
+            Some("@test: thats not a number I understand".into())
         );
 
-        env.push_privmsg("!give museun 10");
+        env.push("!give foo 101");
         env.step();
+        assert_eq!(env.pop(), Some("@test: you only have 100 credits".into()));
 
+        env.push("!give foo 50");
+        env.step();
         assert_eq!(
-            env.pop_env().unwrap().data,
-            "@test: they now have 10 credits and you have 990"
+            env.pop(),
+            Some("@test: they now have 50 credits and you're down to 50 credits".into())
         );
     }
 
     #[test]
     fn check_command() {
-        let env = Environment::new();
-        let _module = Invest::new(&env.bot, &env.config);
+        // to hold on to it.
+        let conn = get_connection();
 
-        env.push_privmsg("!check");
+        let invest = Invest::new();
+        let mut env = Environment::new();
+        env.add(&invest);
+
+        env.push("!check");
         env.step();
+        assert_eq!(env.pop(), Some("@test: you don't have any credits".into()));
 
-        assert_eq!(env.pop_env().unwrap().data, "@test: you have no credits");
+        InvestGame::give(1000, 100);
 
-        give(&_module, 1000);
-
-        env.push_privmsg("!check");
+        env.push("!check");
         env.step();
-
-        assert_eq!(env.pop_env().unwrap().data, "@test: you have 1,000 credits");
+        assert_eq!(env.pop(), Some("@test: you have 100 credits".into()));
     }
 
     #[test]
-    #[ignore] // this requires too much twitch stuff
-    fn top5_command() {}
+    fn top5_command() {
+        // to hold on to it.
+        let conn = get_connection();
+
+        let invest = Invest::new();
+        let mut env = Environment::new();
+        env.add(&invest);
+
+        use rand::distributions::Alphanumeric;
+        use rand::{thread_rng, Rng};
+
+        for n in 1001..1012 {
+            let name = thread_rng()
+                .sample_iter(&Alphanumeric)
+                .take(10)
+                .collect::<String>();
+            let _u = make_test_user(&conn, &name, n as i64);
+            let r = thread_rng().gen::<u16>();
+            InvestGame::give(n, r as usize);
+        }
+
+        env.push("!top5");
+        env.step();
+        assert!(env.pop().is_some());
+
+        env.push("!top 5");
+        env.step();
+        assert!(env.pop().is_some());
+
+        env.push("!top 10");
+        env.step();
+        assert!(env.pop().is_some());
+
+        env.push("!top 100");
+        env.step();
+        assert!(env.pop().is_some());
+
+        env.push("!top 0");
+        env.step();
+        assert!(env.pop().is_some());
+    }
 
     #[test]
-    #[ignore] // this requires too much twitch stuff
-    fn on_message() {}
-
-    #[test]
+    #[ignore] // this requires too much set up. its literally just formatting a string
     fn stats_command() {
-        let env = Environment::new();
-        let module = Invest::new(&env.bot, &env.config);
+        // to hold on to it.
+        let conn = get_connection();
 
-        env.push_privmsg("!stats");
+        let invest = Invest::new();
+        let mut env = Environment::new();
+        env.add(&invest);
+
+        env.push("!stats");
         env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 0 credits, out of 0 total credits with 0 successes and 0 failures.. and I've 'collected' 0 credits");
-        assert_eq!(env.pop_env(), None);
-
-        failure(&module);
-        give(&module, 1000);
-
-        env.push_privmsg("!stats");
-        env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 0 failures.. and I've 'collected' 0 credits");
-
-        env.push_privmsg("!invest 500");
-        env.step();
-        env.drain_envs();
-
-        env.push_privmsg("!stats");
-        env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 1 failures.. and I've 'collected' 500 credits");
-
-        env.push_privmsg("!invest 300");
-        env.step();
-        env.drain_envs();
-
-        env.push_privmsg("!stats");
-        env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,000 total credits with 0 successes and 2 failures.. and I've 'collected' 800 credits");
-
-        success(&module);
-
-        env.push_privmsg("!invest 200");
-        env.step();
-        env.drain_envs();
-
-        env.push_privmsg("!stats");
-        env.step();
-        assert_eq!(env.pop_env().unwrap().data, "@test: you've reached a max of 1,000 credits, out of 1,200 total credits with 1 successes and 2 failures.. and I've 'collected' 800 credits");
-
-        env.push_privmsg("!invest all");
-        env.step();
-        env.push_privmsg("!invest all");
-        env.step();
-        env.drain_envs();
-
-        env.push_privmsg("!stats");
-        env.step();
-        env.drain_envs_warn_log();
-
-        failure(&module);
-        env.push_privmsg("!invest all");
-        env.step();
-        env.drain_envs();
-
-        env.push_privmsg("!stats");
-        env.step();
-        env.drain_envs_warn_log();
-
-        //env.drain_envs_warn_log();
-
-        // TODO write more tests for this
     }
 
+    
     #[test]
-    fn invest() {
-        let mut ch = InvestState::default();
-
-        assert_eq!(
-            ch.invest("test", 10),
-            Err(InvestError::NotEnoughCredits { have: 0, want: 10 })
-        ); // not seen before. so zero credits
-
-        assert_eq!(ch.increment("foo", &IncrementType::Line), 5); // starts at 0, so +5
-        assert_eq!(ch.increment("foo", &IncrementType::Line), 10); // then +5
-
-        assert_eq!(
-            ch.invest("test", 10),
-            Err(InvestError::NotEnoughCredits { have: 0, want: 10 })
-        ); // not seen before. so zero credits
-
-        assert_eq!(
-            ch.invest_success("foo", 10, 5),
-            Ok(Donation::Success { old: 10, new: 15 })
-        );
-
-        assert_eq!(
-            ch.invest_success("foo", 15, 15),
-            Ok(Donation::Success { old: 15, new: 30 })
-        );
-
-        assert_eq!(
-            ch.invest_failure("foo", 30, 15),
-            Ok(Donation::Failure { old: 30, new: 15 })
-        );
-
-        assert_eq!(
-            ch.invest_failure("foo", 15, 15),
-            Ok(Donation::Failure { old: 15, new: 0 })
-        );
-
-        mem::forget(ch); // don't serialize to disk
+    #[ignore] // TODO test this
+    fn on_message() {
     }
 }
+
+const INVEST_TABLE: &str = r#"
+BEGIN;
+
+CREATE TABLE IF NOT EXISTS InvestStats (
+    ID INTEGER PRIMARY KEY NOT NULL UNIQUE,
+    Total INTEGER NOT NULL
+);
+
+INSERT OR IGNORE INTO InvestStats (ID, Total) VALUES(0, 0);
+
+CREATE TABLE IF NOT EXISTS Invest (
+    ID      INTEGER PRIMARY KEY NOT NULL UNIQUE, -- twitch ID
+    Max     INTEGER NOT NULL,                    -- highest credits held
+    Current INTEGER NOT NULL,                    -- current credit balance
+    Total   INTEGER NOT NULL,                    -- total credits earned
+    Success INTEGER NOT NULL,                    -- number of successes
+    Failure INTEGER NOT NULL,                    -- number of failures
+    Active  INTEGER NOT NULL                     -- whether they'll get idle points
+    -- FOREIGN KEY(ID) REFERENCES Users(ID) -- maybe add this constraint later
+);
+
+COMMIT;
+"#;
+
+pub type Credit = usize;
+pub type InvestResult<T> = std::result::Result<T, InvestError>;
+
+#[derive(Debug, PartialEq)]
+pub enum InvestError {
+    NotEnoughCredits { have: Credit, want: Credit },
+    CannotInsert { id: i64 },
+    UserNotFound { id: i64 },
+    NoRowsFound { id: i64 },
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Investment {
+    Success { old: Credit, new: Credit },
+    Failure { old: Credit, new: Credit },
+}
+
+pub enum IncrementType {
+    Line,
+    Emote(usize), // count (for decay)
+}
+
+pub enum SortBy {
+    Current,
+    Max,
+    Total,
+    Success,
+    Failure,
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct InvestUser {
+    pub id: i64,
+    pub max: Credit,
+    pub current: Credit,
+    pub total: Credit,
+    pub invest: (Credit, Credit), // success, failure
+    pub active: bool,
+}
+
+impl InvestUser {
+    pub fn new(id: i64) -> InvestUser {
+        let mut user = InvestUser::default();
+        user.id = id;
+        user
+    }
+}
+
+#[derive(Debug)]
+pub struct InvestGame;
+
+impl InvestGame {
+    pub fn ensure_table(conn: &Connection) {
+        conn.execute_batch(INVEST_TABLE)
+            .expect("to create Invest table");
+    }
+
+    pub fn get_top_n(bound: i16, sort: &SortBy) -> Vec<InvestUser> {
+        let conn = get_connection();
+
+        macro_rules! un {
+            ($e:expr, $n:expr) => {
+                $e.get::<_, i64>($n) as usize
+            };
+        }
+
+        let sort = match sort {
+            SortBy::Current => "Current",
+            SortBy::Max => "Max",
+            SortBy::Total => "Total",
+            SortBy::Success => "Success",
+            SortBy::Failure => "Failure",
+        };
+
+        // TODO make this work for the other constraints
+        let mut stmt = conn
+            .prepare("SELECT * FROM Invest ORDER BY Current DESC LIMIT ?")
+            .expect("valid sql");
+
+        let mut iter = stmt
+            .query_map(&[&bound], |row| InvestUser {
+                id: row.get(0),
+                max: un!(row, 1),
+                current: un!(row, 2),
+                total: un!(row, 3),
+                invest: (un!(row, 4), un!(row, 5)),
+                active: row.get(6),
+            }).map_err(|e| { /* log this */ })
+            .expect("to get rows");
+
+        let mut out = vec![];
+        while let Some(Ok(row)) = iter.next() {
+            out.push(row)
+        }
+        out
+    }
+
+    pub fn find(id: i64) -> Option<InvestUser> {
+        trace!("looking up id: {}", id);
+        let conn = get_connection();
+        Self::get_user_by_id(&conn, id).ok()
+    }
+
+    pub fn stats_for(id: i64) -> (InvestUser, usize) {
+        let conn = get_connection();
+        let user = Self::get_user_by_id(&conn, id).expect("to get user");
+        let total = Self::get_collected(&conn);
+        (user, total)
+    }
+
+    pub fn give(id: i64, credits: Credit) -> Option<Credit> {
+        trace!("trying to give {}: {} credits", id, credits);
+        let conn = get_connection();
+        let mut user = Self::get_user_by_id(&conn, id).ok()?;
+        user.current += credits; // TODO check for overflow...
+        user.total += credits;
+
+        let _ = Self::update_user(&conn, &user);
+        Some(user.current)
+    }
+
+    pub fn take(id: i64, credits: Credit) -> Option<Credit> {
+        trace!("trying to take {} credits from {}", credits, id);
+
+        let conn = get_connection();
+        let mut user = Self::get_user_by_id(&conn, id).ok()?;
+        if credits > user.current {
+            user.current = 0;
+        } else {
+            user.current -= credits;
+        }
+
+        let _ = Self::update_user(&conn, &user);
+        Some(user.current)
+    }
+
+    pub fn update(user: &InvestUser) {
+        trace!("updating: {:?}", user);
+        let conn = get_connection();
+        let _ = Self::update_user(&conn, &user);
+    }
+
+    pub fn invest(chance: f64, id: i64, want: Credit) -> InvestResult<Investment> {
+        trace!("id {} trying to invest {} at {}", id, want, chance);
+
+        let conn = get_connection();
+        let mut user = Self::get_user_by_id(&conn, id)
+            .map_err(|_| InvestError::NotEnoughCredits { have: 0, want })?;
+
+        if user.current < want {
+            return Err(InvestError::NotEnoughCredits {
+                have: user.current,
+                want,
+            });
+        }
+
+        if thread_rng().gen_bool(chance) {
+            Self::failure(&conn, &mut user, want)
+        } else {
+            Self::success(&conn, &mut user, want)
+        }
+    }
+
+    fn success(conn: &Connection, user: &mut InvestUser, want: Credit) -> InvestResult<Investment> {
+        let old = user.current;
+        user.current += want;
+        user.total += want;
+        user.invest.0 += 1;
+
+        let _ = Self::update_user(&conn, &user);
+
+        Ok(Investment::Success {
+            old,
+            new: user.current,
+        })
+    }
+
+    fn failure(conn: &Connection, user: &mut InvestUser, want: Credit) -> InvestResult<Investment> {
+        let old = user.current;
+        user.current -= want;
+        user.invest.1 += 1;
+
+        Self::increment_collected(&conn, want);
+        let _ = Self::update_user(&conn, &user);
+
+        Ok(Investment::Failure {
+            old,
+            new: user.current,
+        })
+    }
+
+    pub fn increment_all_active(conn: &Connection, amount: Credit) {
+        const S: &str = r#"
+            UPDATE Invest 
+            SET 
+                Current = Current + ?,
+                Total = Total + ?
+            WHERE Active = 1;
+        "#;
+
+        let _ = conn.execute(S, &[&(amount as i64), &(amount as i64)]);
+
+        // TODO: probably should batch these
+        Self::update_max(&conn);
+    }
+
+    fn update_max(conn: &Connection) {
+        const S: &str = r#"
+            UPDATE Invest
+            SET
+                Max = Current
+            WHERE Max < Current;
+        "#;
+
+        let _ = conn.execute(S, &[]);
+    }
+
+    pub fn get_collected(conn: &Connection) -> Credit {
+        let mut stmt = conn
+            .prepare("SELECT Total FROM InvestStats WHERE ID = 0 LIMIT 1")
+            .expect("valid sql");
+        let mut iter = stmt
+            .query_map(&[], |row| row.get::<_, i64>(0) as usize)
+            .expect("to get total");
+        iter.next().expect("to get total").expect("to get total")
+    }
+
+    pub fn increment_collected(conn: &Connection, amount: Credit) {
+        const S: &str = "UPDATE InvestStats SET Total = Total + ? where ID = 0";
+        conn.execute(S, &[&(amount as i64)])
+            .expect("to update total");
+    }
+
+    pub fn get_user_by_id(conn: &Connection, id: i64) -> InvestResult<InvestUser> {
+        let mut stmt = conn
+            .prepare("SELECT * FROM Invest WHERE ID = ? LIMIT 1")
+            .expect("valid sql");
+
+        macro_rules! un {
+            ($e:expr, $n:expr) => {
+                $e.get::<_, i64>($n) as usize
+            };
+        }
+
+        let mut iter = stmt
+            .query_map(&[&id], |row| InvestUser {
+                id: row.get(0),
+                max: un!(row, 1),
+                current: un!(row, 2),
+                total: un!(row, 3),
+                invest: (un!(row, 4), un!(row, 5)),
+                active: row.get(6),
+            }).map_err(|_err| InvestError::UserNotFound { id })?;
+
+        if let Some(user) = iter.next() {
+            return user.map_err(|_err| InvestError::UserNotFound { id });
+        }
+
+        let user = InvestUser::new(id);
+        Self::create_user(&conn, &user)?;
+        Ok(user)
+    }
+
+    pub fn update_user(conn: &Connection, user: &InvestUser) -> InvestResult<()> {
+        use rusqlite::types::ToSql;
+
+        const S: &str = r#"
+            UPDATE Invest 
+            SET 
+                Max = ?,
+                Current = ?,
+                Total = ?,
+                Success = ?,
+                Failure = ?,
+                Active = ?
+            WHERE ID = ?"#;
+
+        let map: &[&ToSql] = &[
+            &(user.max as i64),
+            &(user.current as i64),
+            &(user.total as i64),
+            &(user.invest.0 as i64),
+            &(user.invest.1 as i64),
+            &user.active,
+            &user.id,
+        ];
+
+        let res = conn
+            .execute(S, map)
+            .map_err(|_err| InvestError::CannotInsert { id: user.id })
+            .and_then(|_| Ok(()));
+
+        if res.is_ok() {
+            Self::update_max(&conn);
+        }
+        res
+    }
+
+    pub fn create_user(conn: &Connection, user: &InvestUser) -> InvestResult<()> {
+        use rusqlite::types::ToSql;
+
+        const S: &str = r#"
+            INSERT OR IGNORE INTO Invest 
+                (ID, Max, Current, Total, Success, Failure, Active) 
+            VALUES (?, ?, ?, ?, ?, ?, ?)"#;
+
+        let map: &[&ToSql] = &[
+            &user.id,
+            &(user.max as i64),
+            &(user.current as i64),
+            &(user.total as i64),
+            &(user.invest.0 as i64),
+            &(user.invest.1 as i64),
+            &user.active,
+        ];
+
+        conn.execute(S, map)
+            .map_err(|_err| InvestError::CannotInsert { id: user.id })
+            .and_then(|_| Ok(()))
+    }
+}
+

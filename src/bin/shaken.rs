@@ -28,11 +28,13 @@ impl Shaken {
         let builtin = &Builtin::new();
         let shakespeare = &Shakespeare::new();
         let display = &Display::new();
+        let invest = &Invest::new();
 
         let mods: Vec<&dyn Module> = vec![
             builtin,     //
             shakespeare, //
             display,     //
+            invest,
         ];
 
         let mut sleep = 0;

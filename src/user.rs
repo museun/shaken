@@ -10,8 +10,8 @@ pub struct User {
 
 pub struct UserStore;
 impl UserStore {
-    pub fn init_table(conn: &Connection) {
-        conn.execute(USER_TABLE, &[])
+    pub fn ensure_table(conn: &Connection) {
+        conn.execute_batch(USER_TABLE)
             .expect("to create Users table");
     }
 
@@ -117,7 +117,7 @@ mod tests {
     #[test]
     fn userstore_stuff() {
         let conn = Connection::open_in_memory().unwrap();
-        UserStore::init_table(&conn);
+        UserStore::ensure_table(&conn);
 
         let user = UserStore::get_user_by_id(&conn, 1004);
         assert_eq!(user, None);

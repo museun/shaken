@@ -43,6 +43,7 @@ impl Default for Display {
 
 // never forget .or_else::<HashMap<String, RGB>, _>(|_: Option<()>| Ok(HashMap::new()))
 
+// TODO use the bot.inspect to show the bots output on the display
 impl Display {
     pub fn new() -> Self {
         let config = Config::load();
