@@ -7,7 +7,7 @@ use crate::irc::Message;
 use crate::*;
 
 pub trait Module {
-    fn command(&self, _req: &Request) -> Option<Response> {
+    fn command(&self, req: &Request) -> Option<Response> {
         None
     }
 
@@ -18,6 +18,19 @@ pub trait Module {
     fn event(&self, _msg: &Message) -> Option<Response> {
         None
     }
+}
+
+#[macro_export]
+macro_rules! dispatch_commands {
+    ($this:expr, $req:expr) => {{
+        for cmd in &$this.commands {
+            if let Some(req) = $req.search(cmd.name()) {
+                trace!("calling '{}' with {:?}", cmd.name(), &req);
+                return cmd.call($this, &req);
+            }
+        }
+        None
+    }};
 }
 
 pub struct Every(crossbeam_channel::Sender<()>);

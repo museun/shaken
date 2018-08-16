@@ -126,6 +126,7 @@ macro_rules! raw {
 mod tests {
     use super::*;
     use crate::irc::Message;
+    use crate::testing::*;
 
     fn make_test_message() -> Message {
         Message::parse(":testuser!~user@localhost PRIVMSG #test :foobar")
@@ -147,6 +148,8 @@ mod tests {
 
     #[test]
     fn make_reply() {
+        let _env = Environment::new();
+
         let reply = reply!("this is a {}", 42);
         assert_eq!(
             reply,
@@ -167,6 +170,8 @@ mod tests {
 
     #[test]
     fn make_say() {
+        let _env = Environment::new();
+
         let say = say!("this is a {}", 42);
         assert_eq!(
             say,
@@ -181,6 +186,8 @@ mod tests {
 
     #[test]
     fn make_action() {
+        let _env = Environment::new();
+
         let action = action!("this is a {}", 42);
         assert_eq!(
             action,

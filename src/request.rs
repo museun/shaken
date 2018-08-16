@@ -1,4 +1,4 @@
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Request<'a> {
     name: &'a str,      // head
     args: Vec<&'a str>, // tail

@@ -10,13 +10,7 @@ pub struct Builtin {
 
 impl Module for Builtin {
     fn command(&self, req: &Request) -> Option<Response> {
-        for cmd in &self.commands {
-            if let Some(req) = req.search(cmd.name()) {
-                return cmd.call(&self, &req);
-            }
-        }
-
-        None
+        dispatch_commands!(&self, &req)
     }
 
     fn event(&self, msg: &Message) -> Option<Response> {
@@ -28,18 +22,18 @@ impl Module for Builtin {
     }
 }
 
+impl Default for Builtin {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 macro_rules! maybe {
     ($e:expr) => {
         if $e {
             return reply!("the stream doesn't seem to be live");
         }
     };
-}
-
-impl Default for Builtin {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 impl Builtin {
@@ -49,7 +43,6 @@ impl Builtin {
             Command::new("!shaken", Builtin::shaken_command),
             Command::new("!viewers", Builtin::viewers_command),
             Command::new("!uptime", Builtin::uptime_command),
-            // crate::simple_command("!uptime"),  //
         ];
 
         Self {
@@ -60,8 +53,8 @@ impl Builtin {
     }
 
     fn version_command(&self, _req: &Request) -> Option<Response> {
-        let rev = option_env!("SHAKEN_GIT_REV").unwrap();
-        let branch = option_env!("SHAKEN_GIT_BRANCH").unwrap();
+        let rev = option_env!("SHAKEN_GIT_REV").expect("to get rev");
+        let branch = option_env!("SHAKEN_GIT_BRANCH").expect("to get branch");
 
         reply!(
             "https://github.com/museun/shaken ({} on '{}' branch)",
@@ -127,6 +120,7 @@ impl Builtin {
             msg.push_str(&format!(", obs says: {}", &timecode));
         }
 
+        //TODO: say! doesn't do whispers
         say!("{}", msg)
     }
 
@@ -232,9 +226,9 @@ mod tests {
 
     #[test]
     fn version_command() {
-        let builtin = &Builtin::new();
+        let builtin = Builtin::new();
         let mut env = Environment::new();
-        env.add(builtin);
+        env.add(&builtin);
 
         env.push("!version");
         env.step();
