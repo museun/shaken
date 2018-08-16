@@ -21,7 +21,7 @@ fn git_version() -> Option<(String, String)> {
         })
     }
 
-    do_git(&["rev-parse", "--short=12", "master"]).and_then(|rev| {
-        do_git(&["rev-parse", "--abbrev-ref", "master"]).and_then(|branch| Some((rev, branch)))
+    do_git(&["rev-parse", "--short=12", "dev"]).and_then(|rev| {
+        do_git(&["rev-parse", "--abbrev-ref", "dev"]).and_then(|branch| Some((rev, branch)))
     })
 }

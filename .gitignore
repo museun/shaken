@@ -9,3 +9,4 @@ web/.cache/**
 run.ps1
 *.db
 *.sql
+*.log
