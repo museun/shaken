@@ -132,8 +132,7 @@ mod tests {
         Message::parse(":testuser!~user@localhost PRIVMSG #test :foobar")
     }
 
-    fn make_test_user() -> rusqlite::Connection {
-        // db gets dropped
+    fn make_test_user() {
         let conn = database::get_connection();
         UserStore::create_user(
             &conn,
@@ -143,7 +142,6 @@ mod tests {
                 userid: 1004,
             },
         );
-        conn
     }
 
     #[test]
@@ -159,12 +157,37 @@ mod tests {
         );
 
         let msg = make_test_message();
-        let _db = make_test_user(); // so the db doesn't get dropped before build() is called
+        make_test_user();
 
         let output = reply.unwrap().build(&msg);
         assert_eq!(
             output,
             Some("PRIVMSG #test :@TestUser: this is a 42".into())
+        );
+    }
+
+    #[test]
+    fn make_whisper() {
+        let env = Environment::new();
+
+        let whisper = whisper!("this is a {}", 42);
+        assert_eq!(
+            whisper,
+            Some(Response::Whisper {
+                data: "this is a 42".into()
+            })
+        );
+
+        let mut msg = make_test_message();
+        msg.command = "WHISPER".into();
+        msg.args[0] = env.get_user_name().into();
+
+        make_test_user();
+
+        let output = whisper.unwrap().build(&msg);
+        assert_eq!(
+            output,
+            Some("PRIVMSG jtv :/w TestUser this is a 42".into()) // going to fail here
         );
     }
 
