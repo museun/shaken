@@ -62,7 +62,11 @@ impl UserStore {
             return user
                 .map_err(|e| {
                     error!("cannot get user for '{}': {}", q, e);
-                }).ok();
+                }).ok()
+                .and_then(|user| {
+                    trace!("got user: {:?}", user);
+                    Some(user)
+                });
         }
         None
     }

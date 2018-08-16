@@ -357,9 +357,6 @@ mod tests {
 
     #[test]
     fn invest_command() {
-        // to hold on to it.
-        let _conn = get_connection();
-
         let mut invest = Invest::new();
         invest.config.chance = 0.0;
 
@@ -370,7 +367,7 @@ mod tests {
         env.step();
         assert_eq!(env.pop(), Some("@test: you don't have any credits.".into()));
 
-        InvestGame::give(1000, 100);
+        InvestGame::give(env.get_user_id(), 100);
         env.push("!invest 10");
         env.step();
         assert_eq!(
@@ -409,7 +406,7 @@ mod tests {
         env.step();
         assert_eq!(env.pop(), Some("@test: you don't have any credits".into()));
 
-        InvestGame::give(1000, 100);
+        InvestGame::give(env.get_user_id(), 100);
         env.push("!give");
         env.step();
         assert_eq!(
@@ -463,7 +460,7 @@ mod tests {
         env.step();
         assert_eq!(env.pop(), Some("@test: you don't have any credits".into()));
 
-        InvestGame::give(1000, 100);
+        InvestGame::give(env.get_user_id(), 100);
 
         env.push("!check");
         env.step();

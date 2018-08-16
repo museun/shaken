@@ -22,7 +22,7 @@ impl<'a> Default for Environment<'a> {
     }
 }
 
-// don't use 42 (bot) or 1000 (you)
+/// don't use 42 (bot) or 1000 (you)
 pub fn make_test_user(conn: &Connection, name: &str, id: i64) -> User {
     let user = User {
         display: name.into(),
@@ -32,6 +32,9 @@ pub fn make_test_user(conn: &Connection, name: &str, id: i64) -> User {
     let _ = UserStore::create_user(&conn, &user);
     user
 }
+
+const USER_ID: i64 = 1000;
+const USER_NAME: &str = "test";
 
 impl<'a> Environment<'a> {
     pub fn new() -> Self {
@@ -43,9 +46,9 @@ impl<'a> Environment<'a> {
         UserStore::create_user(
             &db,
             &User {
-                display: "test".into(),
+                display: USER_NAME.into(),
                 color: RGB::from("#f0f0f0"),
-                userid: 1000,
+                userid: USER_ID,
             },
         );
         UserStore::create_user(
@@ -78,8 +81,8 @@ impl<'a> Environment<'a> {
 
     pub fn push(&self, data: &str) {
         self.conn.push(&format!(
-            "user-id={};display-name=test;color=#FFFFFF :test!user@irc.test PRIVMSG #test :{}",
-            1000, data
+            "user-id={};display-name={};color=#FFFFFF :{}!user@irc.test PRIVMSG #test :{}",
+            USER_ID, USER_NAME, USER_NAME, data
         ))
     }
 
@@ -93,9 +96,18 @@ impl<'a> Environment<'a> {
 
     pub fn pop(&self) -> Option<String> {
         let mut data = self.conn.pop()?;
+        // TODO make this use USER_NAME
         data.insert_str(0, ":test!user@irc.test ");
         let msg = Message::parse(&data);
         Some(msg.data)
+    }
+
+    pub fn get_user_id(&self) -> i64 {
+        USER_ID
+    }
+
+    pub fn get_user_name(&self) -> &str {
+        USER_NAME
     }
 
     pub fn drain(&self) {

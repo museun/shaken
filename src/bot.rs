@@ -121,7 +121,7 @@ impl<'a> Bot<'a> {
         };
 
         let user = match &msg.command[..] {
-            "PRIVMSG"|"WHISPER" => Some(User {
+            "PRIVMSG" | "WHISPER" => Some(User {
                 display: expect!(msg.tags.get_display()).to_string(),
                 color: expect!(msg.tags.get_color()),
                 userid: expect!(msg.tags.get_userid()),

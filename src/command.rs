@@ -25,6 +25,7 @@ where
     }
 
     pub fn call(&self, recv: &T, req: &Request) -> Option<Response> {
+        trace!("calling");
         (self.func)(recv, req)
     }
 }
