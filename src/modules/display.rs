@@ -72,21 +72,21 @@ impl Display {
             _ => {}
         };
 
-        if let Some(out) = resp.build(&msg) {
-            let conn = crate::database::get_connection();
-            if let Some(user) = UserStore::get_bot(&conn, &self.name) {
+        let conn = crate::database::get_connection();
+        if let Some(user) = UserStore::get_bot(&conn, &self.name) {
+            for out in resp.build(Some(&msg)) {
                 let msg = IrcMessage::parse(&out);
-                println!("<{}> {}", user.color.format(&user.display), &msg.data);
-                self.push_message(user, &msg);
+                println!("<{}> {}", &user.color.format(&user.display), &msg.data);
+                self.push_message(&user, &msg);
             }
         }
     }
 
     fn color_command(&self, req: &Request) -> Option<Response> {
         let id = req.sender();
-        let part = req.args().get(0)?;
+        let part = req.args_iter().next()?;
 
-        let color = RGB::from(*part);
+        let color = RGB::from(part);
         if color.is_dark() {
             return reply!("don't use that color");
         }
@@ -104,17 +104,17 @@ impl Display {
             println!("<{}> {}", user.color.format(&user.display), &msg.data);
         }
 
-        self.push_message(user, &msg);
+        self.push_message(&user, &msg);
         None
     }
 
-    fn push_message(&self, user: User, msg: &IrcMessage) {
+    fn push_message(&self, user: &User, msg: &IrcMessage) {
         let ts = crate::util::get_timestamp();
         let display = Message {
             userid: user.userid.to_string(),
             timestamp: ts as usize,
-            color: user.color,
-            display: user.display,
+            color: user.color.clone(),
+            display: user.display.clone(),
             data: msg.data.clone(),
             kappas: msg.tags.get_kappas().or_else(|| Some(vec![])).unwrap(),
         };

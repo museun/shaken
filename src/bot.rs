@@ -1,6 +1,10 @@
 use crate::irc::{Conn, Message, Prefix};
 use crate::*;
 
+use crossbeam_channel as channel;
+use std::thread;
+use std::time::{Duration, Instant};
+
 pub struct Bot<'a> {
     conn: Conn,
     modules: Vec<&'a dyn Module>,
@@ -57,7 +61,20 @@ impl<'a> Bot<'a> {
 
     pub fn run(&self) {
         trace!("starting run loop");
-        while let Some(_) = self.step() {}
+
+        let (tx, rx) = channel::bounded(1);
+        let tx = tx.clone();
+        thread::spawn(move || {
+            let after = channel::after(Duration::from_millis(1000));
+            for dt in after {
+                tx.send(dt);
+            }
+        });
+
+        while let Some(_) = {
+            let rx = rx.clone();
+            self.step(&rx)
+        } {}
         trace!("ending the run loop");
     }
 
@@ -68,7 +85,8 @@ impl<'a> Bot<'a> {
             "PRIVMSG" | "WHISPER" => {
                 // sanity check
                 if let Some(Prefix::User { .. }) = msg.prefix {
-                    Request::try_parse(id, &msg.data)
+                    // HACK: this is ugly
+                    Request::try_parse(msg.target(), id, &msg.data)
                 } else {
                     None
                 }
@@ -77,39 +95,66 @@ impl<'a> Bot<'a> {
         }
     }
 
-    pub fn step(&self) -> Option<()> {
-        let msg = Message::parse(self.conn.read()?.as_ref());
-        let req = Self::try_make_request(&msg);
+    pub fn step(&self, tick: &channel::Receiver<Instant>) -> Option<()> {
+        let ty = select! {
+            recv(tick, dt) => {
+                if let Some(dt) = dt {
+                    ReadType::Tick(dt)
+                } else {
+                    return None;
+                }
+            }
+            default => {
+                ReadType::Message(self.conn.read()?)
+            }
+        };
 
         let mut out = vec![];
         trace!("dispatching to modules");
-        for module in &self.modules {
-            match &msg.command[..] {
-                "PRIVMSG" | "WHISPER" => {
-                    // try commands first
-                    if let Some(req) = &req {
-                        out.push(module.command(req))
+        let ctx = match ty {
+            ReadType::Message(data) => {
+                let msg = Message::parse(&data);
+                let req = Self::try_make_request(&msg);
+
+                for module in &self.modules {
+                    match &msg.command[..] {
+                        "PRIVMSG" | "WHISPER" => {
+                            // try commands first
+                            if let Some(req) = &req {
+                                out.push(module.command(req))
+                            }
+                            // then passives
+                            out.push(module.passive(&msg));
+                        }
+                        // other message types go to the event handler
+                        _ => out.push(module.event(&msg)),
                     }
-                    // then passives
-                    out.push(module.passive(&msg));
                 }
-                // other message types go to the event handler
-                _ => out.push(module.event(&msg)),
+
+                Some(msg.clone()) // whatever
             }
-        }
+            ReadType::Tick(dt) => {
+                for module in &self.modules {
+                    out.push(module.tick(dt))
+                }
+                None
+            }
+        };
         trace!("done dispatching to modules");
 
         trace!("collecting to send");
-        out.into_iter()
-            .filter_map(|r| {
-                r.and_then(|r| {
-                    (self.inspect)(&msg, &r);
-                    r.build(&msg)
-                })
-            }).inspect(|s| trace!("writing response: {}", s))
-            .for_each(|m| self.send(&m));
-        trace!("done sending");
+        for resp in out.into_iter().filter_map(|s| s) {
+            let ctx = ctx.as_ref();
+            if ctx.is_some() {
+                (self.inspect)(ctx.unwrap(), &resp);
+            }
 
+            resp.build(ctx)
+                .into_iter()
+                .inspect(|s| trace!("writing response: {}", s))
+                .for_each(|m| self.send(&m));
+        }
+        trace!("done sending");
         Some(())
     }
 
@@ -141,4 +186,9 @@ impl<'a> Bot<'a> {
         trace!("added user {:?}: {}", user, id);
         id
     }
+}
+
+enum ReadType {
+    Tick(Instant),
+    Message(String),
 }

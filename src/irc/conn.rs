@@ -160,7 +160,7 @@ impl TestConn {
 
     // reads from the write queue (most recent)
     pub fn pop(&self) -> Option<String> {
-        let s = self.write.borrow_mut().pop_back();
+        let s = self.write.borrow_mut().pop_front();
         debug!("pop: {:?}", s);
         s
     }
@@ -215,7 +215,7 @@ mod tests {
         assert_eq!(conn.read_len(), 0);
         assert_eq!(conn.write_len(), 4);
 
-        for s in list.iter().rev() {
+        for s in list.iter() {
             assert_eq!(conn.pop(), Some(s.to_string()));
         }
     }

@@ -38,16 +38,14 @@ macro_rules! maybe {
 
 impl Builtin {
     pub fn new() -> Self {
-        let commands = vec![
-            Command::new("!version", Builtin::version_command),
-            Command::new("!shaken", Builtin::shaken_command),
-            Command::new("!viewers", Builtin::viewers_command),
-            Command::new("!uptime", Builtin::uptime_command),
-        ];
-
         Self {
             twitch: TwitchClient::new(),
-            commands,
+            commands: command_list!(
+                ("!version", Builtin::version_command),
+                ("!shaken", Builtin::shaken_command),
+                ("!viewers", Builtin::viewers_command),
+                ("!uptime", Builtin::uptime_command),
+            ),
             channel: Config::load().twitch.channel.to_string(),
         }
     }

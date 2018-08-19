@@ -1,25 +1,15 @@
 use crate::irc::{Message, TestConn};
 use crate::*;
 
+use crossbeam_channel as channel;
 use rusqlite::Connection;
 use std::rc::Rc;
+use std::time::Instant;
 
 pub fn init_logger() {
     let _ = env_logger::Builder::from_default_env()
         .default_format_timestamp(false)
         .try_init();
-}
-
-pub struct Environment<'a> {
-    conn: Rc<TestConn>,
-    bot: Bot<'a>,
-    db: Connection,
-}
-
-impl<'a> Default for Environment<'a> {
-    fn default() -> Self {
-        Self::new()
-    }
 }
 
 /// don't use 42 (bot) or 1000 (you)
@@ -36,11 +26,25 @@ pub fn make_test_user(conn: &Connection, name: &str, id: i64) -> User {
 const USER_ID: i64 = 1000;
 const USER_NAME: &str = "test";
 
+pub struct Environment<'a> {
+    conn: Rc<TestConn>,
+    bot: Bot<'a>,
+    db: Connection,
+    tx: channel::Sender<Instant>,
+    rx: channel::Receiver<Instant>,
+}
+
+impl<'a> Default for Environment<'a> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<'a> Environment<'a> {
     pub fn new() -> Self {
         let conn = TestConn::new();
-
         use crate::{color::RGB, user::User, user::UserStore};
+
         // db gets dropped
         let db = crate::database::get_connection();
         UserStore::create_user(
@@ -51,6 +55,7 @@ impl<'a> Environment<'a> {
                 userid: USER_ID,
             },
         );
+
         UserStore::create_user(
             &db,
             &User {
@@ -60,10 +65,14 @@ impl<'a> Environment<'a> {
             },
         );
 
+        let (tx, rx) = channel::bounded(16);
+
         Self {
             conn: Rc::clone(&conn),
             bot: Bot::new(conn),
             db,
+            tx,
+            rx,
         }
     }
 
@@ -76,13 +85,41 @@ impl<'a> Environment<'a> {
     }
 
     pub fn step(&self) {
-        let _ = self.bot.step();
+        let _ = self.bot.step(&self.rx.clone());
+    }
+
+    pub fn tick(&self) {
+        self.tx.send(Instant::now());
+        let _ = self.bot.step(&self.rx.clone());
     }
 
     pub fn push(&self, data: &str) {
         self.conn.push(&format!(
             "user-id={};display-name={};color=#FFFFFF :{}!user@irc.test PRIVMSG #test :{}",
             USER_ID, USER_NAME, USER_NAME, data
+        ))
+    }
+
+    pub fn push_user(&self, data: &str, user: (&str, i64)) {
+        UserStore::create_user(
+            &self.db,
+            &User {
+                display: user.0.into(),
+                color: crate::color::RGB::from("#f0f0f0"),
+                userid: user.1,
+            },
+        );
+
+        self.conn.push(&format!(
+            "user-id={};display-name={};color=#FFFFFF :{}!user@irc.test PRIVMSG #test :{}",
+            user.1, user.0, user.0, data
+        ))
+    }
+
+    pub fn push_owner(&self, data: &str) {
+        self.conn.push(&format!(
+            "user-id={};display-name={};color=#FFFFFF :{}!user@irc.test PRIVMSG #test :{}",
+            23196011, USER_NAME, USER_NAME, data
         ))
     }
 

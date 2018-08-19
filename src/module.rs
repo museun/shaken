@@ -7,7 +7,7 @@ use crate::irc::Message;
 use crate::*;
 
 pub trait Module {
-    fn command(&self, req: &Request) -> Option<Response> {
+    fn command(&self, _req: &Request) -> Option<Response> {
         None
     }
 
@@ -16,6 +16,10 @@ pub trait Module {
     }
 
     fn event(&self, _msg: &Message) -> Option<Response> {
+        None
+    }
+
+    fn tick(&self, _dt: Instant) -> Option<Response> {
         None
     }
 }
@@ -30,6 +34,22 @@ macro_rules! dispatch_commands {
             }
         }
         None
+    }};
+}
+
+#[macro_export]
+macro_rules! require_owner {
+    ($req:expr) => {{
+        if !$req.is_from_owner() {
+            return None;
+        };
+        $req
+    }};
+    ($req:expr, $reason:expr) => {{
+        if !$req.is_from_owner() {
+            return reply!($reason);
+        };
+        $req
     }};
 }
 
@@ -68,6 +88,7 @@ impl Drop for Every {
     }
 }
 
+// TODO this should be using $crate instead of the FQN
 #[macro_export]
 macro_rules! every {
     ($func:expr) => {

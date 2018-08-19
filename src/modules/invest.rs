@@ -10,7 +10,6 @@ use parking_lot::Mutex;
 use crate::*;
 use crate::{config, database::get_connection, irc::Message, twitch::TwitchClient, util::*};
 
-// fuck off clippy
 impl Default for Invest {
     fn default() -> Self {
         Self::new()
@@ -27,13 +26,7 @@ pub struct Invest {
 
 impl Module for Invest {
     fn command(&self, req: &Request) -> Option<Response> {
-        for cmd in &self.commands {
-            if let Some(req) = req.search(cmd.name()) {
-                return cmd.call(&self, &req);
-            }
-        }
-
-        None
+        dispatch_commands!(&self, &req)
     }
 
     fn passive(&self, msg: &Message) -> Option<Response> {
@@ -47,15 +40,6 @@ impl Module for Invest {
 
 impl Invest {
     pub fn new() -> Self {
-        let commands = vec![
-            Command::new("!invest", Self::invest_command), //
-            Command::new("!give", Self::give_command),     //
-            Command::new("!check", Self::check_command),   //
-            Command::new("!top5", Self::top5_command),     //
-            Command::new("!top", Self::top5_command),      // defaults to 5
-            Command::new("!stats", Self::stats_command),   //
-        ];
-
         InvestGame::ensure_table(&get_connection());
 
         let (_, every) = every!(
@@ -69,7 +53,14 @@ impl Invest {
             config: config.invest.clone(),
             twitch: TwitchClient::new(),
             limit: Mutex::new(HashMap::new()),
-            commands,
+            commands: command_list!(
+                ("!invest", Self::invest_command),
+                ("!give", Self::give_command),
+                ("!check", Self::check_command),
+                ("!top5", Self::top5_command),
+                ("!top", Self::top5_command),
+                ("!stats", Self::stats_command),
+            ),
             every, // store this so the update loop stays alive
         }
     }
@@ -92,7 +83,7 @@ impl Invest {
             }
             None => return reply!("you don't have any credits."),
         };
-        let num = match Self::get_credits_from_args(user.current, req.args()) {
+        let num = match Self::get_credits_from_args(user.current, req.args_iter()) {
             Some(num) if num == 0 => return reply!("zero what?"),
             Some(num) => num,
             None => return reply!("thats not a number I understand"),
@@ -136,8 +127,9 @@ impl Invest {
             return reply!("you don't have any credits");
         }
 
-        let (mut target, args) = match req.args().get(0) {
-            Some(target) => (*target, &req.args()[1..]),
+        let mut args = req.args_iter();
+        let mut target = match args.next() {
+            Some(target) => target,
             None => {
                 return reply!("who do you want to give credits to?");
             }
@@ -164,7 +156,7 @@ impl Invest {
             }
         };
 
-        let num = match Self::get_credits_from_args(user.current, &args) {
+        let num = match Self::get_credits_from_args(user.current, args) {
             Some(num) if num == 0 => return reply!("zero what?"),
             Some(num) => num,
             None => return reply!("thats not a number I understand"),
@@ -196,8 +188,7 @@ impl Invest {
 
     fn top5_command(&self, req: &Request) -> Option<Response> {
         let mut n = req
-            .args()
-            .iter()
+            .args_iter()
             .next()
             .and_then(|s| s.parse::<u16>().ok())
             .or_else(|| Some(5))
@@ -260,8 +251,11 @@ impl Invest {
         None
     }
 
-    fn get_credits_from_args(credits: Credit, parts: &[&str]) -> Option<Credit> {
-        let data = parts.iter().next()?.trim();
+    fn get_credits_from_args<'a>(
+        credits: Credit,
+        mut parts: impl Iterator<Item = &'a str>,
+    ) -> Option<Credit> {
+        let data = parts.next()?.trim();
         Some(match parse_number_or_context(&data)? {
             NumType::Num(num) => num,
             NumType::All => credits,

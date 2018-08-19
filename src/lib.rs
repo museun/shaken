@@ -1,5 +1,10 @@
 #![feature(rust_2018_preview)]
-#![allow(dead_code, unused_variables)] // fuck off clippy
+#![allow(
+    unknown_lints,
+    dead_code,
+    unused_variables,
+    unreadable_literal
+)] // fuck off clippy
 
 #[macro_use]
 extern crate log;
@@ -41,6 +46,7 @@ pub use crate::bot::*;
 
 pub mod color;
 
+#[macro_use]
 pub mod command;
 pub use crate::command::*;
 

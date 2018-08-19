@@ -1,5 +1,5 @@
 use std::fs;
-use std::io::{ErrorKind, Write};
+use std::io::Write;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
@@ -14,7 +14,7 @@ pub struct Twitch {
     pub address: String,
     pub port: u32,
     pub name: String,
-    pub owners: Vec<String>,
+    pub owners: Vec<i64>,
     pub channel: String,
 }
 
@@ -48,7 +48,7 @@ impl Default for Config {
                 address: "irc.chat.twitch.tv".into(),
                 port: 6667,
                 name: "shaken_bot".into(),
-                owners: vec!["23196011".into()],
+                owners: vec![23196011],
                 channel: "museun".into(), // twitch channel, not irc channel
             },
             shakespeare: Shakespeare {
@@ -72,7 +72,10 @@ impl Default for Config {
 
 impl Config {
     // TODO: make this a get() and retrieve from a cache
+    #[cfg(not(test))]
     pub fn load() -> Self {
+        use std::io::ErrorKind;
+
         let data = fs::read_to_string(CONFIG_FILE)
             .map_err(|e| {
                 match e.kind() {
@@ -93,6 +96,12 @@ impl Config {
                 error!("unable to parse config: {}", e);
                 ::std::process::exit(1);
             }).unwrap()
+    }
+
+    #[cfg(test)]
+    pub fn load() -> Self {
+        // TODO make this configurable
+        Config::default()
     }
 
     fn save(&self) {

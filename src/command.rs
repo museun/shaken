@@ -29,3 +29,16 @@ where
         (self.func)(recv, req)
     }
 }
+
+#[macro_export]
+macro_rules! command_list {
+    ($(($name:expr,$cmd:expr)),* $(,)*) => {{
+        let mut list = Vec::new();
+        $(
+            list.push($crate::Command::new($name, $cmd));
+        )*
+        // TODO: impl ord on commands
+        list.sort_unstable_by(|a,b| b.name().len().cmp(&a.name().len()));
+        list
+    }};
+}
