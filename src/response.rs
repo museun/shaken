@@ -1,5 +1,7 @@
-use crate::irc::{Message, Prefix};
-use crate::*;
+use crate::{
+    irc::{Message, Prefix},
+    *,
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Response {
@@ -162,8 +164,7 @@ macro_rules! privmsg {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::irc::Message;
-    use crate::testing::*;
+    use crate::{irc::Message, testing::*};
 
     fn make_test_message() -> Message {
         Message::parse(":testuser!~user@localhost PRIVMSG #test :foobar")

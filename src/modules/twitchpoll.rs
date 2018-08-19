@@ -1,9 +1,11 @@
 use crate::*;
 use parking_lot::Mutex;
-use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::time::{Duration, Instant};
-use std::{fmt, str};
+use std::{
+    collections::HashSet,
+    fmt, str,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
+    time::{Duration, Instant},
+};
 
 struct TwitchPoll {
     poll: Mutex<Option<Poll>>,
@@ -14,13 +16,9 @@ struct TwitchPoll {
 }
 
 impl Module for TwitchPoll {
-    fn command(&self, req: &Request) -> Option<Response> {
-        dispatch_commands!(&self, &req)
-    }
+    fn command(&self, req: &Request) -> Option<Response> { dispatch_commands!(&self, &req) }
 
-    fn tick(&self, dt: Instant) -> Option<Response> {
-        self.handle_tick(dt)
-    }
+    fn tick(&self, dt: Instant) -> Option<Response> { self.handle_tick(dt) }
 }
 
 impl TwitchPoll {

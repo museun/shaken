@@ -1,7 +1,6 @@
 use curl::easy::Easy;
 
-use std::fmt::Write;
-use std::time::Duration;
+use std::{fmt::Write, time::Duration};
 
 pub trait CommaSeparated {
     fn commas(&self) -> String;

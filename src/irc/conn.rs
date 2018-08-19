@@ -1,9 +1,12 @@
-use std::cell::RefCell;
-use std::collections::VecDeque;
-use std::io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines};
-use std::net::{self, TcpStream, ToSocketAddrs};
-use std::rc::Rc;
-use std::{fmt, str};
+use std::{
+    cell::RefCell,
+    collections::VecDeque,
+    fmt,
+    io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines},
+    net::{self, TcpStream, ToSocketAddrs},
+    rc::Rc,
+    str,
+};
 
 pub enum ConnError {
     InvalidAddress(net::AddrParseError),
@@ -41,15 +44,11 @@ impl Conn {
 }
 
 impl From<TcpConn> for Conn {
-    fn from(conn: TcpConn) -> Self {
-        Conn::TcpConn(conn)
-    }
+    fn from(conn: TcpConn) -> Self { Conn::TcpConn(conn) }
 }
 
 impl From<Rc<TestConn>> for Conn {
-    fn from(conn: Rc<TestConn>) -> Self {
-        Conn::TestConn(Rc::clone(&conn))
-    }
+    fn from(conn: Rc<TestConn>) -> Self { Conn::TestConn(Rc::clone(&conn)) }
 }
 
 // REFACTOR: this could be parameterized for a Cursor to allow mocking
@@ -143,9 +142,7 @@ pub struct TestConn {
 }
 
 impl TestConn {
-    pub fn new() -> Rc<Self> {
-        Rc::new(Self::default())
-    }
+    pub fn new() -> Rc<Self> { Rc::new(Self::default()) }
 
     pub fn read(&self) -> Option<String> {
         let s = self.read.borrow_mut().pop_front();
@@ -171,13 +168,9 @@ impl TestConn {
         debug!("push: {:?}", data);
     }
 
-    pub fn read_len(&self) -> usize {
-        self.read.borrow().len()
-    }
+    pub fn read_len(&self) -> usize { self.read.borrow().len() }
 
-    pub fn write_len(&self) -> usize {
-        self.write.borrow().len()
-    }
+    pub fn write_len(&self) -> usize { self.write.borrow().len() }
 }
 
 #[cfg(test)]

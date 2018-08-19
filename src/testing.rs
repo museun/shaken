@@ -1,10 +1,11 @@
-use crate::irc::{Message, TestConn};
-use crate::*;
+use crate::{
+    irc::{Message, TestConn},
+    *,
+};
 
 use crossbeam_channel as channel;
 use rusqlite::Connection;
-use std::rc::Rc;
-use std::time::Instant;
+use std::{rc::Rc, time::Instant};
 
 pub fn init_logger() {
     let _ = env_logger::Builder::from_default_env()
@@ -35,15 +36,16 @@ pub struct Environment<'a> {
 }
 
 impl<'a> Default for Environment<'a> {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 impl<'a> Environment<'a> {
     pub fn new() -> Self {
         let conn = TestConn::new();
-        use crate::{color::RGB, user::User, user::UserStore};
+        use crate::{
+            color::RGB,
+            user::{User, UserStore},
+        };
 
         // db gets dropped
         let db = crate::database::get_connection();
@@ -76,17 +78,11 @@ impl<'a> Environment<'a> {
         }
     }
 
-    pub fn get_db_conn(&self) -> &Connection {
-        &self.db
-    }
+    pub fn get_db_conn(&self) -> &Connection { &self.db }
 
-    pub fn add(&mut self, m: &'a dyn Module) {
-        self.bot.add(m)
-    }
+    pub fn add(&mut self, m: &'a dyn Module) { self.bot.add(m) }
 
-    pub fn step(&self) {
-        let _ = self.bot.step(&self.rx.clone());
-    }
+    pub fn step(&self) { let _ = self.bot.step(&self.rx.clone()); }
 
     pub fn tick(&self) {
         self.tx.send(Instant::now());
@@ -123,13 +119,9 @@ impl<'a> Environment<'a> {
         ))
     }
 
-    pub fn push_raw(&self, data: &str) {
-        self.conn.push(data)
-    }
+    pub fn push_raw(&self, data: &str) { self.conn.push(data) }
 
-    pub fn pop_raw(&self) -> Option<String> {
-        self.conn.pop()
-    }
+    pub fn pop_raw(&self) -> Option<String> { self.conn.pop() }
 
     pub fn pop(&self) -> Option<String> {
         let mut data = self.conn.pop()?;
@@ -139,17 +131,11 @@ impl<'a> Environment<'a> {
         Some(msg.data)
     }
 
-    pub fn get_user_id(&self) -> i64 {
-        USER_ID
-    }
+    pub fn get_user_id(&self) -> i64 { USER_ID }
 
-    pub fn get_user_name(&self) -> &str {
-        USER_NAME
-    }
+    pub fn get_user_name(&self) -> &str { USER_NAME }
 
-    pub fn drain(&self) {
-        while let Some(_) = self.pop() {}
-    }
+    pub fn drain(&self) { while let Some(_) = self.pop() {} }
 
     pub fn drain_and_log(&self) {
         while let Some(resp) = self.pop() {

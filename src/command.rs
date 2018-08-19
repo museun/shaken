@@ -20,9 +20,7 @@ where
         }
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
+    pub fn name(&self) -> &str { &self.name }
 
     pub fn call(&self, recv: &T, req: &Request) -> Option<Response> {
         trace!("calling");

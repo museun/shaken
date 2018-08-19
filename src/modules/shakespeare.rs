@@ -1,9 +1,7 @@
 use rand::prelude::*;
-use std::cell::RefCell;
-use std::time; // this should be chrono time
+use std::{cell::RefCell, time}; // this should be chrono time
 
-use crate::irc::Message;
-use crate::*;
+use crate::{irc::Message, *};
 
 pub struct Shakespeare(RefCell<Inner>);
 
@@ -30,9 +28,7 @@ impl Module for Shakespeare {
 }
 
 impl Default for Shakespeare {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 impl Shakespeare {

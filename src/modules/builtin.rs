@@ -9,9 +9,7 @@ pub struct Builtin {
 }
 
 impl Module for Builtin {
-    fn command(&self, req: &Request) -> Option<Response> {
-        dispatch_commands!(&self, &req)
-    }
+    fn command(&self, req: &Request) -> Option<Response> { dispatch_commands!(&self, &req) }
 
     fn event(&self, msg: &Message) -> Option<Response> {
         match msg.command() {
@@ -23,9 +21,7 @@ impl Module for Builtin {
 }
 
 impl Default for Builtin {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 macro_rules! maybe {
@@ -102,7 +98,7 @@ impl Builtin {
 
         let mut msg = format!("uptime from twitch: {}", dur.as_readable_time());
         if let Some(timecode) = timecode {
-            //01:40:05.671
+            // 01:40:05.671
             let mut map = [("hours", 0), ("minutes", 0), ("seconds", 0)];
 
             // trim off the .nnn
@@ -118,7 +114,7 @@ impl Builtin {
             msg.push_str(&format!(", obs says: {}", &timecode));
         }
 
-        //TODO: say! doesn't do whispers
+        // TODO: say! doesn't do whispers
         say!("{}", msg)
     }
 
@@ -131,7 +127,8 @@ impl Builtin {
 
             let (mut socket, _r) = conn.unwrap();
 
-            // this should really be done by serde, but we're only going to send 1 message for now
+            // this should really be done by serde, but we're only going to send 1 message
+            // for now
             let msg = r#"{"request-type":"GetStreamingStatus", "message-id":"0"}"#.to_string();
             socket
                 .write_message(tungstenite::Message::Text(msg))

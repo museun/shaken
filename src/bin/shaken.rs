@@ -3,12 +3,10 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 
-use std::thread;
-use std::time;
+use std::{thread, time};
 
 extern crate shaken;
-use shaken::modules::*;
-use shaken::*;
+use shaken::{modules::*, *};
 
 fn main() {
     env_logger::Builder::from_default_env()
@@ -34,7 +32,7 @@ impl Shaken {
             &builtin,     //
             &shakespeare, //
             &display,     //
-            &invest,
+            &invest,      //
         ];
 
         let mut sleep = 0;

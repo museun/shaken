@@ -1,9 +1,13 @@
-use crate::irc::{Conn, Message, Prefix};
-use crate::*;
+use crate::{
+    irc::{Conn, Message, Prefix},
+    *,
+};
 
 use crossbeam_channel as channel;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::{
+    thread,
+    time::{Duration, Instant},
+};
 
 pub struct Bot<'a> {
     conn: Conn,
@@ -26,9 +30,7 @@ impl<'a> Bot<'a> {
         }
     }
 
-    pub fn add(&mut self, m: &'a dyn Module) {
-        self.modules.push(m)
-    }
+    pub fn add(&mut self, m: &'a dyn Module) { self.modules.push(m) }
 
     pub fn set_inspect<F>(&mut self, f: F)
     where
@@ -55,9 +57,7 @@ impl<'a> Bot<'a> {
         trace!("registered");
     }
 
-    pub fn send(&self, data: &str) {
-        self.conn.write(data)
-    }
+    pub fn send(&self, data: &str) { self.conn.write(data) }
 
     pub fn run(&self) {
         trace!("starting run loop");

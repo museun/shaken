@@ -1,19 +1,18 @@
 use rand::prelude::*;
 use rusqlite::Connection;
 
-use std::collections::HashMap;
-use std::str;
-use std::time::{Duration, Instant};
+use std::{
+    collections::HashMap,
+    str,
+    time::{Duration, Instant},
+};
 
 use parking_lot::Mutex;
 
-use crate::*;
-use crate::{config, database::get_connection, irc::Message, twitch::TwitchClient, util::*};
+use crate::{config, database::get_connection, irc::Message, twitch::TwitchClient, util::*, *};
 
 impl Default for Invest {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
 pub struct Invest {
@@ -25,9 +24,7 @@ pub struct Invest {
 }
 
 impl Module for Invest {
-    fn command(&self, req: &Request) -> Option<Response> {
-        dispatch_commands!(&self, &req)
-    }
+    fn command(&self, req: &Request) -> Option<Response> { dispatch_commands!(&self, &req) }
 
     fn passive(&self, msg: &Message) -> Option<Response> {
         // for now
@@ -220,7 +217,9 @@ impl Invest {
         let id = req.sender();
         let (user, total) = InvestGame::stats_for(id);
 
-        reply!("you've reached a max of {} credits, out of {} total credits with {} successes and {} failures. and I've 'collected' {} credits from all of the failures.",
+        reply!(
+            "you've reached a max of {} credits, out of {} total credits with {} successes and {} \
+             failures. and I've 'collected' {} credits from all of the failures.",
             user.max.commas(),
             user.total.commas(),
             user.invest.0.commas(),
@@ -264,9 +263,7 @@ impl Invest {
         })
     }
 
-    fn rate_limit(&self, id: i64) {
-        self.limit.lock().insert(id, Instant::now());
-    }
+    fn rate_limit(&self, id: i64) { self.limit.lock().insert(id, Instant::now()); }
 
     fn check_rate_limit(&self, id: i64) -> bool {
         if let Some(t) = self.limit.lock().get(&id) {
@@ -470,8 +467,7 @@ mod tests {
         let mut env = Environment::new();
         env.add(&invest);
 
-        use rand::distributions::Alphanumeric;
-        use rand::{thread_rng, Rng};
+        use rand::{distributions::Alphanumeric, thread_rng, Rng};
 
         for n in 1001..1012 {
             let name = thread_rng()

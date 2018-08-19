@@ -15,8 +15,7 @@ pub fn get_connection() -> Connection {
 
 #[cfg(test)]
 pub fn get_connection() -> Connection {
-    use rand::distributions::Alphanumeric;
-    use rand::prelude::*;
+    use rand::{distributions::Alphanumeric, prelude::*};
     use rusqlite::OpenFlags;
 
     thread_local!(static TEST_DB_ID: String = format!(

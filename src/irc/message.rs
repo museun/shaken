@@ -1,9 +1,5 @@
+use super::{super::*, Prefix};
 use std::fmt;
-
-// TODO figure this out
-//use super::super::tags::Tags;
-use super::super::*;
-use super::Prefix;
 
 // TODO get rid of all of these string allocations
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -78,9 +74,7 @@ impl Message {
         }
     }
 
-    pub fn command(&self) -> &str {
-        &self.command
-    }
+    pub fn command(&self) -> &str { &self.command }
 }
 
 impl fmt::Display for Message {

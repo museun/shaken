@@ -3,9 +3,11 @@ use crate::{color::*, irc::Message as IrcMessage, tags::Kappa, *};
 use crossbeam_channel as channel;
 use tungstenite as ws;
 
-use std::net::{TcpListener, TcpStream};
-use std::thread;
-use std::time::Duration;
+use std::{
+    net::{TcpListener, TcpStream},
+    thread,
+    time::Duration,
+};
 
 #[derive(Debug, Clone, Serialize)]
 struct Message {
@@ -41,12 +43,11 @@ impl Module for Display {
 }
 
 impl Default for Display {
-    fn default() -> Self {
-        Self::new()
-    }
+    fn default() -> Self { Self::new() }
 }
 
-// never forget .or_else::<HashMap<String, RGB>, _>(|_: Option<()>| Ok(HashMap::new()))
+// never forget .or_else::<HashMap<String, RGB>, _>(|_: Option<()>|
+// Ok(HashMap::new()))
 impl Display {
     pub fn new() -> Self {
         let config = Config::load();
