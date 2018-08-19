@@ -393,8 +393,6 @@ mod tests {
         let mut env = Environment::new();
         env.add(&poll);
 
-        init_logger();
-
         env.push("!poll vote");
         env.step();
         assert_eq!(env.pop(), None);

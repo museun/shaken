@@ -314,8 +314,6 @@ mod tests {
 
     #[test]
     fn make_multi() {
-        init_logger();
-
         let env = Environment::new();
         make_test_user();
 
