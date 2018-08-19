@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-struct TwitchPoll {
+pub struct TwitchPoll {
     poll: Mutex<Option<Poll>>,
     start: Mutex<Option<Instant>>,
     duration: AtomicUsize,
@@ -19,6 +19,10 @@ impl Module for TwitchPoll {
     fn command(&self, req: &Request) -> Option<Response> { dispatch_commands!(&self, &req) }
 
     fn tick(&self, dt: Instant) -> Option<Response> { self.handle_tick(dt) }
+}
+
+impl Default for TwitchPoll {
+    fn default() -> Self { Self::new() }
 }
 
 impl TwitchPoll {

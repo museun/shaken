@@ -23,47 +23,40 @@ extern crate rand;
 extern crate tungstenite;
 extern crate url;
 
-// TODO remove most of these pubs
-
-pub mod database;
-
-pub mod user;
-pub use crate::user::*;
+mod user;
+crate use crate::user::*;
 
 #[macro_use]
-pub mod module;
-pub use crate::module::*;
+mod module;
+pub use crate::module::Module;
+crate use crate::module::*;
 
 #[macro_use]
-pub mod response;
-pub use crate::response::*;
+mod response;
+crate use crate::response::*;
+#[macro_use]
+mod command;
+crate use crate::command::*;
+mod request;
+crate use crate::request::*;
 
 #[macro_use]
-pub mod util;
+crate mod util;
 
-pub mod bot;
-pub use crate::bot::*;
+crate mod tags;
+crate use crate::tags::Tags;
 
-pub mod color;
-
-#[macro_use]
-pub mod command;
-pub use crate::command::*;
-
-pub mod config;
-pub use crate::config::*;
-
-pub mod irc;
-
-pub mod request;
-pub use crate::request::*;
-
-pub mod tags;
-pub use crate::tags::*;
-
-pub mod testing;
-
-pub mod twitch;
+#[cfg(test)]
+crate mod testing;
+crate mod twitch;
 
 pub mod modules;
 pub use modules::*;
+
+pub mod bot;
+pub mod database;
+pub use crate::bot::Bot;
+pub mod config;
+pub use crate::config::*;
+pub mod color;
+pub mod irc;

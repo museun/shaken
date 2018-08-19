@@ -27,12 +27,14 @@ impl Shaken {
         let shakespeare = Shakespeare::new();
         let display = Display::new();
         let invest = Invest::new();
+        let twitchpoll = TwitchPoll::new();
 
         let mods: Vec<&dyn Module> = vec![
             &builtin,     //
             &shakespeare, //
             &display,     //
             &invest,      //
+            &twitchpoll,  //
         ];
 
         let mut sleep = 0;
