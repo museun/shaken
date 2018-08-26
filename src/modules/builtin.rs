@@ -9,7 +9,9 @@ pub struct Builtin {
 }
 
 impl Module for Builtin {
-    fn command(&self, req: &Request) -> Option<Response> { dispatch_commands!(&self, &req) }
+    fn command(&self, req: &Request) -> Option<Response> {
+        dispatch_commands!(&self, &req)
+    }
 
     fn event(&self, msg: &Message) -> Option<Response> {
         match msg.command() {
@@ -21,7 +23,9 @@ impl Module for Builtin {
 }
 
 impl Default for Builtin {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 macro_rules! maybe {

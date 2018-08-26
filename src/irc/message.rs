@@ -74,7 +74,9 @@ impl Message {
         }
     }
 
-    pub fn command(&self) -> &str { &self.command }
+    pub fn command(&self) -> &str {
+        &self.command
+    }
 }
 
 impl fmt::Display for Message {

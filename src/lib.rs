@@ -34,9 +34,11 @@ crate use crate::module::*;
 #[macro_use]
 mod response;
 crate use crate::response::*;
+
 #[macro_use]
 mod command;
 crate use crate::command::*;
+
 mod request;
 crate use crate::request::*;
 
@@ -46,17 +48,25 @@ crate mod util;
 crate mod tags;
 crate use crate::tags::Tags;
 
-#[cfg(test)]
-crate mod testing;
 crate mod twitch;
 
-pub mod modules;
-pub use modules::*;
+#[cfg(test)]
+crate mod testing;
+#[cfg(test)]
+crate use crate::bot::ReadType;
 
 pub mod bot;
-pub mod database;
 pub use crate::bot::Bot;
+
+pub mod modules;
+// crate use modules;
+
+pub mod database; // does this need to be public?
+
 pub mod config;
 pub use crate::config::*;
+
 pub mod color;
-pub mod irc;
+
+mod irc;
+pub use irc::*;

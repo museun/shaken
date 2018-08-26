@@ -1,12 +1,9 @@
-use std::{
-    cell::RefCell,
-    collections::VecDeque,
-    fmt,
-    io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines},
-    net::{self, TcpStream, ToSocketAddrs},
-    rc::Rc,
-    str,
-};
+use std::collections::VecDeque;
+use std::io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines};
+use std::net::{self, TcpStream, ToSocketAddrs};
+use std::ops::{Deref, DerefMut};
+use std::time::Duration;
+use std::{fmt, str};
 
 pub enum ConnError {
     InvalidAddress(net::AddrParseError),
@@ -22,62 +19,69 @@ impl fmt::Display for ConnError {
     }
 }
 
-pub enum Conn {
-    TcpConn(TcpConn),
-    TestConn(Rc<TestConn>),
+pub trait Conn: Send + Sync {
+    fn try_read(&mut self) -> Option<Option<String>>;
+    fn read(&mut self) -> Option<String>;
+    fn write(&mut self, data: &str);
 }
 
-impl Conn {
-    pub fn read(&self) -> Option<String> {
-        match *self {
-            Conn::TcpConn(ref conn) => conn.read(),
-            Conn::TestConn(ref conn) => conn.read(),
-        }
-    }
+pub struct Connection<T> {
+    conn: Box<T>,
+}
 
-    pub fn write(&self, data: &str) {
-        match *self {
-            Conn::TcpConn(ref conn) => conn.write(data),
-            Conn::TestConn(ref conn) => conn.write(data),
-        }
+impl<T> Connection<T> {
+    pub fn new(c: T) -> Self {
+        Connection { conn: Box::new(c) }
     }
 }
 
-impl From<TcpConn> for Conn {
-    fn from(conn: TcpConn) -> Self { Conn::TcpConn(conn) }
+impl<T> Deref for Connection<T> {
+    type Target = Box<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.conn
+    }
 }
 
-impl From<Rc<TestConn>> for Conn {
-    fn from(conn: Rc<TestConn>) -> Self { Conn::TestConn(Rc::clone(&conn)) }
+impl<T> DerefMut for Connection<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.conn
+    }
 }
 
 // REFACTOR: this could be parameterized for a Cursor to allow mocking
 pub struct TcpConn {
-    reader: RefCell<Lines<BufReader<TcpStream>>>,
-    writer: RefCell<BufWriter<TcpStream>>,
+    reader: Lines<BufReader<TcpStream>>,
+    writer: BufWriter<TcpStream>,
 }
 
 impl TcpConn {
     pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, ConnError> {
         let conn = TcpStream::connect(&addr).map_err(ConnError::CannotConnect)?;
+        conn.set_read_timeout(Some(Duration::from_millis(50)))
+            .expect("to set read timeout");
+
         debug!("connected");
 
         let reader = {
             let conn = conn.try_clone().expect("to clone stream");
-            RefCell::new(BufReader::new(conn).lines())
+            BufReader::new(conn).lines()
         };
 
         let writer = {
             let conn = conn.try_clone().expect("to clone stream");
-            RefCell::new(BufWriter::new(conn))
+            BufWriter::new(conn)
         };
 
         Ok(Self { reader, writer })
     }
+}
 
-    pub fn write(&self, data: &str) {
+impl Conn for TcpConn {
+    fn write(&mut self, data: &str) {
+        let writer = &mut self.writer;
+
         // XXX: might want to rate limit here
-        let mut writer = self.writer.borrow_mut();
         for part in split(data) {
             // don't log the password
             if &part[..4] != "PASS" {
@@ -96,8 +100,30 @@ impl TcpConn {
         writer.flush().expect("to flush");
     }
 
-    pub fn read(&self) -> Option<String> {
-        let mut reader = self.reader.borrow_mut();
+    // TODO: make a Result type for this
+    fn try_read(&mut self) -> Option<Option<String>> {
+        let reader = &mut self.reader;
+
+        if let Some(line) = reader.next() {
+            match line {
+                Ok(line) => {
+                    trace!("trying to read from socket");
+                    trace!("<-- {}", &line);
+                    Some(Some(line))
+                }
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Some(None),
+                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => Some(None),
+                _ => unreachable!(),
+            }
+        } else {
+            warn!("couldn't read line");
+            None
+        }
+    }
+
+    fn read(&mut self) -> Option<String> {
+        let reader = &mut self.reader;
+
         trace!("trying to read from socket");
         if let Some(Ok(line)) = reader.next() {
             trace!("<-- {}", &line);
@@ -135,42 +161,54 @@ fn split<S: AsRef<str>>(raw: S) -> Vec<String> {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Default)]
 pub struct TestConn {
-    read: RefCell<VecDeque<String>>,
-    write: RefCell<VecDeque<String>>,
+    read: VecDeque<String>,
+    write: VecDeque<String>,
 }
 
 impl TestConn {
-    pub fn new() -> Rc<Self> { Rc::new(Self::default()) }
-
-    pub fn read(&self) -> Option<String> {
-        let s = self.read.borrow_mut().pop_front();
-        trace!("read: {:?}", s);
-        s
-    }
-
-    pub fn write(&self, data: &str) {
-        self.write.borrow_mut().push_back(data.into());
-        trace!("write: {:?}", data);
+    pub fn new() -> Self {
+        Self::default()
     }
 
     // reads from the write queue (most recent)
-    pub fn pop(&self) -> Option<String> {
-        let s = self.write.borrow_mut().pop_front();
+    pub fn pop(&mut self) -> Option<String> {
+        let s = self.write.pop_front();
         debug!("pop: {:?}", s);
         s
     }
 
     // writes to the read queue
-    pub fn push(&self, data: &str) {
-        self.read.borrow_mut().push_back(data.into());
+    pub fn push(&mut self, data: &str) {
+        self.read.push_back(data.into());
         debug!("push: {:?}", data);
     }
 
-    pub fn read_len(&self) -> usize { self.read.borrow().len() }
+    pub fn read_len(&self) -> usize {
+        self.read.len()
+    }
 
-    pub fn write_len(&self) -> usize { self.write.borrow().len() }
+    pub fn write_len(&self) -> usize {
+        self.write.len()
+    }
+}
+
+impl Conn for TestConn {
+    fn try_read(&mut self) -> Option<Option<String>> {
+        self.read().and_then(|s| Some(Some(s)))
+    }
+
+    fn read(&mut self) -> Option<String> {
+        let s = self.read.pop_front();
+        trace!("read: {:?}", s);
+        s
+    }
+
+    fn write(&mut self, data: &str) {
+        self.write.push_back(data.into());
+        trace!("write: {:?}", data);
+    }
 }
 
 #[cfg(test)]
@@ -179,7 +217,7 @@ mod tests {
 
     #[test]
     fn conn_read() {
-        let conn = TestConn::new();
+        let mut conn = TestConn::new();
         assert!(conn.read().is_none());
 
         let list = &["a", "b", "c", "d"];
@@ -197,7 +235,7 @@ mod tests {
 
     #[test]
     fn conn_write() {
-        let conn = TestConn::new();
+        let mut conn = TestConn::new();
         assert!(conn.pop().is_none());
 
         let list = &["a", "b", "c", "d"];

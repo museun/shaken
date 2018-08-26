@@ -16,13 +16,19 @@ pub struct TwitchPoll {
 }
 
 impl Module for TwitchPoll {
-    fn command(&self, req: &Request) -> Option<Response> { dispatch_commands!(&self, &req) }
+    fn command(&self, req: &Request) -> Option<Response> {
+        dispatch_commands!(&self, &req)
+    }
 
-    fn tick(&self, dt: Instant) -> Option<Response> { self.handle_tick(dt) }
+    fn tick(&self, dt: Instant) -> Option<Response> {
+        self.handle_tick(dt)
+    }
 }
 
 impl Default for TwitchPoll {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TwitchPoll {
@@ -105,6 +111,7 @@ impl TwitchPoll {
             return reply!("no poll is running");
         }
 
+        info!("stopping poll");
         self.running.store(false, Ordering::Relaxed);
         self.duration.store(0, Ordering::Relaxed);
         let _ = { self.start.lock().take() };
@@ -114,18 +121,19 @@ impl TwitchPoll {
     }
 
     fn poll_vote_command(&self, req: &Request) -> Option<Response> {
+        debug!("{:#?}", self.poll);
+        debug!("{:#?}", self.start);
+        debug!("{:#?}", self.duration);
+        debug!("{:#?}", self.running);
+
         if !self.running.load(Ordering::Relaxed) {
             debug!("poll not running");
             return None;
         }
 
-        let max = {
-            if let Some(ref poll) = *self.poll.lock() {
-                poll.choices.len()
-            } else {
-                unreachable!()
-            }
-        };
+        let poll = &mut *self.poll.lock();
+        let poll = poll.as_mut().expect("poll to be configured");
+        let max = poll.choices.len();
 
         let n = match req.args_iter().next().and_then(|a| {
             a.chars()
@@ -142,9 +150,7 @@ impl TwitchPoll {
         };
 
         trace!("attempting to vote for {}", n);
-        if let Some(ref mut poll) = *self.poll.lock() {
-            poll.vote(req.sender(), n - 1)
-        }
+        poll.vote(req.sender(), n - 1);
 
         None
     }
@@ -154,9 +160,11 @@ impl TwitchPoll {
             return None;
         }
 
-        let deadline = Duration::from_secs(self.duration.load(Ordering::Relaxed) as u64);
+        let dt = Instant::now(); // don't trust the delta
 
+        let deadline = Duration::from_secs(self.duration.load(Ordering::Relaxed) as u64);
         if let Some(start) = *self.start.lock() {
+            warn!("{:?} - {:?} < {:?}", dt, start, deadline);
             if dt - start < deadline {
                 return None;
             }
@@ -164,21 +172,28 @@ impl TwitchPoll {
 
         info!("tallying the poll");
         self.running.store(false, Ordering::Relaxed);
-        if let Some(ref mut poll) = *self.poll.lock() {
-            let target = poll.target.clone();
-            let res = poll.tally().iter().take(3).enumerate().map(|(i, opt)| {
-                privmsg!(
-                    &target,
-                    "({} votes) #{} {}",
-                    opt.count,
-                    opt.pos + 1,
-                    opt.option
-                )
-            });
-            return multi(res);
-        }
 
-        None // technically this is unreachable..
+        // clean up the mutexes
+        let mut poll = {
+            self.start.lock().take();
+
+            let poll = &mut *self.poll.lock();
+            let poll = poll.take();
+            poll.expect("poll to be running")
+        };
+
+        let target = poll.target.clone(); // this is dumb
+        let res = poll.tally().iter().take(3).enumerate().map(|(i, opt)| {
+            privmsg!(
+                &target,
+                "({} votes) #{} {}",
+                opt.count,
+                opt.pos + 1,
+                opt.option
+            )
+        });
+
+        multi(res)
     }
 
     fn parse_poll(target: &str, data: &str) -> Result<Poll, ParseError> {
@@ -401,44 +416,34 @@ mod tests {
 
         env.push_owner("!poll test poll | option a | option b");
         env.step();
-        env.drain();
 
         env.push_owner("!poll start 1");
         env.step();
-        env.drain();
 
         env.push_user("!vote 1", ("test", 1001));
         env.step();
-        env.drain();
 
         env.push_user("!vote 2", ("test", 1002));
         env.step();
-        env.drain();
 
         env.push_user("!vote 3", ("test", 1003));
         env.step();
-        env.drain();
 
         env.push_user("!vote 1", ("test", 1003));
         env.step();
-        env.drain();
 
         env.push_user("!vote 2", ("test", 1002));
         env.step();
-        env.drain();
 
         env.push("!vote 1");
         env.step();
-        env.drain();
 
         env.push_owner("!vote 1");
         env.step();
+
         env.drain();
 
-        env.tick();
-        env.drain();
-
-        ::std::thread::sleep(::std::time::Duration::from_secs(2));
+        ::std::thread::sleep(::std::time::Duration::from_secs(1));
         env.tick();
 
         assert_eq!(env.pop(), Some("(4 votes) #1 option a".into()));

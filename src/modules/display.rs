@@ -43,7 +43,9 @@ impl Module for Display {
 }
 
 impl Default for Display {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 // never forget .or_else::<HashMap<String, RGB>, _>(|_: Option<()>|

@@ -28,7 +28,9 @@ impl Module for Shakespeare {
 }
 
 impl Default for Shakespeare {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Shakespeare {

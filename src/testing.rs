@@ -1,11 +1,9 @@
-use crate::{
-    irc::{Message, TestConn},
-    *,
-};
+use crate::irc::{Message, TestConn};
+use crate::*;
 
 use crossbeam_channel as channel;
 use rusqlite::Connection;
-use std::{rc::Rc, time::Instant};
+use std::time::Instant;
 
 pub fn init_logger() {
     let _ = env_logger::Builder::from_default_env()
@@ -28,15 +26,16 @@ const USER_ID: i64 = 1000;
 const USER_NAME: &str = "test";
 
 pub struct Environment<'a> {
-    conn: Rc<TestConn>,
-    bot: Bot<'a>,
+    bot: Bot<'a, TestConn>,
     db: Connection,
     tx: channel::Sender<Instant>,
     rx: channel::Receiver<Instant>,
 }
 
 impl<'a> Default for Environment<'a> {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<'a> Environment<'a> {
@@ -70,7 +69,6 @@ impl<'a> Environment<'a> {
         let (tx, rx) = channel::bounded(16);
 
         Self {
-            conn: Rc::clone(&conn),
             bot: Bot::new(conn),
             db,
             tx,
@@ -78,25 +76,39 @@ impl<'a> Environment<'a> {
         }
     }
 
-    pub fn get_db_conn(&self) -> &Connection { &self.db }
-
-    pub fn add(&mut self, m: &'a dyn Module) { self.bot.add(m) }
-
-    pub fn step(&self) { let _ = self.bot.step(&self.rx.clone()); }
-
-    pub fn tick(&self) {
-        self.tx.send(Instant::now());
-        let _ = self.bot.step(&self.rx.clone());
+    pub fn get_db_conn(&self) -> &Connection {
+        &self.db
     }
 
-    pub fn push(&self, data: &str) {
-        self.conn.push(&format!(
+    pub fn add(&mut self, m: &'a dyn Module) {
+        self.bot.add(m)
+    }
+
+    pub fn step(&mut self) {
+        let msg = {
+            let conn = self.bot.get_conn_mut();
+            let conn = &mut *conn.lock();
+            ReadType::Message(conn.read().unwrap())
+        };
+
+        let _ = self.bot.step(&msg);
+    }
+
+    pub fn tick(&self) {
+        let msg = ReadType::Tick(Instant::now());
+        let _ = self.bot.step(&msg);
+    }
+
+    pub fn push(&mut self, data: &str) {
+        let conn = self.bot.get_conn_mut();
+        let conn = &mut *conn.lock();
+        conn.push(&format!(
             "user-id={};display-name={};color=#FFFFFF :{}!user@irc.test PRIVMSG #test :{}",
             USER_ID, USER_NAME, USER_NAME, data
         ))
     }
 
-    pub fn push_user(&self, data: &str, user: (&str, i64)) {
+    pub fn push_user(&mut self, data: &str, user: (&str, i64)) {
         UserStore::create_user(
             &self.db,
             &User {
@@ -106,38 +118,58 @@ impl<'a> Environment<'a> {
             },
         );
 
-        self.conn.push(&format!(
+        let conn = self.bot.get_conn_mut();
+        let conn = &mut *conn.lock();
+        conn.push(&format!(
             "user-id={};display-name={};color=#FFFFFF :{}!user@irc.test PRIVMSG #test :{}",
             user.1, user.0, user.0, data
         ))
     }
 
-    pub fn push_owner(&self, data: &str) {
-        self.conn.push(&format!(
+    pub fn push_owner(&mut self, data: &str) {
+        let conn = self.bot.get_conn_mut();
+        let conn = &mut *conn.lock();
+        conn.push(&format!(
             "user-id={};display-name={};color=#FFFFFF :{}!user@irc.test PRIVMSG #test :{}",
             23196011, USER_NAME, USER_NAME, data
         ))
     }
 
-    pub fn push_raw(&self, data: &str) { self.conn.push(data) }
+    pub fn push_raw(&mut self, data: &str) {
+        let conn = self.bot.get_conn_mut();
+        let conn = &mut *conn.lock();
+        conn.push(data)
+    }
 
-    pub fn pop_raw(&self) -> Option<String> { self.conn.pop() }
+    pub fn pop_raw(&mut self) -> Option<String> {
+        let conn = self.bot.get_conn_mut();
+        let conn = &mut *conn.lock();
+        conn.pop()
+    }
 
-    pub fn pop(&self) -> Option<String> {
-        let mut data = self.conn.pop()?;
+    pub fn pop(&mut self) -> Option<String> {
+        let conn = self.bot.get_conn_mut();
+        let conn = &mut *conn.lock();
+        let mut data = conn.pop()?;
         // TODO make this use USER_NAME
         data.insert_str(0, ":test!user@irc.test ");
         let msg = Message::parse(&data);
         Some(msg.data)
     }
 
-    pub fn get_user_id(&self) -> i64 { USER_ID }
+    pub fn get_user_id(&self) -> i64 {
+        USER_ID
+    }
 
-    pub fn get_user_name(&self) -> &str { USER_NAME }
+    pub fn get_user_name(&self) -> &str {
+        USER_NAME
+    }
 
-    pub fn drain(&self) { while let Some(_) = self.pop() {} }
+    pub fn drain(&mut self) {
+        while let Some(_) = self.pop() {}
+    }
 
-    pub fn drain_and_log(&self) {
+    pub fn drain_and_log(&mut self) {
         while let Some(resp) = self.pop() {
             warn!("{:#?}", resp);
         }

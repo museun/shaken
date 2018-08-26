@@ -1,4 +1,6 @@
+use crate::modules::InvestGame;
 use crate::*;
+
 use rusqlite::Connection;
 
 #[cfg(not(test))]

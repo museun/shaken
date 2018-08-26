@@ -28,17 +28,25 @@ impl<'a> Request<'a> {
         None
     }
 
-    pub fn name(&self) -> Option<&'a str> { self.name }
+    pub fn name(&self) -> Option<&'a str> {
+        self.name
+    }
 
-    pub fn args(&self) -> &'a str { self.args }
+    pub fn args(&self) -> &'a str {
+        self.args
+    }
 
     pub fn args_iter(&self) -> impl Iterator<Item = &'a str> {
         self.args.split_whitespace().map(|s| s.trim())
     }
 
-    pub fn target(&self) -> &'a str { self.target }
+    pub fn target(&self) -> &'a str {
+        self.target
+    }
 
-    pub fn sender(&self) -> i64 { self.sender }
+    pub fn sender(&self) -> i64 {
+        self.sender
+    }
 
     pub fn is_from_owner(&self) -> bool {
         Config::load()

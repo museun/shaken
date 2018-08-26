@@ -6,7 +6,8 @@ extern crate log;
 use std::{thread, time};
 
 extern crate shaken;
-use shaken::{modules::*, *};
+use shaken::modules::{Builtin, Display, Invest, Shakespeare, TwitchPoll};
+use shaken::*;
 
 fn main() {
     env_logger::Builder::from_default_env()
@@ -45,10 +46,10 @@ impl Shaken {
             }
 
             info!("trying to connect to {}", address);
-            let mut bot = match irc::TcpConn::new(&address) {
+            let conn = match TcpConn::new(&address) {
                 Ok(conn) => {
                     sleep = 0;
-                    Bot::new(conn)
+                    conn
                 }
                 Err(err) => {
                     error!("error: {}", err);
@@ -57,6 +58,7 @@ impl Shaken {
                 }
             };
 
+            let mut bot = Bot::new(conn);
             for module in &mods {
                 bot.add(*module);
             }

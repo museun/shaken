@@ -5,7 +5,9 @@ pub struct TwitchClient {
 }
 
 impl Default for TwitchClient {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TwitchClient {

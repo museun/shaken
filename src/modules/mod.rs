@@ -1,14 +1,14 @@
-mod builtin;
+crate mod builtin;
 pub use self::builtin::*;
 
-mod shakespeare;
+crate mod shakespeare;
 pub use self::shakespeare::*;
 
-mod display;
+crate mod display;
 pub use self::display::*;
 
-mod invest;
+crate mod invest;
 pub use self::invest::*;
 
-mod twitchpoll;
+crate mod twitchpoll;
 pub use self::twitchpoll::*;

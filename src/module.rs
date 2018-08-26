@@ -5,13 +5,21 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crate::{irc::Message, *};
+use crate::*;
 
 pub trait Module {
-    fn command(&self, _req: &Request) -> Option<Response> { None }
-    fn passive(&self, _msg: &Message) -> Option<Response> { None }
-    fn event(&self, _msg: &Message) -> Option<Response> { None }
-    fn tick(&self, _dt: Instant) -> Option<Response> { None }
+    fn command(&self, _req: &Request) -> Option<Response> {
+        None
+    }
+    fn passive(&self, _msg: &Message) -> Option<Response> {
+        None
+    }
+    fn event(&self, _msg: &Message) -> Option<Response> {
+        None
+    }
+    fn tick(&self, _dt: Instant) -> Option<Response> {
+        None
+    }
 }
 
 #[macro_export]
@@ -73,7 +81,9 @@ impl Every {
 }
 
 impl Drop for Every {
-    fn drop(&mut self) { self.0.send(()) }
+    fn drop(&mut self) {
+        self.0.send(())
+    }
 }
 
 // TODO this should be using $crate instead of the FQN

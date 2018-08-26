@@ -1,36 +1,44 @@
-use crate::{
-    irc::{Conn, Message, Prefix},
-    *,
-};
+use crate::irc::{Conn, Message, Prefix};
+use crate::*;
 
 use crossbeam_channel as channel;
-use std::{
-    thread,
-    time::{Duration, Instant},
-};
+use parking_lot::Mutex;
 
-pub struct Bot<'a> {
-    conn: Conn,
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
+
+pub struct Bot<'a, T>
+where
+    T: Conn + 'static,
+{
+    conn: Arc<Mutex<Connection<T>>>,
     modules: Vec<&'a dyn Module>,
-    // TODO this might have to be a closure
     inspect: Box<Fn(&Message, &Response) + 'a>,
 }
 
-impl<'a> Bot<'a> {
+impl<'a, T> Bot<'a, T>
+where
+    T: Conn + 'static,
+{
     /// just clone the connection
-    pub fn new<C>(conn: C) -> Self
-    where
-        C: Into<Conn>,
-    {
-        let conn = conn.into();
+    pub fn new(conn: T) -> Self {
+        let conn = Connection::new(conn);
+
         Self {
-            conn,
+            conn: Arc::new(Mutex::new(conn)),
             modules: vec![],
             inspect: Box::new(|_, _| {}),
         }
     }
 
-    pub fn add(&mut self, m: &'a dyn Module) { self.modules.push(m) }
+    crate fn get_conn_mut(&mut self) -> Arc<Mutex<Connection<T>>> {
+        Arc::clone(&self.conn)
+    }
+
+    pub fn add(&mut self, m: &'a dyn Module) {
+        self.modules.push(m)
+    }
 
     pub fn set_inspect<F>(&mut self, f: F)
     where
@@ -57,24 +65,37 @@ impl<'a> Bot<'a> {
         trace!("registered");
     }
 
-    pub fn send(&self, data: &str) { self.conn.write(data) }
+    pub fn send(&self, data: &str) {
+        self.conn.lock().write(data);
+    }
 
     pub fn run(&self) {
         trace!("starting run loop");
 
-        let (tx, rx) = channel::bounded(1);
-        let tx = tx.clone();
+        let (tx, rx) = channel::bounded(10); // hmm
+        let out = tx.clone();
         thread::spawn(move || {
-            let after = channel::after(Duration::from_millis(1000));
-            for dt in after {
-                tx.send(dt);
+            for _ in channel::tick(Duration::from_millis(1000)) {
+                out.send(ReadType::Tick(Instant::now()));
             }
         });
 
-        while let Some(_) = {
-            let rx = rx.clone();
-            self.step(&rx)
-        } {}
+        let out = tx.clone();
+        let conn = Arc::clone(&self.conn);
+        thread::spawn(move || loop {
+            if let Some(ref mut conn) = conn.try_lock_for(Duration::from_millis(50)) {
+                if let Some(msg) = conn.try_read() {
+                    if let Some(msg) = msg {
+                        out.send(ReadType::Message(msg));
+                    }
+                } else {
+                    return;
+                }
+            }
+        });
+
+        let rx = rx.clone();
+        while let Some(_) = { rx.recv().and_then(|next| self.step(&next)) } {}
         trace!("ending the run loop");
     }
 
@@ -95,24 +116,15 @@ impl<'a> Bot<'a> {
         }
     }
 
-    pub fn step(&self, tick: &channel::Receiver<Instant>) -> Option<()> {
-        let ty = select! {
-            recv(tick, dt) => {
-                if let Some(dt) = dt {
-                    ReadType::Tick(dt)
-                } else {
-                    return None;
-                }
-            }
-            default => {
-                ReadType::Message(self.conn.read()?)
-            }
-        };
-
+    pub fn step(&self, next: &ReadType) -> Option<()> {
         let mut out = vec![];
-        trace!("dispatching to modules");
-        let ctx = match ty {
+        if let ReadType::Message(..) = next {
+            trace!("dispatching to modules");
+        }
+
+        let ctx = match next {
             ReadType::Message(data) => {
+                trace!("handling message");
                 let msg = Message::parse(&data);
                 let req = Self::try_make_request(&msg);
 
@@ -135,14 +147,20 @@ impl<'a> Bot<'a> {
             }
             ReadType::Tick(dt) => {
                 for module in &self.modules {
-                    out.push(module.tick(dt))
+                    out.push(module.tick(*dt))
                 }
                 None
             }
         };
-        trace!("done dispatching to modules");
 
-        trace!("collecting to send");
+        if let ReadType::Message(..) = next {
+            trace!("done dispatching to modules");
+        }
+
+        if let ReadType::Message(..) = next {
+            trace!("collecting to send");
+        }
+
         for resp in out.into_iter().filter_map(|s| s) {
             let ctx = ctx.as_ref();
             if ctx.is_some() {
@@ -154,7 +172,11 @@ impl<'a> Bot<'a> {
                 .inspect(|s| trace!("writing response: {}", s))
                 .for_each(|m| self.send(&m));
         }
-        trace!("done sending");
+
+        if let ReadType::Message(..) = next {
+            trace!("done sending");
+        }
+
         Some(())
     }
 
@@ -188,7 +210,7 @@ impl<'a> Bot<'a> {
     }
 }
 
-enum ReadType {
+pub enum ReadType {
     Tick(Instant),
     Message(String),
 }
