@@ -81,19 +81,26 @@ impl Invest {
             }
             None => return reply!("you don't have any credits."),
         };
-        let num = match Self::get_credits_from_args(user.current, req.args_iter()) {
-            Some(num) if num == 0 => return reply!("zero what?"),
-            Some(num) => num,
+        let (ty, num) = match Self::get_credits_from_args(user.current, req.args_iter()) {
+            Some((_, num)) if num == 0 => return reply!("zero what?"),
+            Some((ty, num)) => (ty, num),
             None => return reply!("thats not a number I understand"),
         };
 
         match InvestGame::invest(self.config.chance, id, num) {
-            Ok(Investment::Success { old, new }) => reply!(
-                "success! you went from {} to {} (+{})",
-                old.commas(),
-                new.commas(),
-                (new - old).commas()
-            ),
+            Ok(Investment::Success { old, new }) => match ty {
+                NumType::Random => reply!(
+                    "success! you went from {} to {} (+{})",
+                    old.commas(),
+                    new.commas(),
+                    (new - old).commas()
+                ),
+                _ => reply!(
+                    "success! you went from {} to {}",
+                    old.commas(),
+                    new.commas(),
+                ),
+            },
             Ok(Investment::Failure { old, new }) => {
                 self.rate_limit(id);
                 reply!(
@@ -154,9 +161,9 @@ impl Invest {
             }
         };
 
-        let num = match Self::get_credits_from_args(user.current, args) {
-            Some(num) if num == 0 => return reply!("zero what?"),
-            Some(num) => num,
+        let (ty, num) = match Self::get_credits_from_args(user.current, args) {
+            Some((_, num)) if num == 0 => return reply!("zero what?"),
+            Some((ty, num)) => (ty, num),
             None => return reply!("thats not a number I understand"),
         };
 
@@ -254,13 +261,20 @@ impl Invest {
     fn get_credits_from_args<'a>(
         credits: Credit,
         mut parts: impl Iterator<Item = &'a str>,
-    ) -> Option<Credit> {
+    ) -> Option<(NumType, Credit)> {
         let data = parts.next()?.trim();
         Some(match parse_number_or_context(&data)? {
-            NumType::Num(num) => num,
-            NumType::All => credits,
-            NumType::Half => credits / 2,
-            NumType::Random => thread_rng().gen_range(1, credits),
+            ty @ NumType::Num(_) => {
+                let n = match &ty {
+                    // TODO: why is this needed?
+                    NumType::Num(n) => *n,
+                    _ => unreachable!(),
+                };
+                (ty, n)
+            }
+            ty @ NumType::All => (ty, credits),
+            ty @ NumType::Half => (ty, credits / 2),
+            ty @ NumType::Random => (ty, thread_rng().gen_range(1, credits)),
         })
     }
 
