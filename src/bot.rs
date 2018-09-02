@@ -72,15 +72,27 @@ where
     pub fn run(&self) {
         trace!("starting run loop");
 
-        let (tx, rx) = channel::bounded(10); // hmm
+        let (quittx, quitrx): (channel::Sender<()>, channel::Receiver<()>) = channel::bounded(0);
+
+        let (tx, rx) = channel::bounded(10);
         let out = tx.clone();
+        let quit = quitrx.clone();
         thread::spawn(move || {
-            for _ in channel::tick(Duration::from_millis(1000)) {
-                out.send(ReadType::Tick(Instant::now()));
+            let ticker = channel::tick(Duration::from_millis(1000));
+            loop {
+                select! {
+                    recv(ticker, _) => {
+                        out.send(ReadType::Tick(Instant::now()));
+                    },
+                    recv(quit, _) => {
+                        break;
+                    }
+                }
             }
         });
 
         let out = tx.clone();
+        let quit = quittx.clone();
         let conn = Arc::clone(&self.conn);
         thread::spawn(move || loop {
             if let Some(ref mut conn) = conn.try_lock_for(Duration::from_millis(50)) {
@@ -89,6 +101,7 @@ where
                         out.send(ReadType::Message(msg));
                     }
                 } else {
+                    quit.send(());
                     return;
                 }
             }

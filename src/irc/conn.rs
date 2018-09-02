@@ -113,7 +113,10 @@ impl Conn for TcpConn {
                 }
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Some(None),
                 Err(ref e) if e.kind() == io::ErrorKind::TimedOut => Some(None),
-                _ => unreachable!(),
+                e => {
+                    warn!("unknown error: {:?}", e);
+                    None
+                }
             }
         } else {
             warn!("couldn't read line");
