@@ -1,18 +1,15 @@
-use crate::modules::InvestGame;
-use crate::*;
-
 use rusqlite::Connection;
+
+pub fn ensure_table(f: fn(&Connection)) -> Connection {
+    let conn = get_connection();
+    f(&conn);
+    conn
+}
 
 #[cfg(not(test))]
 pub fn get_connection() -> Connection {
     const DB_PATH: &str = "shaken.db";
-    let conn = Connection::open(DB_PATH).unwrap();
-
-    // TODO don't do this here
-    UserStore::ensure_table(&conn);
-    InvestGame::ensure_table(&conn);
-
-    conn
+    Connection::open(DB_PATH).unwrap()
 }
 
 #[cfg(test)]
@@ -28,16 +25,12 @@ pub fn get_connection() -> Connection {
         .collect::<String>()
     ));
 
-    let conn = TEST_DB_ID.with(|id| {
+    TEST_DB_ID.with(|id| {
         trace!("getting db conn: {}", id);
 
         Connection::open_with_flags(
             &id,
             OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE,
         ).unwrap()
-    });
-
-    UserStore::ensure_table(&conn);
-    InvestGame::ensure_table(&conn);
-    conn
+    })
 }

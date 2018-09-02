@@ -1,4 +1,4 @@
-#![feature(rust_2018_preview)]
+#![feature(rust_2018_preview, uniform_paths)]
 #![allow(
     unknown_lints,
     dead_code,
@@ -44,6 +44,8 @@ crate use crate::request::*;
 
 #[macro_use]
 crate mod util;
+#[allow(unused_imports)]
+crate use util::*;
 
 crate mod tags;
 crate use crate::tags::Tags;

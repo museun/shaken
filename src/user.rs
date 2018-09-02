@@ -10,13 +10,15 @@ pub struct User {
 
 pub struct UserStore;
 impl UserStore {
-    pub fn ensure_table(conn: &Connection) {
+    fn ensure_table(conn: &Connection) {
         conn.execute_batch(USER_TABLE)
             .expect("to create Users table");
     }
 
     // XXX: default color for the bot: fc0fc0
     pub fn get_bot(conn: &Connection, name: &str) -> Option<User> {
+        Self::ensure_table(conn);
+
         trace!("get bot by name: {}", name);
         let stmt = conn
             .prepare(
@@ -27,6 +29,8 @@ impl UserStore {
     }
 
     pub fn get_user_by_id(conn: &Connection, id: i64) -> Option<User> {
+        Self::ensure_table(conn);
+
         trace!("get user by id: {}", id);
         let stmt = conn
             .prepare("SELECT ID, Display, Color FROM Users WHERE ID = ? LIMIT 1")
@@ -36,6 +40,8 @@ impl UserStore {
     }
 
     pub fn get_user_by_name(conn: &Connection, name: &str) -> Option<User> {
+        Self::ensure_table(conn);
+
         trace!("get user by name: {}", name);
         let stmt = conn
             .prepare(
@@ -72,6 +78,8 @@ impl UserStore {
     }
 
     pub fn update_color_for_id(conn: &Connection, id: i64, color: &RGB) {
+        Self::ensure_table(conn);
+
         match conn.execute(
             r#"UPDATE Users SET Color = ? where ID = ?"#,
             &[&color.to_string(), &id],
@@ -82,6 +90,8 @@ impl UserStore {
     }
 
     pub fn create_user(conn: &Connection, user: &User) -> i64 {
+        Self::ensure_table(conn);
+
         let color = user.color.to_string();
 
         match conn.execute(
