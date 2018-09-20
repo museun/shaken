@@ -1,4 +1,4 @@
-#![feature(rust_2018_preview, uniform_paths)]
+#![feature(rust_2018_preview, uniform_paths, crate_visibility_modifier)]
 #![allow(
     unknown_lints,
     dead_code,

@@ -45,6 +45,8 @@ impl Builtin {
                 ("!shaken", Builtin::shaken_command),
                 ("!viewers", Builtin::viewers_command),
                 ("!uptime", Builtin::uptime_command),
+                ("!editor", Builtin::editor_command),
+                ("!theme", Builtin::editor_command),
             ),
             channel: Config::load().twitch.channel.to_string(),
         }
@@ -58,6 +60,13 @@ impl Builtin {
             "https://github.com/museun/shaken ({} on '{}' branch)",
             rev,
             branch
+        )
+    }
+
+    fn editor_command(&self, _req: &Request) -> Option<Response> {
+        multi!(
+            say!("The editor is Visual Studio Code."),
+            say!("..and the theme is a heavily modified version of 'Nord Extra Dark'")
         )
     }
 
