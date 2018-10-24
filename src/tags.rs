@@ -21,11 +21,12 @@ impl Tags {
         self.get("emotes")
             .and_then(|e| {
                 if !e.is_empty() {
-                    Some(Kappa::new(e))
+                    Some(Kappa::parse(e))
                 } else {
                     None
                 }
-            }).or_else(|| {
+            })
+            .or_else(|| {
                 debug!("no emotes attached to that message");
                 None
             })
@@ -67,7 +68,7 @@ pub struct Kappa {
 }
 
 impl Kappa {
-    pub fn new(s: &str) -> Vec<Self> {
+    pub fn parse(s: &str) -> Vec<Self> {
         // could count the commas to pre-size the vector
         let mut kappas = vec![];
         fn get_ranges(tail: &str) -> Option<Vec<Range<u16>>> {

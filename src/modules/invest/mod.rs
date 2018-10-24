@@ -1,4 +1,4 @@
-crate mod game;
+pub(crate) mod game;
 use self::game::*;
 
 use parking_lot::Mutex;
@@ -224,7 +224,8 @@ impl Invest {
             .map(|(i, iu)| {
                 let user = UserStore::get_user_by_id(&conn, iu.id).expect("user to exist");
                 format!("(#{}) {}: {}", i + 1, &user.display, iu.current.commas())
-            }).collect::<Vec<_>>(); // this collect is needed
+            })
+            .collect::<Vec<_>>(); // this collect is needed
 
         reply!("{}", crate::util::join_with(list.iter(), ", "))
     }
@@ -340,7 +341,7 @@ impl From<&str> for NumType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use testing::*;
+    use crate::testing::*;
 
     #[test]
     fn invest_command() {

@@ -32,7 +32,7 @@ where
         }
     }
 
-    crate fn get_conn_mut(&mut self) -> Arc<Mutex<Connection<T>>> {
+    pub(crate) fn get_conn_mut(&mut self) -> Arc<Mutex<Connection<T>>> {
         Arc::clone(&self.conn)
     }
 

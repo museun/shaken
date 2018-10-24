@@ -205,8 +205,8 @@ impl Display {
 
 #[cfg(test)]
 mod tests {
+    use self::testing::*;
     use super::*;
-    use testing::*;
 
     #[test]
     fn color_command() {

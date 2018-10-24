@@ -1,4 +1,3 @@
-#![feature(rust_2018_preview, uniform_paths, crate_visibility_modifier)]
 #![allow(
     unknown_lints,
     dead_code,
@@ -24,38 +23,38 @@ extern crate tungstenite;
 extern crate url;
 
 mod user;
-crate use crate::user::*;
+pub(crate) use crate::user::*;
 
 #[macro_use]
 mod module;
 pub use crate::module::Module;
-crate use crate::module::*;
+pub(crate) use crate::module::*;
 
 #[macro_use]
 mod response;
-crate use crate::response::*;
+pub(crate) use crate::response::*;
 
 #[macro_use]
 mod command;
-crate use crate::command::*;
+pub(crate) use crate::command::*;
 
 mod request;
-crate use crate::request::*;
+pub(crate) use crate::request::*;
 
 #[macro_use]
-crate mod util;
+pub(crate) mod util;
 #[allow(unused_imports)]
-crate use util::*;
+pub(crate) use crate::util::*;
 
-crate mod tags;
-crate use crate::tags::Tags;
+pub(crate) mod tags;
+pub(crate) use crate::tags::Tags;
 
-crate mod twitch;
+pub(crate) mod twitch;
 
 #[cfg(test)]
-crate mod testing;
+pub(crate) mod testing;
 #[cfg(test)]
-crate use crate::bot::ReadType;
+pub(crate) use crate::bot::ReadType;
 
 pub mod bot;
 pub use crate::bot::Bot;
@@ -71,4 +70,4 @@ pub use crate::config::*;
 pub mod color;
 
 mod irc;
-pub use irc::*;
+pub use crate::irc::*;
