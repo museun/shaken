@@ -56,7 +56,7 @@ pub struct TcpConn {
 }
 
 impl TcpConn {
-    pub fn new<A: ToSocketAddrs>(addr: A) -> Result<Self, ConnError> {
+    pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self, ConnError> {
         let conn = TcpStream::connect(&addr).map_err(ConnError::CannotConnect)?;
         conn.set_read_timeout(Some(Duration::from_millis(50)))
             .expect("to set read timeout");

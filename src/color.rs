@@ -101,21 +101,17 @@ impl HSL {
     #[cfg_attr(feature = "cargo-clippy", allow(many_single_char_names))]
     pub fn from_color(color: &RGB) -> Self {
         use std::cmp::{max, min};
-
         let (r, g, b) = color.0;
-
         let max = max(max(r, g), b);
         let min = min(min(r, g), b);
-
         let (r, g, b) = (
             f64::from(r) / 255.0,
             f64::from(g) / 255.0,
             f64::from(b) / 255.0,
         );
+
         let (min, max) = (f64::from(min) / 255.0, f64::from(max) / 255.0);
-
         let l = (max + min) / 2.0;
-
         let delta: f64 = max - min;
         // this checks for grey
         if delta == 0.0 {
@@ -177,11 +173,6 @@ mod tests {
         for (rgb, hsl, name) in colors {
             assert_eq!(*hsl, HSL::from_color(&rgb), "{}", name)
         }
-    }
-
-    #[test]
-    fn write() {
-        println!("{}", HSL::from_color(&RGB::from("#ff00ff")));
     }
 
     #[test]

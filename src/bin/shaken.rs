@@ -46,7 +46,7 @@ impl Shaken {
             }
 
             info!("trying to connect to {}", address);
-            let conn = match TcpConn::new(&address) {
+            let conn = match TcpConn::connect(&address) {
                 Ok(conn) => {
                     sleep = 0;
                     conn

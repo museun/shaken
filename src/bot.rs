@@ -59,8 +59,7 @@ where
         self.send(&format!("NICK {}", &nick));
 
         // this would be needed for a real irc server
-        // self.conn
-        //     .write(&format!("USER {} * 8 :{}", "shaken_bot", "shaken_bot"));
+        // self.send(&format!("USER {} * 8 :{}", "shaken", "shaken bot"));
 
         trace!("registered");
     }
@@ -213,7 +212,8 @@ where
                 userid: expect!(msg.tags.get_userid()),
             }),
             _ => return -1,
-        }.unwrap();
+        }
+        .unwrap();
 
         trace!("trying to add user {:?}", user);
         let conn = crate::database::get_connection();
