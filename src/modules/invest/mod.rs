@@ -8,13 +8,11 @@ use std::collections::HashMap;
 use std::str;
 use std::time::{Duration, Instant};
 
-use crate::{
-    config,
-    database::{ensure_table, get_connection},
-    irc::Message,
-    twitch::TwitchClient,
-    *,
-};
+use crate::config;
+use crate::database::{ensure_table, get_connection};
+use crate::irc::Message;
+use crate::util::*;
+use crate::*;
 
 impl Default for Invest {
     fn default() -> Self {
@@ -24,10 +22,9 @@ impl Default for Invest {
 
 pub struct Invest {
     config: config::Invest,
-    twitch: TwitchClient,
     limit: Mutex<HashMap<i64, Instant>>,
     commands: Vec<Command<Invest>>,
-    every: Every,
+    _every: Every,
 }
 
 impl Module for Invest {
@@ -57,7 +54,6 @@ impl Invest {
         let config = Config::load();
         Self {
             config: config.invest.clone(),
-            twitch: TwitchClient::new(),
             limit: Mutex::new(HashMap::new()),
             commands: command_list!(
                 ("!invest", Self::invest_command),
@@ -67,7 +63,7 @@ impl Invest {
                 ("!top", Self::top5_command),
                 ("!stats", Self::stats_command),
             ),
-            every, // store this so the update loop stays alive
+            _every: every, // store this so the update loop stays alive
         }
     }
 
@@ -169,7 +165,7 @@ impl Invest {
             }
         };
 
-        let (ty, num) = match Self::get_credits_from_args(user.current, args) {
+        let (_ty, num) = match Self::get_credits_from_args(user.current, args) {
             Some((_, num)) if num == 0 => return reply!("zero what?"),
             Some((ty, num)) => (ty, num),
             None => return reply!("thats not a number I understand"),

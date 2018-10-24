@@ -105,7 +105,7 @@ impl TwitchPoll {
     }
 
     fn poll_stop_command(&self, req: &Request) -> Option<Response> {
-        let req = require_owner!(&req);
+        require_owner!(&req);
 
         if !self.running.load(Ordering::Relaxed) {
             return reply!("no poll is running");
@@ -155,7 +155,7 @@ impl TwitchPoll {
         None
     }
 
-    fn handle_tick(&self, dt: Instant) -> Option<Response> {
+    fn handle_tick(&self, _dt: Instant) -> Option<Response> {
         if !self.running.load(Ordering::Relaxed) || self.start.lock().is_none() {
             return None;
         }
@@ -183,7 +183,7 @@ impl TwitchPoll {
         };
 
         let target = poll.target.clone(); // this is dumb
-        let res = poll.tally().iter().take(3).enumerate().map(|(i, opt)| {
+        let res = poll.tally().iter().take(3).map(|opt| {
             privmsg!(
                 &target,
                 "({} votes) #{} {}",

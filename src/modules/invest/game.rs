@@ -93,7 +93,7 @@ impl InvestGame {
             };
         }
 
-        let sort = match sort {
+        let _sort = match sort {
             SortBy::Current => "Current",
             SortBy::Max => "Max",
             SortBy::Total => "Total",
@@ -115,7 +115,7 @@ impl InvestGame {
                 invest: (un!(row, 4), un!(row, 5)),
                 active: row.get(6),
             })
-            .map_err(|e| { /* log this */ })
+            .map_err(|_e| { /* log this */ })
             .expect("to get rows");
 
         let mut out = vec![];

@@ -186,7 +186,7 @@ mod kappa_test {
         ];
 
         for (input, expect) in inputs {
-            let kappas = Kappa::new(&input);
+            let kappas = Kappa::parse(&input);
             assert_eq!(kappas.len(), expect.len());
             assert_eq!(kappas, *expect);
         }

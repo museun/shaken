@@ -98,7 +98,7 @@ impl fmt::Display for HSL {
 }
 
 impl HSL {
-    #[cfg_attr(feature = "cargo-clippy", allow(many_single_char_names))]
+    #[allow(clippy::many_single_char_names)]
     pub fn from_color(color: &RGB) -> Self {
         use std::cmp::{max, min};
         let (r, g, b) = color.0;
