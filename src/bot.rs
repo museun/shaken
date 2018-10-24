@@ -95,13 +95,17 @@ where
         let conn = Arc::clone(&self.conn);
         thread::spawn(move || loop {
             if let Some(ref mut conn) = conn.try_lock_for(Duration::from_millis(50)) {
-                if let Some(msg) = conn.try_read() {
-                    if let Some(msg) = msg {
+                match conn.try_read() {
+                    Some(ReadStatus::Data(msg)) => {
                         out.send(ReadType::Message(msg));
                     }
-                } else {
-                    quit.send(());
-                    return;
+                    Some(ReadStatus::Nothing) => {
+                        continue;
+                    }
+                    _ => {
+                        quit.send(());
+                        return;
+                    }
                 }
             }
         });

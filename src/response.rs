@@ -315,7 +315,7 @@ mod tests {
 
     #[test]
     fn make_multi() {
-        let env = Environment::new();
+        let _env = Environment::new();
         make_test_user();
 
         let resp = multi!(

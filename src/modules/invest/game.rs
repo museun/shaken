@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::database::get_connection;
 
 use rand::prelude::*;

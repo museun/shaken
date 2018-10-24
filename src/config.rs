@@ -38,8 +38,6 @@ pub struct WebSocket {
     pub address: String,
 }
 
-const CONFIG_FILE: &str = "shaken.toml"; // hardcoded
-
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -68,6 +66,9 @@ impl Default for Config {
         }
     }
 }
+
+#[cfg(not(test))]
+const CONFIG_FILE: &str = "shaken.toml"; // hardcoded
 
 impl Config {
     #[cfg(not(test))]

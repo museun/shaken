@@ -19,8 +19,13 @@ impl fmt::Display for ConnError {
     }
 }
 
+pub enum ReadStatus {
+    Data(String),
+    Nothing,
+}
+
 pub trait Conn: Send + Sync {
-    fn try_read(&mut self) -> Option<Option<String>>; // why is this a thing
+    fn try_read(&mut self) -> Option<ReadStatus>; // why is this a thing
     fn read(&mut self) -> Option<String>;
     fn write(&mut self, data: &str);
 }
@@ -101,7 +106,7 @@ impl Conn for TcpConn {
     }
 
     // TODO: make a Result type for this
-    fn try_read(&mut self) -> Option<Option<String>> {
+    fn try_read(&mut self) -> Option<ReadStatus> {
         let reader = &mut self.reader;
 
         if let Some(line) = reader.next() {
@@ -109,10 +114,11 @@ impl Conn for TcpConn {
                 Ok(line) => {
                     trace!("trying to read from socket");
                     trace!("<-- {}", &line);
-                    Some(Some(line))
+                    Some(ReadStatus::Data(line))
                 }
-                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Some(None),
-                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => Some(None),
+                Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Some(ReadStatus::Nothing),
+                // TODO read docs on iocp to make sure this isn't a real error
+                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => Some(ReadStatus::Nothing),
                 e => {
                     warn!("unknown error: {:?}", e);
                     None
@@ -198,8 +204,8 @@ impl TestConn {
 }
 
 impl Conn for TestConn {
-    fn try_read(&mut self) -> Option<Option<String>> {
-        self.read().and_then(|s| Some(Some(s)))
+    fn try_read(&mut self) -> Option<ReadStatus> {
+        self.read().and_then(|s| Some(ReadStatus::Data(s)))
     }
 
     fn read(&mut self) -> Option<String> {

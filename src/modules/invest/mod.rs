@@ -438,7 +438,7 @@ mod tests {
     #[test]
     fn check_command() {
         // to hold on to it.
-        let conn = get_connection();
+        let _conn = get_connection();
 
         let invest = Invest::new();
         let mut env = Environment::new();
@@ -505,7 +505,7 @@ mod tests {
     #[ignore] // this requires too much set up. its literally just formatting a string
     fn stats_command() {
         // to hold on to it.
-        let conn = get_connection();
+        let _conn = get_connection();
 
         let invest = Invest::new();
         let mut env = Environment::new();

@@ -88,10 +88,10 @@ mod tests {
     #[test]
     fn make_request() {
         let input = "!this is a test";
-        let req = Request::try_parse("#test", 0, input).unwrap();
+        let _req = Request::try_parse("#test", 0, input).unwrap();
 
         let input = "!hello";
-        let req = Request::try_parse("#test", 0, input).unwrap();
+        let _req = Request::try_parse("#test", 0, input).unwrap();
 
         let input = "!";
         assert_eq!(Request::try_parse("#test", 0, input), None);
