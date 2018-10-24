@@ -44,7 +44,7 @@ impl<'a> Environment<'a> {
         use crate::{
             color::RGB,
             user::{User, UserStore},
-        };
+};
 
         // db gets dropped
         let db = crate::database::get_connection();
@@ -151,7 +151,6 @@ impl<'a> Environment<'a> {
         let conn = self.bot.get_conn_mut();
         let conn = &mut *conn.lock();
         let mut data = conn.pop()?;
-        // TODO make this use USER_NAME
         data.insert_str(0, ":test!user@irc.test ");
         let msg = Message::parse(&data);
         Some(msg.data)

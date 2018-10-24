@@ -20,13 +20,13 @@ impl fmt::Display for ConnError {
 }
 
 pub trait Conn: Send + Sync {
-    fn try_read(&mut self) -> Option<Option<String>>;
+    fn try_read(&mut self) -> Option<Option<String>>; // why is this a thing
     fn read(&mut self) -> Option<String>;
     fn write(&mut self, data: &str);
 }
 
 pub struct Connection<T> {
-    conn: Box<T>,
+    conn: Box<T>, // why is this a box
 }
 
 impl<T> Connection<T> {

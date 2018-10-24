@@ -86,7 +86,6 @@ impl Drop for Every {
     }
 }
 
-// TODO this should be using $crate instead of the FQN
 #[macro_export]
 macro_rules! every {
     ($func:expr) => {

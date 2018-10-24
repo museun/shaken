@@ -114,7 +114,8 @@ impl InvestGame {
                 total: un!(row, 3),
                 invest: (un!(row, 4), un!(row, 5)),
                 active: row.get(6),
-            }).map_err(|e| { /* log this */ })
+            })
+            .map_err(|e| { /* log this */ })
             .expect("to get rows");
 
         let mut out = vec![];
@@ -290,7 +291,8 @@ impl InvestGame {
                 total: un!(row, 3),
                 invest: (un!(row, 4), un!(row, 5)),
                 active: row.get(6),
-            }).map_err(|_err| InvestError::UserNotFound { id })?;
+            })
+            .map_err(|_err| InvestError::UserNotFound { id })?;
 
         if let Some(user) = iter.next() {
             return user.map_err(|_err| InvestError::UserNotFound { id });

@@ -31,6 +31,7 @@ pub fn get_connection() -> Connection {
         Connection::open_with_flags(
             &id,
             OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE,
-        ).unwrap()
+        )
+        .unwrap()
     })
 }

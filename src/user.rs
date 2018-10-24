@@ -23,7 +23,8 @@ impl UserStore {
         let stmt = conn
             .prepare(
                 "SELECT ID, Display, Color FROM Users WHERE DISPLAY = ? COLLATE NOCASE LIMIT 1",
-            ).expect("valid sql");
+            )
+            .expect("valid sql");
 
         Self::get_user(&name, stmt)
     }
@@ -46,7 +47,8 @@ impl UserStore {
         let stmt = conn
             .prepare(
                 "SELECT ID, Display, Color FROM Users WHERE DISPLAY = ? COLLATE NOCASE LIMIT 1",
-            ).expect("valid sql");
+            )
+            .expect("valid sql");
 
         Self::get_user(&name, stmt)
     }
@@ -60,15 +62,18 @@ impl UserStore {
                 userid: row.get(0),
                 display: row.get(1),
                 color: RGB::from(&row.get::<_, String>(2)),
-            }).map_err(|e| {
+            })
+            .map_err(|e| {
                 error!("cannot get user for '{}': {}", q, e);
-            }).ok()?;
+            })
+            .ok()?;
 
         if let Some(user) = iter.next() {
             return user
                 .map_err(|e| {
                     error!("cannot get user for '{}': {}", q, e);
-                }).ok()
+                })
+                .ok()
                 .and_then(|user| {
                     trace!("got user: {:?}", user);
                     Some(user)

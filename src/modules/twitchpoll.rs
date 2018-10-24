@@ -260,7 +260,8 @@ impl Poll {
                     option: f.as_ref().to_string(),
                     pos: i,
                     count: 0,
-                }).collect(),
+                })
+                .collect(),
             seen: HashSet::new(),
         }
     }

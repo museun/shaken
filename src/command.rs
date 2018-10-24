@@ -37,7 +37,6 @@ macro_rules! command_list {
         $(
             list.push($crate::Command::new($name, $cmd));
         )*
-        // TODO: impl ord on commands
         list.sort_unstable_by(|a,b| b.name().len().cmp(&a.name().len()));
         list
     }};

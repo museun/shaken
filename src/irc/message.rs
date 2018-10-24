@@ -62,7 +62,8 @@ impl Message {
         let user = UserStore::get_bot(
             &crate::database::get_connection(),
             &Config::load().twitch.name,
-        ).expect("to get our name");
+        )
+        .expect("to get our name");
 
         if target.eq_ignore_ascii_case(&user.display) {
             match self.prefix {

@@ -173,6 +173,7 @@ impl Builtin {
 
         let (tx, rx) = crossbeam_channel::bounded(1);
         let tx = tx.clone();
+        // wtf is this
         ::std::thread::spawn(move || {
             if get_inner(&tx).is_none() {
                 drop(tx)
@@ -182,11 +183,11 @@ impl Builtin {
         use crossbeam_channel::after;
         let timeout = ::std::time::Duration::from_millis(3000);
         select!{
-                recv(rx, msg) => msg,
-                recv(after(timeout)) =>{
-                    warn!("timed out when trying to get the uptime from obs");
-                    None
-                },
+            recv(rx, msg) => msg,
+            recv(after(timeout)) =>{
+                warn!("timed out when trying to get the uptime from obs");
+                None
+            },
         }
     }
 }

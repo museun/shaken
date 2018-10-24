@@ -110,20 +110,23 @@ impl TwitchClient {
             .map_err(|err| {
                 error!("parse json: {}", err);
                 err
-            }).ok()?;
+            })
+            .ok()?;
 
         let value = value
             .get("data")
             .or_else(|| {
                 error!("cannot get 'data' from json value");
                 None
-            })?.clone(); // why is this being cloned?
+            })?
+            .clone(); // why is this being cloned?
 
         serde_json::from_value(value)
             .map_err(|e| {
                 error!("cannot convert : {}", e);
                 e
-            }).ok()
+            })
+            .ok()
     }
 
     pub fn get_names_for<S: AsRef<str>>(ch: S) -> Option<Names> {
