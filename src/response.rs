@@ -10,12 +10,13 @@ pub enum Response {
     Command { cmd: IrcCommand },
 }
 
+// TODO look at this. it looks way too nested
 impl Response {
-    pub(crate) fn build(&self, context: Option<&Message>) -> Vec<String> {
+    pub(crate) fn build(&self, context: Option<&irc::Message>) -> Vec<String> {
         match self {
             Response::Reply { data } => {
                 let context = context.expect("reply requires a context");
-                if let Some(Prefix::User { ref nick, .. }) = context.prefix {
+                if let Some(irc::Prefix::User { ref nick, .. }) = context.prefix {
                     let conn = crate::database::get_connection();
                     if let Some(user) = UserStore::get_user_by_name(&conn, &nick) {
                         match &context.command[..] {
@@ -49,7 +50,7 @@ impl Response {
             }
             Response::Whisper { data } => {
                 let context = context.expect("whisper requires a context");
-                if let Some(Prefix::User { ref nick, .. }) = context.prefix {
+                if let Some(irc::Prefix::User { ref nick, .. }) = context.prefix {
                     let conn = crate::database::get_connection();
                     if let Some(user) = UserStore::get_user_by_name(&conn, &nick) {
                         return vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)];

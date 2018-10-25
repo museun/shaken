@@ -1,20 +1,32 @@
 use log::{error, info, warn};
-use std::{thread, time};
+use simplelog::{Config as LogConfig, LevelFilter, TermLogger};
+use std::{env, thread, time};
 
 use shaken::modules::{Builtin, Display, Invest, Shakespeare, TwitchPoll};
 use shaken::prelude::*;
 
 fn main() {
-    env_logger::Builder::from_default_env()
-        .default_format_timestamp(false)
-        .init();
+    let filter = match env::var("SHAKEN_LOG")
+        .map(|s| s.to_ascii_uppercase())
+        .unwrap_or_default()
+        .as_str()
+    {
+        "TRACE" => LevelFilter::Trace,
+        "DEBUG" => LevelFilter::Debug,
+        "WARN" => LevelFilter::Warn,
+        "ERROR" => LevelFilter::Error,
+
+        // default
+        "INFO" | _ => LevelFilter::Info,
+    };
+
+    TermLogger::init(filter, LogConfig::default()).expect("initialize logger");
 
     let config = Config::load();
     Shaken::start(&config);
 }
 
 pub struct Shaken;
-
 impl Shaken {
     pub fn start(config: &Config) {
         let address = format!("{}:{}", &config.twitch.address, &config.twitch.port);
@@ -41,7 +53,7 @@ impl Shaken {
             }
 
             info!("trying to connect to {}", address);
-            let conn = match TcpConn::connect(&address) {
+            let conn = match irc::TcpConn::connect(&address) {
                 Ok(conn) => {
                     sleep = 0;
                     conn

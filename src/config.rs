@@ -67,6 +67,7 @@ impl Default for Config {
     }
 }
 
+#[allow(dead_code)]
 const CONFIG_FILE: &str = "shaken.toml"; // hardcoded
 
 impl Config {
@@ -103,6 +104,7 @@ impl Config {
         Config::default()
     }
 
+    #[allow(dead_code)]
     fn save(&self) {
         let s = toml::to_string_pretty(&self).expect("to generate correct config");
         let mut f = fs::File::create(CONFIG_FILE)

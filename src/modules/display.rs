@@ -1,4 +1,3 @@
-use crate::prelude::Message as IrcMessage;
 use crate::prelude::*;
 
 use crossbeam_channel as channel;
@@ -15,7 +14,7 @@ struct Message {
     pub color: RGB,
     pub display: String,
     pub data: String,
-    pub kappas: Vec<Kappa>,
+    pub kappas: Vec<irc::Kappa>,
 }
 
 pub struct Display {
@@ -32,7 +31,7 @@ impl Module for Display {
         None
     }
 
-    fn passive(&self, msg: &IrcMessage) -> Option<Response> {
+    fn passive(&self, msg: &irc::Message) -> Option<Response> {
         // for now
         match &msg.command[..] {
             "PRIVMSG" => self.handle_passive(msg),
@@ -62,7 +61,7 @@ impl Display {
         }
     }
 
-    pub fn inspect(&self, msg: &IrcMessage, resp: &Response) {
+    pub fn inspect(&self, msg: &irc::Message, resp: &Response) {
         if &msg.command[..] != "PRIVMSG" {
             return;
         }
@@ -77,7 +76,7 @@ impl Display {
         let conn = crate::database::get_connection();
         if let Some(user) = UserStore::get_bot(&conn, &self.name) {
             for out in resp.build(Some(&msg)) {
-                let msg = IrcMessage::parse(&out);
+                let msg = irc::Message::parse(&out);
                 println!("<{}> {}", &user.color.format(&user.display), &msg.data);
                 self.push_message(&user, &msg);
             }
@@ -98,7 +97,7 @@ impl Display {
         None
     }
 
-    fn handle_passive(&self, msg: &IrcMessage) -> Option<Response> {
+    fn handle_passive(&self, msg: &irc::Message) -> Option<Response> {
         let conn = crate::database::get_connection();
         let user = UserStore::get_user_by_id(&conn, msg.tags.get_userid()?)?;
 
@@ -110,7 +109,7 @@ impl Display {
         None
     }
 
-    fn push_message(&self, user: &User, msg: &IrcMessage) {
+    fn push_message(&self, user: &User, msg: &irc::Message) {
         let ts = crate::util::get_timestamp();
         let display = Message {
             userid: user.userid.to_string(),

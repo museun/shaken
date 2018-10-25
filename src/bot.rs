@@ -9,20 +9,20 @@ use std::time::{Duration, Instant};
 
 pub struct Bot<'a, T>
 where
-    T: Conn + 'static,
+    T: irc::Conn + 'static,
 {
-    conn: Arc<Mutex<Connection<T>>>,
+    conn: Arc<Mutex<irc::Connection<T>>>,
     modules: Vec<&'a dyn Module>,
-    inspect: Box<dyn Fn(&Message, &Response) + 'a>,
+    inspect: Box<dyn Fn(&irc::Message, &Response) + 'a>,
 }
 
 impl<'a, T> Bot<'a, T>
 where
-    T: Conn + 'static,
+    T: irc::Conn + 'static,
 {
     /// just clone the connection
     pub fn new(conn: T) -> Self {
-        let conn = Connection::new(conn);
+        let conn = irc::Connection::new(conn);
 
         Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -31,7 +31,7 @@ where
         }
     }
 
-    pub(crate) fn get_conn_mut(&mut self) -> Arc<Mutex<Connection<T>>> {
+    pub(crate) fn get_conn_mut(&mut self) -> Arc<Mutex<irc::Connection<T>>> {
         Arc::clone(&self.conn)
     }
 
@@ -41,7 +41,7 @@ where
 
     pub fn set_inspect<F>(&mut self, f: F)
     where
-        F: Fn(&Message, &Response) + 'a,
+        F: Fn(&irc::Message, &Response) + 'a,
     {
         self.inspect = Box::new(f)
     }
@@ -94,10 +94,10 @@ where
         thread::spawn(move || loop {
             if let Some(ref mut conn) = conn.try_lock_for(Duration::from_millis(50)) {
                 match conn.try_read() {
-                    Some(ReadStatus::Data(msg)) => {
+                    Some(irc::ReadStatus::Data(msg)) => {
                         out.send(ReadType::Message(msg));
                     }
-                    Some(ReadStatus::Nothing) => {
+                    Some(irc::ReadStatus::Nothing) => {
                         continue;
                     }
                     _ => {
@@ -113,13 +113,13 @@ where
         trace!("ending the run loop");
     }
 
-    fn try_make_request(msg: &Message) -> Option<Request<'_>> {
+    fn try_make_request(msg: &irc::Message) -> Option<Request<'_>> {
         let id = Self::add_user_from_msg(&msg);
         trace!("trying to make request for: `{}` {:?}", id, msg);
         match &msg.command[..] {
             "PRIVMSG" | "WHISPER" => {
                 // sanity check
-                if let Some(Prefix::User { .. }) = msg.prefix {
+                if let Some(irc::Prefix::User { .. }) = msg.prefix {
                     // HACK: this is ugly
                     Request::try_parse(msg.target(), id, &msg.data)
                 } else {
@@ -139,7 +139,7 @@ where
         let ctx = match next {
             ReadType::Message(data) => {
                 trace!("handling message");
-                let msg = Message::parse(&data);
+                let msg = irc::Message::parse(&data);
                 let req = Self::try_make_request(&msg);
 
                 for module in &self.modules {
@@ -194,7 +194,7 @@ where
         Some(())
     }
 
-    fn add_user_from_msg(msg: &Message) -> i64 {
+    fn add_user_from_msg(msg: &irc::Message) -> i64 {
         macro_rules! expect {
             ($e:expr) => {
                 $e.expect("user tags to be well formed")

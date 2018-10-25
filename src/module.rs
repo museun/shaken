@@ -1,16 +1,19 @@
-use std::{    sync::Arc,    thread,    time::{Duration, Instant},};
-use parking_lot::RwLock;
-
 use crate::prelude::*;
+
+use std::sync::Arc;
+use std::thread;
+use std::time::{Duration, Instant};
+
+use parking_lot::RwLock;
 
 pub trait Module {
     fn command(&self, _req: &Request<'_>) -> Option<Response> {
         None
     }
-    fn passive(&self, _msg: &Message) -> Option<Response> {
+    fn passive(&self, _msg: &irc::Message) -> Option<Response> {
         None
     }
-    fn event(&self, _msg: &Message) -> Option<Response> {
+    fn event(&self, _msg: &irc::Message) -> Option<Response> {
         None
     }
     fn tick(&self, _dt: Instant) -> Option<Response> {

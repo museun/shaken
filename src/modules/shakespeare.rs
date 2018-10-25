@@ -21,7 +21,7 @@ impl Module for Shakespeare {
         None
     }
 
-    fn passive(&self, msg: &Message) -> Option<Response> {
+    fn passive(&self, msg: &irc::Message) -> Option<Response> {
         self.check_mentions(&msg).or_else(|| self.auto_speak())
     }
 }
@@ -72,7 +72,7 @@ impl Shakespeare {
         None
     }
 
-    fn check_mentions(&self, msg: &Message) -> Option<Response> {
+    fn check_mentions(&self, msg: &irc::Message) -> Option<Response> {
         let conn = get_connection();
         let user = UserStore::get_bot(&conn, &self.0.borrow().name)?;
 

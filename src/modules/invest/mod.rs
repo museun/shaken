@@ -28,7 +28,7 @@ impl Module for Invest {
         dispatch_commands!(&self, &req)
     }
 
-    fn passive(&self, msg: &Message) -> Option<Response> {
+    fn passive(&self, msg: &irc::Message) -> Option<Response> {
         // for now
         match &msg.command[..] {
             "PRIVMSG" => self.on_message(msg),
@@ -237,7 +237,7 @@ impl Invest {
         )
     }
 
-    fn on_message(&self, msg: &Message) -> Option<Response> {
+    fn on_message(&self, msg: &irc::Message) -> Option<Response> {
         if msg.data.starts_with('!') || msg.data.starts_with('@') {
             return None;
         }

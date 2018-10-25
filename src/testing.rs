@@ -1,11 +1,11 @@
+#![allow(dead_code)] // testing stuff probably won't be used in debug/release builds
 use crate::prelude::*;
 use rusqlite::Connection;
 use std::time::Instant;
 
 pub fn init_logger() {
-    let _ = env_logger::Builder::from_default_env()
-        .default_format_timestamp(false)
-        .try_init();
+    use simplelog::{Config as LogConfig, LevelFilter, TermLogger};
+    TermLogger::init(LevelFilter::Trace, LogConfig::default()).expect("initialize logger");
 }
 
 /// don't use 42 (bot) or 1000 (you)
@@ -23,7 +23,7 @@ const USER_ID: i64 = 1000;
 const USER_NAME: &str = "test";
 
 pub struct Environment<'a> {
-    bot: Bot<'a, TestConn>,
+    bot: Bot<'a, irc::TestConn>,
     db: Connection,
 }
 
@@ -35,7 +35,7 @@ impl<'a> Default for Environment<'a> {
 
 impl<'a> Environment<'a> {
     pub fn new() -> Self {
-        let conn = TestConn::new();
+        let conn = irc::TestConn::new();
         use crate::{
             color::RGB,
             user::{User, UserStore},
@@ -143,7 +143,7 @@ impl<'a> Environment<'a> {
         let conn = &mut *conn.lock();
         let mut data = conn.pop()?;
         data.insert_str(0, ":test!user@irc.test ");
-        let msg = Message::parse(&data);
+        let msg = irc::Message::parse(&data);
         Some(msg.data)
     }
 

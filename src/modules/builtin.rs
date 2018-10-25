@@ -13,7 +13,7 @@ impl Module for Builtin {
         dispatch_commands!(&self, &req)
     }
 
-    fn event(&self, msg: &Message) -> Option<Response> {
+    fn event(&self, msg: &irc::Message) -> Option<Response> {
         match msg.command() {
             "001" => join(&format!("#{}", self.channel)),
             "PING" => raw!("PONG :{}", &msg.data),

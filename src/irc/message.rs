@@ -4,8 +4,8 @@ use std::fmt;
 // TODO get rid of all of these string allocations
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct Message {
-    pub tags: Tags,
-    pub prefix: Option<Prefix>,
+    pub tags: irc::Tags,
+    pub prefix: Option<irc::Prefix>,
     pub command: String,
     pub args: Vec<String>,
     pub data: String,
@@ -17,10 +17,10 @@ impl Message {
         let (input, tags) = if !input.starts_with(':') && !input.starts_with("PING") {
             Self::parse_tags(&input)
         } else {
-            (input, Tags::default())
+            (input, irc::Tags::default())
         };
 
-        let prefix = Prefix::parse(&input);
+        let prefix = irc::Prefix::parse(&input);
 
         let iter = input
             .split_whitespace()
@@ -48,10 +48,10 @@ impl Message {
     }
 
     // TODO: make sure it has caps before sending to this function
-    fn parse_tags(input: &str) -> (&str, Tags) {
+    fn parse_tags(input: &str) -> (&str, irc::Tags) {
         let pos = input.find(' ').unwrap();
         let sub = &input[..pos];
-        let tags = Tags::new(&sub);
+        let tags = irc::Tags::new(&sub);
         (&input[pos + 1..], tags)
     }
 
@@ -64,7 +64,7 @@ impl Message {
 
         if target.eq_ignore_ascii_case(&user.display) {
             match self.prefix {
-                Some(Prefix::User { ref nick, .. }) => &nick,
+                Some(irc::Prefix::User { ref nick, .. }) => &nick,
                 _ => unreachable!(),
             }
         } else {
@@ -80,8 +80,8 @@ impl Message {
 impl fmt::Display for Message {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let prefix = match &self.prefix {
-            Some(Prefix::User { nick, .. }) => nick.trim(),
-            Some(Prefix::Server { host, .. }) => host.trim(),
+            Some(irc::Prefix::User { nick, .. }) => nick.trim(),
+            Some(irc::Prefix::Server { host, .. }) => host.trim(),
             None => "??",
         };
 
