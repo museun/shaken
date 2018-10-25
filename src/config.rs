@@ -67,7 +67,6 @@ impl Default for Config {
     }
 }
 
-#[cfg(not(test))]
 const CONFIG_FILE: &str = "shaken.toml"; // hardcoded
 
 impl Config {
