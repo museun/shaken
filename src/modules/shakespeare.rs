@@ -15,7 +15,7 @@ struct Inner {
 }
 
 impl Module for Shakespeare {
-    fn command(&self, req: &Request) -> Option<Response> {
+    fn command(&self, req: &Request<'_>) -> Option<Response> {
         if let Some(_req) = req.search("!speak") {
             return self.speak_command();
         }

@@ -9,7 +9,7 @@ pub struct Builtin {
 }
 
 impl Module for Builtin {
-    fn command(&self, req: &Request) -> Option<Response> {
+    fn command(&self, req: &Request<'_>) -> Option<Response> {
         dispatch_commands!(&self, &req)
     }
 
@@ -53,7 +53,7 @@ impl Builtin {
         }
     }
 
-    fn version_command(&self, _req: &Request) -> Option<Response> {
+    fn version_command(&self, _req: &Request<'_>) -> Option<Response> {
         let rev = option_env!("SHAKEN_GIT_REV").expect("to get rev");
         let branch = option_env!("SHAKEN_GIT_BRANCH").expect("to get branch");
 
@@ -64,22 +64,22 @@ impl Builtin {
         )
     }
 
-    fn editor_command(&self, _req: &Request) -> Option<Response> {
+    fn editor_command(&self, _req: &Request<'_>) -> Option<Response> {
         multi!(
             say!("The editor is Visual Studio Code."),
             say!("..and the theme is https://github.com/museun/museun-theme")
         )
     }
 
-    fn github_command(&self, _req: &Request) -> Option<Response> {
+    fn github_command(&self, _req: &Request<'_>) -> Option<Response> {
         say!("I upload some of these projects to: https://github.com/museun")
     }
 
-    fn shaken_command(&self, _req: &Request) -> Option<Response> {
+    fn shaken_command(&self, _req: &Request<'_>) -> Option<Response> {
         say!("I try to impersonate The Bard, by being trained on all of his works.")
     }
 
-    fn viewers_command(&self, _req: &Request) -> Option<Response> {
+    fn viewers_command(&self, _req: &Request<'_>) -> Option<Response> {
         let streams = self.twitch.get_streams(&[&self.channel]);
         maybe!(streams.is_none());
 
@@ -93,7 +93,7 @@ impl Builtin {
         reply!("viewers: {}", viewers)
     }
 
-    fn uptime_command(&self, _req: &Request) -> Option<Response> {
+    fn uptime_command(&self, _req: &Request<'_>) -> Option<Response> {
         let timecode = Self::get_uptime_from_obs();
 
         let streams = self.twitch.get_streams(&[&self.channel]);

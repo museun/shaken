@@ -4,7 +4,7 @@ use std::fmt::{self, Write};
 pub struct RGB((u8, u8, u8));
 
 impl fmt::Display for RGB {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (r, g, b) = self.0;
         write!(f, "#{:02X}{:02X}{:02X}", r, g, b)
     }
@@ -91,7 +91,7 @@ impl RGB {
 pub struct HSL((f64, f64, f64)); // H S L
 
 impl fmt::Display for HSL {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (h, s, l) = self.0;
         write!(f, "{:.2}%, {:.2}%, {:.2}%", h, s, l)
     }

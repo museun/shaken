@@ -28,7 +28,7 @@ pub struct Invest {
 }
 
 impl Module for Invest {
-    fn command(&self, req: &Request) -> Option<Response> {
+    fn command(&self, req: &Request<'_>) -> Option<Response> {
         dispatch_commands!(&self, &req)
     }
 
@@ -67,7 +67,7 @@ impl Invest {
         }
     }
 
-    fn invest_command(&self, req: &Request) -> Option<Response> {
+    fn invest_command(&self, req: &Request<'_>) -> Option<Response> {
         let id = req.sender();
         if self.check_rate_limit(id) {
             // they've been rate limited
@@ -126,7 +126,7 @@ impl Invest {
         }
     }
 
-    fn give_command(&self, req: &Request) -> Option<Response> {
+    fn give_command(&self, req: &Request<'_>) -> Option<Response> {
         let conn = get_connection();
 
         let id = req.sender();
@@ -188,14 +188,14 @@ impl Invest {
         )
     }
 
-    fn check_command(&self, req: &Request) -> Option<Response> {
+    fn check_command(&self, req: &Request<'_>) -> Option<Response> {
         match InvestGame::find(req.sender()).unwrap().current {
             credits if credits > 0 => reply!("you have {} credits", credits.commas()),
             _ => reply!("you don't have any credits"),
         }
     }
 
-    fn top5_command(&self, req: &Request) -> Option<Response> {
+    fn top5_command(&self, req: &Request<'_>) -> Option<Response> {
         let mut n = req
             .args_iter()
             .next()
@@ -226,7 +226,7 @@ impl Invest {
         reply!("{}", crate::util::join_with(list.iter(), ", "))
     }
 
-    fn stats_command(&self, req: &Request) -> Option<Response> {
+    fn stats_command(&self, req: &Request<'_>) -> Option<Response> {
         let id = req.sender();
         let (user, total) = InvestGame::stats_for(id);
 

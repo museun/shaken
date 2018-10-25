@@ -14,7 +14,7 @@ where
 {
     conn: Arc<Mutex<Connection<T>>>,
     modules: Vec<&'a dyn Module>,
-    inspect: Box<Fn(&Message, &Response) + 'a>,
+    inspect: Box<dyn Fn(&Message, &Response) + 'a>,
 }
 
 impl<'a, T> Bot<'a, T>
@@ -114,7 +114,7 @@ where
         trace!("ending the run loop");
     }
 
-    fn try_make_request(msg: &Message) -> Option<Request> {
+    fn try_make_request(msg: &Message) -> Option<Request<'_>> {
         let id = Self::add_user_from_msg(&msg);
         trace!("trying to make request for: `{}` {:?}", id, msg);
         match &msg.command[..] {

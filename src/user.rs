@@ -53,7 +53,7 @@ impl UserStore {
         Self::get_user(&name, stmt)
     }
 
-    fn get_user<T>(q: &T, mut stmt: rusqlite::Statement) -> Option<User>
+    fn get_user<T>(q: &T, mut stmt: rusqlite::Statement<'_>) -> Option<User>
     where
         T: ::std::fmt::Display + rusqlite::types::ToSql,
     {

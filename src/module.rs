@@ -8,7 +8,7 @@ use std::{
 use crate::*;
 
 pub trait Module {
-    fn command(&self, _req: &Request) -> Option<Response> {
+    fn command(&self, _req: &Request<'_>) -> Option<Response> {
         None
     }
     fn passive(&self, _msg: &Message) -> Option<Response> {

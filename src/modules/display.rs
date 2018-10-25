@@ -26,7 +26,7 @@ pub struct Display {
 }
 
 impl Module for Display {
-    fn command(&self, req: &Request) -> Option<Response> {
+    fn command(&self, req: &Request<'_>) -> Option<Response> {
         if let Some(req) = req.search("!color") {
             return self.color_command(&req);
         }
@@ -85,7 +85,7 @@ impl Display {
         }
     }
 
-    fn color_command(&self, req: &Request) -> Option<Response> {
+    fn color_command(&self, req: &Request<'_>) -> Option<Response> {
         let id = req.sender();
         let part = req.args_iter().next()?;
 

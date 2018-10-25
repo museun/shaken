@@ -81,7 +81,7 @@ impl Message {
 }
 
 impl fmt::Display for Message {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let prefix = match &self.prefix {
             Some(Prefix::User { nick, .. }) => nick.trim(),
             Some(Prefix::Server { host, .. }) => host.trim(),

@@ -11,7 +11,7 @@ pub enum ConnError {
 }
 
 impl fmt::Display for ConnError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ConnError::InvalidAddress(e) => write!(f, "invalid address: {}", e),
             ConnError::CannotConnect(e) => write!(f, "cannot connect: {}", e),

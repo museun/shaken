@@ -318,7 +318,7 @@ impl InvestGame {
                 Active = ?
             WHERE ID = ?"#;
 
-        let map: &[&ToSql] = &[
+        let map: &[&dyn ToSql] = &[
             &(user.max as i64),
             &(user.current as i64),
             &(user.total as i64),
@@ -347,7 +347,7 @@ impl InvestGame {
                 (ID, Max, Current, Total, Success, Failure, Active) 
             VALUES (?, ?, ?, ?, ?, ?, ?)"#;
 
-        let map: &[&ToSql] = &[
+        let map: &[&dyn ToSql] = &[
             &user.id,
             &(user.max as i64),
             &(user.current as i64),

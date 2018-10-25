@@ -16,7 +16,7 @@ pub struct TwitchPoll {
 }
 
 impl Module for TwitchPoll {
-    fn command(&self, req: &Request) -> Option<Response> {
+    fn command(&self, req: &Request<'_>) -> Option<Response> {
         dispatch_commands!(&self, &req)
     }
 
@@ -48,7 +48,7 @@ impl TwitchPoll {
         }
     }
 
-    fn poll_command(&self, req: &Request) -> Option<Response> {
+    fn poll_command(&self, req: &Request<'_>) -> Option<Response> {
         let req = require_owner!(&req);
         let poll = match Self::parse_poll(req.target(), req.args()) {
             Ok(poll) => poll,
@@ -75,7 +75,7 @@ impl TwitchPoll {
         res
     }
 
-    fn poll_start_command(&self, req: &Request) -> Option<Response> {
+    fn poll_start_command(&self, req: &Request<'_>) -> Option<Response> {
         let req = require_owner!(&req);
 
         let poll = self.poll.lock();
@@ -104,7 +104,7 @@ impl TwitchPoll {
         )
     }
 
-    fn poll_stop_command(&self, req: &Request) -> Option<Response> {
+    fn poll_stop_command(&self, req: &Request<'_>) -> Option<Response> {
         require_owner!(&req);
 
         if !self.running.load(Ordering::Relaxed) {
@@ -120,7 +120,7 @@ impl TwitchPoll {
         None
     }
 
-    fn poll_vote_command(&self, req: &Request) -> Option<Response> {
+    fn poll_vote_command(&self, req: &Request<'_>) -> Option<Response> {
         debug!("{:#?}", self.poll);
         debug!("{:#?}", self.start);
         debug!("{:#?}", self.duration);
@@ -220,7 +220,7 @@ enum ParseError {
 }
 
 impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParseError::Title => write!(f, "no title provided"),
             ParseError::Options => write!(f, "no options provided"),
