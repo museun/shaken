@@ -19,7 +19,8 @@ fn git_version() -> Option<(String, String)> {
         })
     }
 
-    do_git(&["rev-parse", "--short=12", "dev"]).and_then(|rev| {
-        do_git(&["rev-parse", "--abbrev-ref", "dev"]).and_then(|branch| Some((rev, branch)))
+    let branch = option_env!("SHAKEN_BRANCH").unwrap_or_else(|| "dev");
+    do_git(&["rev-parse", "--short=12", branch]).and_then(|rev| {
+        do_git(&["rev-parse", "--abbrev-ref", branch]).and_then(|branch| Some((rev, branch)))
     })
 }
