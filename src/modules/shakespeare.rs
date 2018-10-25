@@ -108,24 +108,31 @@ impl Shakespeare {
         trace!("before conditional");
         #[cfg(not(test))]
         {
-            if let Some(data) = crate::util::http_get("http://localhost:7878/markov/next") {
-                fn prune(s: &str) -> &str {
-                    let mut pos = 0;
-                    for c in s.chars().rev() {
-                        if c.is_alphabetic() {
-                            break;
+            loop {
+                if let Some(data) = crate::util::http_get("http://localhost:7878/markov/next") {
+                    fn prune(s: &str) -> &str {
+                        let mut pos = 0;
+                        for c in s.chars().rev() {
+                            if c.is_alphabetic() {
+                                break;
+                            }
+                            pos += 1
                         }
-                        pos += 1
+                        &s[..s.len() - pos]
                     }
-                    &s[..s.len() - pos]
-                }
 
-                trace!("generated a message");
-                self.0.borrow_mut().previous = Some(now);
-                Some(prune(&data).to_string() + ".")
-            } else {
-                warn!("cannot get a response from the brain");
-                None
+                    trace!("generated a message");
+                    self.0.borrow_mut().previous = Some(now);
+                    let data = prune(&data).to_string();
+                    if data.chars().filter(char::is_ascii_whitespace).count() < 3 {
+                        continue;
+                    }
+
+                    return Some(data + ".");
+                } else {
+                    warn!("cannot get a response from the brain");
+                    return None;
+                }
             }
         }
         #[cfg(test)]
