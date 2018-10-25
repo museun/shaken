@@ -1,10 +1,6 @@
-// #![allow(dead_code)]
 use crate::prelude::*;
-
-use std::time::Instant;
-
-use crossbeam_channel as channel;
 use rusqlite::Connection;
+use std::time::Instant;
 
 pub fn init_logger() {
     let _ = env_logger::Builder::from_default_env()
@@ -29,8 +25,6 @@ const USER_NAME: &str = "test";
 pub struct Environment<'a> {
     bot: Bot<'a, TestConn>,
     db: Connection,
-    tx: channel::Sender<Instant>,
-    rx: channel::Receiver<Instant>,
 }
 
 impl<'a> Default for Environment<'a> {
@@ -67,13 +61,9 @@ impl<'a> Environment<'a> {
             },
         );
 
-        let (tx, rx) = channel::bounded(16);
-
         Self {
             bot: Bot::new(conn),
             db,
-            tx,
-            rx,
         }
     }
 
