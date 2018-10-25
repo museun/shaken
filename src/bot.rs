@@ -70,7 +70,6 @@ where
 
     pub fn run(&self) {
         trace!("starting run loop");
-
         let (quittx, quitrx): (channel::Sender<()>, channel::Receiver<()>) = channel::bounded(0);
 
         let (tx, rx) = channel::bounded(10);

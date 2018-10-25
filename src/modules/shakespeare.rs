@@ -88,7 +88,6 @@ impl Shakespeare {
                 return self.speak_command();
             }
         }
-
         None
     }
 
