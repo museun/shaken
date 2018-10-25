@@ -1,7 +1,4 @@
-use crate::{
-    irc::{Message, Prefix},
-    *,
-};
+use crate::prelude::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Response {
@@ -79,53 +76,10 @@ impl Response {
     }
 }
 
-#[macro_export]
-macro_rules! multi {
-    ($($arg:expr),* $(,)*) => {{
-        let mut vec = vec![];
-
-        $(
-            if let Some(arg) = $arg {
-                vec.push(Box::new(arg));
-            }
-        )*
-
-        Some(Response::Multi{data: vec})
-    }};
-}
-
 pub fn multi(iter: impl Iterator<Item = Option<Response>>) -> Option<Response> {
     Some(Response::Multi {
         data: iter.filter_map(|s| s).map(Box::new).collect(),
     })
-}
-
-#[macro_export]
-macro_rules! reply {
-    ($($arg:tt)*) => {
-        Some(Response::Reply{data: format!($($arg)*)})
-    };
-}
-
-#[macro_export]
-macro_rules! say {
-    ($($arg:tt)*) => {
-        Some(Response::Say{data: format!($($arg)*)})
-    }
-}
-
-#[macro_export]
-macro_rules! action {
-    ($($arg:tt)*) => {
-        Some(Response::Action{data: format!($($arg)*)})
-    };
-}
-
-#[macro_export]
-macro_rules! whisper {
-    ($($arg:tt)*) => {
-        Some(Response::Whisper{data: format!($($arg)*)})
-    };
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -140,25 +94,6 @@ pub fn join(ch: &str) -> Option<Response> {
     Some(Response::Command {
         cmd: IrcCommand::Join { channel: ch.into() },
     })
-}
-
-#[macro_export]
-macro_rules! raw {
-    ($($arg:tt)*) => {
-       Some(Response::Command{cmd: $crate::IrcCommand::Raw{ data: format!($($arg)*) }})
-    };
-}
-
-#[macro_export]
-macro_rules! privmsg {
-    ($target:expr, $($arg:tt)*) => {
-        Some(Response::Command {
-            cmd: $crate::IrcCommand::Privmsg{
-                target: $target.to_string(),
-                data: format!($($arg)*)
-            }
-        })
-    };
 }
 
 #[cfg(test)]

@@ -1,11 +1,7 @@
+use std::{    sync::Arc,    thread,    time::{Duration, Instant},};
 use parking_lot::RwLock;
-use std::{
-    sync::Arc,
-    thread,
-    time::{Duration, Instant},
-};
 
-use crate::*;
+use crate::prelude::*;
 
 pub trait Module {
     fn command(&self, _req: &Request<'_>) -> Option<Response> {
@@ -20,35 +16,6 @@ pub trait Module {
     fn tick(&self, _dt: Instant) -> Option<Response> {
         None
     }
-}
-
-#[macro_export]
-macro_rules! dispatch_commands {
-    ($this:expr, $req:expr) => {{
-        for cmd in &$this.commands {
-            if let Some(req) = $req.search(cmd.name()) {
-                trace!("calling '{}' with {:?}", cmd.name(), &req);
-                return cmd.call($this, &req);
-            }
-        }
-        None
-    }};
-}
-
-#[macro_export]
-macro_rules! require_owner {
-    ($req:expr) => {{
-        if !$req.is_from_owner() {
-            return None;
-        };
-        $req
-    }};
-    ($req:expr, $reason:expr) => {{
-        if !$req.is_from_owner() {
-            return reply!($reason);
-        };
-        $req
-    }};
 }
 
 pub struct Every(crossbeam_channel::Sender<()>);
@@ -84,24 +51,4 @@ impl Drop for Every {
     fn drop(&mut self) {
         self.0.send(())
     }
-}
-
-#[macro_export]
-macro_rules! every {
-    ($func:expr) => {
-        every!($func, (), 1000)
-    };
-
-    // default to one second
-    ($func:expr, $this:expr) => {
-        every!($func, $this, 1000)
-    };
-
-    ($func:expr, $this:expr, $dur:expr) => {{
-        let this = ::std::sync::Arc::new(parking_lot::RwLock::new($this));
-        (
-            ::std::sync::Arc::clone(&this),
-            Every::new(::std::sync::Arc::clone(&this), $func, $dur),
-        )
-    }};
 }

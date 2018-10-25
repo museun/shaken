@@ -1,5 +1,4 @@
-use crate::irc::{Conn, Message, Prefix};
-use crate::*;
+use crate::prelude::*;
 
 use crossbeam_channel as channel;
 use parking_lot::Mutex;
@@ -211,7 +210,7 @@ where
             // this is /our/ user
             "GLOBALUSERSTATE" => Some(User {
                 display: expect!(msg.tags.get_display()).to_string(),
-                color: color::RGB::from("fc0fc0"),
+                color: RGB::from("fc0fc0"),
                 userid: expect!(msg.tags.get_userid()),
             }),
             _ => return -1,
@@ -219,7 +218,7 @@ where
         .unwrap();
 
         trace!("trying to add user {:?}", user);
-        let conn = crate::database::get_connection();
+        let conn = get_connection();
         let id = UserStore::create_user(&conn, &user);
         trace!("added user {:?}: {}", user, id);
         id

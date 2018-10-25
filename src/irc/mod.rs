@@ -4,6 +4,9 @@ pub use self::message::Message;
 mod prefix;
 pub use self::prefix::Prefix;
 
+mod tags;
+pub use self::tags::{Kappa, Tags};
+
 mod conn;
 // TODO this should only expose a Conn
 // with a generic constraint to select which underlying conn is used

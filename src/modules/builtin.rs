@@ -1,4 +1,4 @@
-use crate::{irc::Message, twitch::TwitchClient, util::*, *};
+use crate::prelude::*;
 
 use chrono::prelude::*;
 
@@ -15,7 +15,7 @@ impl Module for Builtin {
 
     fn event(&self, msg: &Message) -> Option<Response> {
         match msg.command() {
-            "001" => response::join(&format!("#{}", self.channel)),
+            "001" => join(&format!("#{}", self.channel)),
             "PING" => raw!("PONG :{}", &msg.data),
             _ => None,
         }
@@ -247,11 +247,10 @@ mod tests {
         env.push("!version");
         env.step();
 
-        assert!(
-            env.pop()
-                .unwrap()
-                .starts_with("@test: https://github.com/museun/shaken")
-        );
+        assert!(env
+            .pop()
+            .unwrap()
+            .starts_with("@test: https://github.com/museun/shaken"));
     }
 
     #[test]

@@ -1,13 +1,12 @@
-use crate::{color::*, irc::Message as IrcMessage, tags::Kappa, *};
+use crate::prelude::Message as IrcMessage;
+use crate::prelude::*;
 
 use crossbeam_channel as channel;
 use tungstenite as ws;
 
-use std::{
-    net::{TcpListener, TcpStream},
-    thread,
-    time::Duration,
-};
+use std::net::{TcpListener, TcpStream};
+use std::thread;
+use std::time::Duration;
 
 #[derive(Debug, Clone, Serialize)]
 struct Message {
@@ -205,8 +204,8 @@ impl Display {
 
 #[cfg(test)]
 mod tests {
-    use self::testing::*;
     use super::*;
+    use crate::testing::*;
 
     #[test]
     fn color_command() {

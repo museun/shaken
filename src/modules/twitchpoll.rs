@@ -1,11 +1,11 @@
-use crate::*;
+use crate::prelude::*;
+
 use parking_lot::Mutex;
-use std::{
-    collections::HashSet,
-    fmt, str,
-    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
-    time::{Duration, Instant},
-};
+
+use std::collections::HashSet;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::time::{Duration, Instant};
+use std::{fmt, str};
 
 pub struct TwitchPoll {
     poll: Mutex<Option<Poll>>,

@@ -1,4 +1,4 @@
-use crate::*;
+use crate::prelude::*;
 
 // this is used so modules can express their commands
 pub struct Command<T>
@@ -28,16 +28,4 @@ where
         trace!("calling");
         (self.func)(recv, req)
     }
-}
-
-#[macro_export]
-macro_rules! command_list {
-    ($(($name:expr,$cmd:expr)),* $(,)*) => {{
-        let mut list = Vec::new();
-        $(
-            list.push($crate::Command::new($name, $cmd));
-        )*
-        list.sort_unstable_by(|a,b| b.name().len().cmp(&a.name().len()));
-        list
-    }};
 }

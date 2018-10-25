@@ -1,10 +1,10 @@
-#![allow(dead_code)]
-use crate::irc::{Message, TestConn};
-use crate::*;
+// #![allow(dead_code)]
+use crate::prelude::*;
+
+use std::time::Instant;
 
 use crossbeam_channel as channel;
 use rusqlite::Connection;
-use std::time::Instant;
 
 pub fn init_logger() {
     let _ = env_logger::Builder::from_default_env()
@@ -42,7 +42,10 @@ impl<'a> Default for Environment<'a> {
 impl<'a> Environment<'a> {
     pub fn new() -> Self {
         let conn = TestConn::new();
-        use crate::{color::RGB, user::{User, UserStore}};
+        use crate::{
+            color::RGB,
+            user::{User, UserStore},
+        };
 
         // db gets dropped
         let db = crate::database::get_connection();

@@ -1,4 +1,4 @@
-use crate::color::RGB;
+use crate::prelude::*;
 use rusqlite::{self, Connection};
 
 #[derive(Clone, PartialEq, Debug)]

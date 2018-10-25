@@ -1,3 +1,5 @@
+use crate::prelude::*;
+
 pub(crate) mod game;
 use self::game::*;
 
@@ -7,12 +9,6 @@ use rand::prelude::*;
 use std::collections::HashMap;
 use std::str;
 use std::time::{Duration, Instant};
-
-use crate::config;
-use crate::database::{ensure_table, get_connection};
-use crate::irc::Message;
-use crate::util::*;
-use crate::*;
 
 impl Default for Invest {
     fn default() -> Self {

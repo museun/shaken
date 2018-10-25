@@ -1,10 +1,8 @@
-#[macro_use]
-extern crate log;
-
+use log::{error, info, warn};
 use std::{thread, time};
 
 use shaken::modules::{Builtin, Display, Invest, Shakespeare, TwitchPoll};
-use shaken::*;
+use shaken::prelude::*;
 
 fn main() {
     env_logger::Builder::from_default_env()

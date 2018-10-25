@@ -1,7 +1,6 @@
+use crate::prelude::*;
 use rand::prelude::*;
 use std::{cell::RefCell, time}; // this should be chrono time
-
-use crate::{irc::Message, *};
 
 pub struct Shakespeare(RefCell<Inner>);
 
@@ -74,7 +73,7 @@ impl Shakespeare {
     }
 
     fn check_mentions(&self, msg: &Message) -> Option<Response> {
-        let conn = database::get_connection();
+        let conn = get_connection();
         let user = UserStore::get_bot(&conn, &self.0.borrow().name)?;
 
         fn trim_then_check(s: &str, nick: &str) -> bool {

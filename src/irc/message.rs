@@ -1,4 +1,4 @@
-use super::{super::*, Prefix};
+use crate::prelude::*;
 use std::fmt;
 
 // TODO get rid of all of these string allocations
@@ -59,11 +59,8 @@ impl Message {
     pub fn target(&self) -> &str {
         let target = self.args.first().expect("should have a target");
 
-        let user = UserStore::get_bot(
-            &crate::database::get_connection(),
-            &Config::load().twitch.name,
-        )
-        .expect("to get our name");
+        let user = UserStore::get_bot(&get_connection(), &Config::load().twitch.name)
+            .expect("to get our name");
 
         if target.eq_ignore_ascii_case(&user.display) {
             match self.prefix {

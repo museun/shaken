@@ -1,5 +1,4 @@
 use curl::easy::Easy;
-
 use std::{fmt::Write, time::Duration};
 
 pub trait CommaSeparated {
@@ -145,14 +144,4 @@ pub fn get_timestamp() -> u64 {
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
     ts.as_secs() * 1000 + u64::from(ts.subsec_nanos()) / 1_000_000
-}
-
-#[macro_export]
-macro_rules! bail {
-    ($e:expr) => {
-        match $e {
-            Some(item) => item,
-            None => return,
-        }
-    };
 }
