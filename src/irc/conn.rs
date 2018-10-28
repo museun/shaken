@@ -1,7 +1,5 @@
-use std::collections::VecDeque;
 use std::io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines};
 use std::net::{self, TcpStream, ToSocketAddrs};
-use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 use std::{fmt, str};
 
@@ -24,37 +22,6 @@ pub enum ReadStatus {
     Nothing,
 }
 
-pub trait Conn: Send + Sync {
-    fn try_read(&mut self) -> Option<ReadStatus>; // why is this a thing
-    fn read(&mut self) -> Option<String>;
-    fn write(&mut self, data: &str);
-}
-
-pub struct Connection<T> {
-    conn: Box<T>, // why is this a box
-}
-
-impl<T> Connection<T> {
-    pub fn new(c: T) -> Self {
-        Connection { conn: Box::new(c) }
-    }
-}
-
-impl<T> Deref for Connection<T> {
-    type Target = Box<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.conn
-    }
-}
-
-impl<T> DerefMut for Connection<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.conn
-    }
-}
-
-// REFACTOR: this could be parameterized for a Cursor to allow mocking
 pub struct TcpConn {
     reader: Lines<BufReader<TcpStream>>,
     writer: BufWriter<TcpStream>,
@@ -64,26 +31,24 @@ impl TcpConn {
     pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self, ConnError> {
         let conn = TcpStream::connect(&addr).map_err(ConnError::CannotConnect)?;
         conn.set_read_timeout(Some(Duration::from_millis(50)))
-            .expect("to set read timeout");
+            .expect("set read timeout");
 
         debug!("connected");
 
         let reader = {
-            let conn = conn.try_clone().expect("to clone stream");
+            let conn = conn.try_clone().expect("clone stream");
             BufReader::new(conn).lines()
         };
 
         let writer = {
-            let conn = conn.try_clone().expect("to clone stream");
+            let conn = conn.try_clone().expect("clone stream");
             BufWriter::new(conn)
         };
 
         Ok(Self { reader, writer })
     }
-}
 
-impl Conn for TcpConn {
-    fn write(&mut self, data: &str) {
+    pub fn write(&mut self, data: &str) {
         let writer = &mut self.writer;
 
         // XXX: might want to rate limit here
@@ -102,15 +67,14 @@ impl Conn for TcpConn {
                 return;
             }
         }
-        writer.flush().expect("to flush");
+        writer.flush().expect("flush");
     }
 
-    // TODO: make a Result type for this
-    fn try_read(&mut self) -> Option<ReadStatus> {
+    pub fn try_read(&mut self) -> Option<ReadStatus> {
         let reader = &mut self.reader;
 
         if let Some(line) = reader.next() {
-            match line {
+            return match line {
                 Ok(line) => {
                     trace!("trying to read from socket");
                     trace!("<-- {}", &line);
@@ -119,37 +83,23 @@ impl Conn for TcpConn {
                 Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => Some(ReadStatus::Nothing),
                 // TODO read docs on iocp to make sure this isn't a real error
                 Err(ref e) if e.kind() == io::ErrorKind::TimedOut => Some(ReadStatus::Nothing),
-                e => {
+                Err(e) => {
                     warn!("unknown error: {:?}", e);
                     None
                 }
-            }
-        } else {
-            warn!("couldn't read line");
-            None
-        }
-    }
+            };
+        };
 
-    fn read(&mut self) -> Option<String> {
-        let reader = &mut self.reader;
-
-        trace!("trying to read from socket");
-        if let Some(Ok(line)) = reader.next() {
-            trace!("<-- {}", &line);
-            Some(line)
-        } else {
-            warn!("couldn't read line");
-            None
-        }
+        warn!("couldn't read line");
+        None
     }
 }
 
-fn split<S: AsRef<str>>(raw: S) -> Vec<String> {
-    let raw = raw.as_ref();
-
+#[inline]
+fn split(raw: &str) -> Vec<String> {
     if raw.len() > 510 - 2 && raw.contains(':') {
-        let split = raw.splitn(2, ':').map(|s| s.trim()).collect::<Vec<_>>();
-        let (head, tail) = (split[0], split[1]);
+        let mut split = raw.splitn(2, ':').map(str::trim);
+        let (head, tail) = (split.next().unwrap(), split.next().unwrap());
         let mut vec = vec![];
         for part in tail
             .as_bytes()
@@ -164,99 +114,8 @@ fn split<S: AsRef<str>>(raw: S) -> Vec<String> {
                 }
             }
         }
-        vec
-    } else {
-        vec![format!("{}\r\n", raw)]
-    }
-}
-
-#[derive(Debug, Default)]
-pub struct TestConn {
-    read: VecDeque<String>,
-    write: VecDeque<String>,
-}
-
-impl TestConn {
-    pub fn new() -> Self {
-        Self::default()
+        return vec;
     }
 
-    // reads from the write queue (most recent)
-    pub fn pop(&mut self) -> Option<String> {
-        let s = self.write.pop_front();
-        debug!("pop: {:?}", s);
-        s
-    }
-
-    // writes to the read queue
-    pub fn push(&mut self, data: &str) {
-        self.read.push_back(data.into());
-        debug!("push: {:?}", data);
-    }
-
-    pub fn read_len(&self) -> usize {
-        self.read.len()
-    }
-
-    pub fn write_len(&self) -> usize {
-        self.write.len()
-    }
-}
-
-impl Conn for TestConn {
-    fn try_read(&mut self) -> Option<ReadStatus> {
-        self.read().and_then(|s| Some(ReadStatus::Data(s)))
-    }
-
-    fn read(&mut self) -> Option<String> {
-        let s = self.read.pop_front();
-        trace!("read: {:?}", s);
-        s
-    }
-
-    fn write(&mut self, data: &str) {
-        self.write.push_back(data.into());
-        trace!("write: {:?}", data);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn conn_read() {
-        let mut conn = TestConn::new();
-        assert!(conn.read().is_none());
-
-        let list = &["a", "b", "c", "d"];
-        for s in list {
-            conn.push(s);
-        }
-
-        assert_eq!(conn.read_len(), 4);
-        assert_eq!(conn.write_len(), 0);
-
-        for s in list {
-            assert_eq!(conn.read(), Some(s.to_string()));
-        }
-    }
-
-    #[test]
-    fn conn_write() {
-        let mut conn = TestConn::new();
-        assert!(conn.pop().is_none());
-
-        let list = &["a", "b", "c", "d"];
-        for s in list {
-            conn.write(s);
-        }
-
-        assert_eq!(conn.read_len(), 0);
-        assert_eq!(conn.write_len(), 4);
-
-        for s in list.iter() {
-            assert_eq!(conn.pop(), Some(s.to_string()));
-        }
-    }
+    vec![format!("{}\r\n", raw)]
 }

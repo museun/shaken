@@ -1,69 +1,68 @@
 use crate::prelude::*;
-
-pub(crate) mod game;
+mod game;
 use self::game::*;
 
-use parking_lot::Mutex;
 use rand::prelude::*;
 
 use std::collections::HashMap;
 use std::str;
 use std::time::{Duration, Instant};
 
-impl Default for Invest {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 pub struct Invest {
     config: config::Invest,
-    limit: Mutex<HashMap<i64, Instant>>,
-    commands: Vec<Command<Invest>>,
-    _every: Every,
+    limit: HashMap<i64, Instant>,
+    last: Instant,
+    map: CommandMap<Invest>,
 }
 
 impl Module for Invest {
-    fn command(&self, req: &Request<'_>) -> Option<Response> {
-        dispatch_commands!(&self, &req)
+    fn command(&mut self, req: &Request) -> Option<Response> {
+        let map = self.map.shallow_clone();
+        map.dispatch(self, req)
     }
 
-    fn passive(&self, msg: &irc::Message) -> Option<Response> {
-        // for now
-        match &msg.command[..] {
-            "PRIVMSG" => self.on_message(msg),
-            _ => None,
+    fn passive(&mut self, msg: &irc::Message) -> Option<Response> {
+        if msg.command == "PRIVMSG" {
+            return self.on_message(msg);
         }
+        None
+    }
+
+    fn tick(&mut self, dt: Instant) -> Option<Response> {
+        if dt - self.last >= Duration::from_secs(self.config.interval as u64) {
+            InvestGame::increment_all_active(&get_connection(), 1);
+            self.last = dt
+        }
+        None
     }
 }
 
 impl Invest {
-    pub fn new() -> Self {
+    pub fn create() -> Result<Self, ModuleError> {
         ensure_table(InvestGame::ensure_table);
 
-        let (_, every) = every!(
-            |_, _| InvestGame::increment_all_active(&get_connection(), 1),
-            (),
-            60 * 1000
-        );
-
-        let config = Config::load();
-        Self {
-            config: config.invest.clone(),
-            limit: Mutex::new(HashMap::new()),
-            commands: command_list!(
+        let map = CommandMap::create(
+            "Invest",
+            &[
                 ("!invest", Self::invest_command),
                 ("!give", Self::give_command),
                 ("!check", Self::check_command),
                 ("!top5", Self::top5_command),
                 ("!top", Self::top5_command),
                 ("!stats", Self::stats_command),
-            ),
-            _every: every, // store this so the update loop stays alive
-        }
+            ],
+        )?;
+
+        let config = Config::load();
+        Ok(Self {
+            config: config.invest.clone(),
+            limit: HashMap::new(),
+            last: Instant::now(),
+            map,
+        })
     }
 
-    fn invest_command(&self, req: &Request<'_>) -> Option<Response> {
+    fn invest_command(&mut self, req: &Request) -> Option<Response> {
         let id = req.sender();
         if self.check_rate_limit(id) {
             // they've been rate limited
@@ -122,7 +121,7 @@ impl Invest {
         }
     }
 
-    fn give_command(&self, req: &Request<'_>) -> Option<Response> {
+    fn give_command(&mut self, req: &Request) -> Option<Response> {
         let conn = get_connection();
 
         let id = req.sender();
@@ -184,14 +183,14 @@ impl Invest {
         )
     }
 
-    fn check_command(&self, req: &Request<'_>) -> Option<Response> {
+    fn check_command(&mut self, req: &Request) -> Option<Response> {
         match InvestGame::find(req.sender()).unwrap().current {
             credits if credits > 0 => reply!("you have {} credits", credits.commas()),
             _ => reply!("you don't have any credits"),
         }
     }
 
-    fn top5_command(&self, req: &Request<'_>) -> Option<Response> {
+    fn top5_command(&mut self, req: &Request) -> Option<Response> {
         let mut n = req
             .args_iter()
             .next()
@@ -222,7 +221,7 @@ impl Invest {
         reply!("{}", crate::util::join_with(list.iter(), ", "))
     }
 
-    fn stats_command(&self, req: &Request<'_>) -> Option<Response> {
+    fn stats_command(&mut self, req: &Request) -> Option<Response> {
         let id = req.sender();
         let (user, total) = InvestGame::stats_for(id);
 
@@ -279,12 +278,12 @@ impl Invest {
         })
     }
 
-    fn rate_limit(&self, id: i64) {
-        self.limit.lock().insert(id, Instant::now());
+    fn rate_limit(&mut self, id: i64) {
+        self.limit.insert(id, Instant::now());
     }
 
     fn check_rate_limit(&self, id: i64) -> bool {
-        if let Some(t) = self.limit.lock().get(&id) {
+        if let Some(t) = self.limit.get(&id) {
             if Instant::now() - *t < Duration::from_secs(60) {
                 return true;
             }
@@ -337,141 +336,119 @@ mod tests {
 
     #[test]
     fn invest_command() {
-        let mut invest = Invest::new();
-        invest.config.chance = 0.0;
+        let db = database::get_connection();
+        {
+            let mut invest = Invest::create().unwrap();
+            invest.config.chance = 0.0;
+            let mut env = Environment::new(&db, &mut invest);
 
-        let mut env = Environment::new();
-        env.add(&invest);
-        // sequencing..
-        InvestGame::ensure_table(env.get_db_conn());
+            env.push("!invest 10");
+            env.step();
+            assert_eq!(env.pop().unwrap(), "@test: you don't have any credits.");
 
-        env.push("!invest 10");
-        env.step();
-        assert_eq!(env.pop(), Some("@test: you don't have any credits.".into()));
+            InvestGame::give(env.get_user_id(), 100);
+            env.push("!invest 10");
+            env.step();
+            assert_eq!(
+                env.pop().unwrap(),
+                "@test: success! you went from 100 to 110"
+            );
+        };
 
-        InvestGame::give(env.get_user_id(), 100);
-        env.push("!invest 10");
-        env.step();
-        assert_eq!(
-            env.pop(),
-            Some("@test: success! you went from 100 to 110".into())
-        );
-
-        // borrowing is fun
-        let mut invest = Invest::new();
+        let mut invest = Invest::create().unwrap();
         invest.config.chance = 1.0;
-
-        let mut env = Environment::new();
-        env.add(&invest);
+        let mut env = Environment::new(&db, &mut invest);
 
         env.push("!invest 10");
         env.step();
         assert_eq!(
-            env.pop(),
-            Some("@test: failure! you went from 110 to 100 (-10). try again in a minute".into())
+            env.pop().unwrap(),
+            "@test: failure! you went from 110 to 100 (-10). try again in a minute"
         );
         env.push("!invest 10");
-        env.step();
+        env.step_wait(false);
         assert_eq!(env.pop(), None);
     }
 
     #[test]
     fn give_command() {
-        // to hold on to it.
-        let conn = get_connection();
-
-        let invest = Invest::new();
-        let mut env = Environment::new();
-        env.add(&invest);
-
-        InvestGame::ensure_table(env.get_db_conn());
+        let db = database::get_connection();
+        let mut invest = Invest::create().unwrap();
+        let mut env = Environment::new(&db, &mut invest);
 
         env.push("!give foo 10");
         env.step();
-        assert_eq!(env.pop(), Some("@test: you don't have any credits".into()));
+        assert_eq!(env.pop().unwrap(), "@test: you don't have any credits");
 
         InvestGame::give(env.get_user_id(), 100);
         env.push("!give");
         env.step();
         assert_eq!(
-            env.pop(),
-            Some("@test: who do you want to give credits to?".into())
+            env.pop().unwrap(),
+            "@test: who do you want to give credits to?"
         );
 
         env.push("!give test");
         env.step();
-        assert_eq!(env.pop(), Some("@test: what are you doing?".into()));
+        assert_eq!(env.pop().unwrap(), "@test: what are you doing?");
 
         env.push("!give shaken_bot");
         env.step();
-        assert_eq!(env.pop(), Some("@test: I don't want any credits.".into()));
+        assert_eq!(env.pop().unwrap(), "@test: I don't want any credits.");
 
         env.push("!give foo");
         env.step();
-        assert_eq!(env.pop(), Some("@test: I don't know who that is.".into()));
+        assert_eq!(env.pop().unwrap(), "@test: I don't know who that is.");
 
-        let _user = make_test_user(&conn, "foo", 1001);
+        let _user = make_test_user(&db, "foo", 1001);
 
         env.push("!give foo");
         env.step();
-        assert_eq!(
-            env.pop(),
-            Some("@test: thats not a number I understand".into())
-        );
+        assert_eq!(env.pop().unwrap(), "@test: thats not a number I understand");
 
         env.push("!give foo 101");
         env.step();
-        assert_eq!(env.pop(), Some("@test: you only have 100 credits".into()));
+        assert_eq!(env.pop().unwrap(), "@test: you only have 100 credits");
 
         env.push("!give foo 50");
         env.step();
         assert_eq!(
-            env.pop(),
-            Some("@test: they now have 50 credits and you're down to 50 credits".into())
+            env.pop().unwrap(),
+            "@test: they now have 50 credits and you're down to 50 credits"
         );
     }
 
     #[test]
     fn check_command() {
-        // to hold on to it.
-        let _conn = get_connection();
-
-        let invest = Invest::new();
-        let mut env = Environment::new();
-        env.add(&invest);
-
-        InvestGame::ensure_table(env.get_db_conn());
+        let db = database::get_connection();
+        let mut invest = Invest::create().unwrap();
+        let mut env = Environment::new(&db, &mut invest);
 
         env.push("!check");
         env.step();
-        assert_eq!(env.pop(), Some("@test: you don't have any credits".into()));
+        assert_eq!(env.pop().unwrap(), "@test: you don't have any credits");
 
         InvestGame::give(env.get_user_id(), 100);
 
         env.push("!check");
         env.step();
-        assert_eq!(env.pop(), Some("@test: you have 100 credits".into()));
+        assert_eq!(env.pop().unwrap(), "@test: you have 100 credits");
     }
 
     #[test]
     fn top5_command() {
-        // to hold on to it.
-        let conn = get_connection();
-
-        let invest = Invest::new();
-        let mut env = Environment::new();
-        env.add(&invest);
-
-        InvestGame::ensure_table(env.get_db_conn());
-
         use rand::{distributions::Alphanumeric, thread_rng, Rng};
+
+        let db = database::get_connection();
+        let mut invest = Invest::create().unwrap();
+        let mut env = Environment::new(&db, &mut invest);
 
         for n in 1001..1012 {
             let name = thread_rng()
                 .sample_iter(&Alphanumeric)
                 .take(10)
                 .collect::<String>();
-            let _u = make_test_user(&conn, &name, n as i64);
+            let _u = make_test_user(&db, &name, n as i64);
             let r = thread_rng().gen::<u16>();
             InvestGame::give(n, r as usize);
         }
@@ -496,24 +473,4 @@ mod tests {
         env.step();
         assert!(env.pop().is_some());
     }
-
-    #[test]
-    #[ignore] // this requires too much set up. its literally just formatting a string
-    fn stats_command() {
-        // to hold on to it.
-        let _conn = get_connection();
-
-        let invest = Invest::new();
-        let mut env = Environment::new();
-        env.add(&invest);
-
-        InvestGame::ensure_table(env.get_db_conn());
-
-        env.push("!stats");
-        env.step();
-    }
-
-    #[test]
-    #[ignore] // TODO test this
-    fn on_message() {}
 }

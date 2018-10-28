@@ -1,57 +1,117 @@
 use crate::prelude::*;
-
+use std::collections::HashMap;
 use std::sync::Arc;
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
-use parking_lot::RwLock;
+type Func<T> = fn(&mut T, &Request) -> Option<Response>;
+pub struct CommandMap<T>(Arc<HashMap<&'static str, Func<T>>>);
 
-pub trait Module {
-    fn command(&self, _req: &Request<'_>) -> Option<Response> {
-        None
+impl<T> CommandMap<T> {
+    pub fn create(
+        namespace: impl ToString,
+        commands: &[(&'static str, Func<T>)],
+    ) -> Result<CommandMap<T>, ModuleError> {
+        let mut map = HashMap::new();
+        for (k, v) in commands.into_iter() {
+            let cmd = CommandBuilder::command(*k)
+                .namespace(namespace.to_string())
+                .build();
+            if let Err(RegistryError::AlreadyExists) = Registry::register(&cmd) {
+                warn!("{} already exists", cmd.name());
+                return Err(ModuleError::CommandAlreadyExists);
+            }
+            map.insert(*k, *v);
+        }
+        Ok(CommandMap(Arc::new(map)))
     }
-    fn passive(&self, _msg: &irc::Message) -> Option<Response> {
-        None
-    }
-    fn event(&self, _msg: &irc::Message) -> Option<Response> {
-        None
-    }
-    fn tick(&self, _dt: Instant) -> Option<Response> {
-        None
-    }
-}
 
-pub struct Every(crossbeam_channel::Sender<()>);
+    pub fn shallow_clone(&self) -> CommandMap<T> {
+        CommandMap(Arc::clone(&self.0))
+    }
 
-impl Every {
-    pub fn new<T, F>(ctx: Arc<RwLock<T>>, f: F, ms: u64) -> Self
-    where
-        T: Send + Sync + 'static,
-        F: Fn(Arc<RwLock<T>>, Instant) + Send + Sync + 'static,
-    {
-        let (tx, rx) = crossbeam_channel::bounded(0);
-        let tick = crossbeam_channel::tick(Duration::from_millis(ms));
+    // TODO get rid of these dumb allocations
+    pub fn dispatch(&self, this: &mut T, req: &Request) -> Option<Response> {
+        let mut maybes = vec![];
+        for (cmd, func) in self.0.iter() {
+            if let Some(req) = req.search(cmd) {
+                maybes.push((cmd, func, req));
+            }
+        }
 
-        let f = Arc::new(RwLock::new(f));
-        thread::spawn(move || loop {
-            select!{
-                recv(tick, dt) => {
-                    if let Some(dt) = dt {
-                        let ctx = Arc::clone(&ctx);
-                        (*f.write())(ctx, dt);
-                    }
-                    // when is a None sent?
-                }
-                recv(rx, _) => { return; }
+        if maybes.is_empty() {
+            return None;
+        }
+
+        let first = maybes.remove(0);
+        let (_, func, req) = maybes.iter().fold(first, |acc, (cmd, func, req)| {
+            if cmd.len() < acc.0.len() {
+                acc
+            } else {
+                (cmd, func, req.clone()) // hmm
             }
         });
-
-        Self { 0: tx }
+        func(this, &req)
     }
 }
 
-impl Drop for Every {
-    fn drop(&mut self) {
-        self.0.send(())
+pub trait Module: Send {
+    fn handle(&mut self, rx: Receiver, tx: Sender) {
+        // TODO handle panics here
+        let mut resp = vec![];
+        while let Some(ev) = rx.recv() {
+            let msg = match ev {
+                Event::Message(msg, req) => {
+                    match msg.command.as_str() {
+                        "PRIVMSG" | "WHISPER" => {
+                            if let Some(req) = req {
+                                resp.push(self.command(&req));
+                            }
+                            resp.push(self.passive(&msg))
+                        }
+                        _ => resp.push(self.event(&msg)),
+                    };
+                    msg
+                }
+                Event::Tick(dt) => {
+                    if let Some(resp) = self.tick(dt) {
+                        tx.send((None, resp));
+                    }
+                    continue;
+                }
+                Event::Inspect(msg, resp) => {
+                    self.inspect(&msg, &resp);
+                    continue;
+                }
+            };
+
+            for resp in resp.drain(..).filter_map(|s| s) {
+                tx.send((Some(msg.clone()), resp))
+            }
+        }
     }
+
+    fn command(&mut self, _req: &Request) -> Option<Response> {
+        None
+    }
+
+    fn passive(&mut self, _msg: &irc::Message) -> Option<Response> {
+        None
+    }
+
+    fn event(&mut self, _msg: &irc::Message) -> Option<Response> {
+        None
+    }
+
+    fn tick(&mut self, _dt: Instant) -> Option<Response> {
+        None
+    }
+
+    /// don't block in this or you'll probably break the tests
+    // TODO: make this async
+    fn inspect(&mut self, _msg: &irc::Message, _resp: &Response) {}
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Error {
+    CommandAlreadyExists,
 }

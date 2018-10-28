@@ -1,19 +1,38 @@
 use crate::prelude::*;
+use std::time::Duration;
 
 use chrono::prelude::*;
+use rusqlite::{types::ToSql, Connection, NO_PARAMS};
+
+use crate::module::CommandMap;
+
+#[derive(Default, Debug)]
+struct UserCommand {
+    command: String,
+    body: String,
+    description: String,
+    creator: i64,
+    created_at: i64,
+    uses: i64,
+    disabled: bool,
+}
 
 pub struct Builtin {
     twitch: TwitchClient,
     channel: String,
-    commands: Vec<Command<Builtin>>,
+    map: CommandMap<Builtin>,
 }
 
 impl Module for Builtin {
-    fn command(&self, req: &Request<'_>) -> Option<Response> {
-        dispatch_commands!(&self, &req)
+    fn command(&mut self, req: &Request) -> Option<Response> {
+        let map = self.map.shallow_clone();
+        match map.dispatch(self, req) {
+            Some(resp) => Some(resp),
+            None => self.try_user_command(req),
+        }
     }
 
-    fn event(&self, msg: &irc::Message) -> Option<Response> {
+    fn event(&mut self, msg: &irc::Message) -> Option<Response> {
         match msg.command() {
             "001" => join(&format!("#{}", self.channel)),
             "PING" => raw!("PONG :{}", &msg.data),
@@ -22,40 +41,315 @@ impl Module for Builtin {
     }
 }
 
-impl Default for Builtin {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-macro_rules! maybe {
-    ($e:expr) => {
-        if $e {
-            return reply!("the stream doesn't seem to be live");
-        }
-    };
-}
-
 impl Builtin {
-    pub fn new() -> Self {
-        Self {
+    pub fn create() -> Result<Self, ModuleError> {
+        Self::ensure_table(&database::get_connection());
+
+        Self::fetch_command_names()
+            .iter()
+            .filter(|s| !Self::is_available(&s))
+            .for_each(|cmd| {
+                warn!(
+                    "user command '{}' already exists as a system command, disabling it",
+                    cmd,
+                );
+                Self::disable_bad_command(cmd);
+            });
+
+        Ok(Self {
             twitch: TwitchClient::new(),
-            commands: command_list!(
-                ("!version", Builtin::version_command),
-                ("!shaken", Builtin::shaken_command),
-                ("!viewers", Builtin::viewers_command),
-                ("!uptime", Builtin::uptime_command),
-                ("!editor", Builtin::editor_command),
-                ("!theme", Builtin::editor_command),
-                ("!github", Builtin::github_command),
-            ),
+            map: CommandMap::create(
+                "Builtin",
+                &[
+                    ("!version", Builtin::version_command),
+                    ("!viewers", Builtin::viewers_command),
+                    ("!uptime", Builtin::uptime_command),
+                    ("!add", Builtin::add_command),
+                    ("!edit", Builtin::edit_command),
+                    ("!info", Builtin::info_command),
+                    ("!remove", Builtin::remove_command),
+                    ("!help", Builtin::help_command),
+                ],
+            )?,
             channel: Config::load().twitch.channel.to_string(),
+        })
+    }
+
+    fn ensure_table(conn: &Connection) {
+        conn.execute(
+            r#"CREATE TABLE IF NOT EXISTS UserCommands(
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                command         TEXT NOT NULL,
+                body            TEXT NOT NULL,
+                description     TEXT NOT NULL,
+                creator         INTEGER NOT NULL,
+                created_at      INTEGER NOT NULL,
+                uses            INTEGER NOT NULL,
+                disabled        INTEGER,
+                UNIQUE(command)
+            )"#,
+            NO_PARAMS,
+        )
+        .expect("create UserCommands table");
+    }
+
+    fn try_user_command(&self, req: &Request) -> Option<Response> {
+        struct Command {
+            body: String,
+            disabled: bool,
+        }
+
+        let conn = database::get_connection();
+        let mut statement = conn
+            .prepare("SELECT body, disabled FROM UserCommands WHERE command = ?")
+            .expect("valid sql");
+
+        let mut result = statement
+            .query_map(&[&req.args()], |row| Command {
+                body: row.get(0),
+                disabled: row.get(1),
+            })
+            .expect("valid sql");
+
+        match result.next() {
+            Some(Ok(ref command)) if !command.disabled => say!("{}", command.body),
+            _ => None,
         }
     }
 
-    fn version_command(&self, _req: &Request<'_>) -> Option<Response> {
-        let rev = option_env!("SHAKEN_GIT_REV").expect("to get rev");
-        let branch = option_env!("SHAKEN_GIT_BRANCH").expect("to get branch");
+    fn add_command(&mut self, req: &Request) -> Option<Response> {
+        require_priviledges!(&req, "you cannot do that");
+
+        let (command, body) = match Self::arg_parts(&req) {
+            Some((head, tail)) => (head, tail),
+            None => return reply!("invalid arguments"),
+        };
+
+        if !Self::is_available(&command) {
+            return reply!("'{}' is a reserved name", &command);
+        }
+
+        let command = UserCommand {
+            command,
+            body,
+            description: "no description provided".into(),
+            creator: req.sender(),
+            created_at: Utc::now().timestamp(),
+            uses: 0,
+            disabled: false,
+        };
+
+        let conn = database::get_connection();
+        match conn.execute(
+            r#"INSERT OR IGNORE INTO UserCommands (
+                command, body, description, creator, 
+                created_at, uses, disabled
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)            
+            "#,
+            &[
+                &command.command as &dyn ToSql,
+                &command.body,
+                &command.description,
+                &command.creator,
+                &command.created_at,
+                &command.uses,
+                &command.disabled,
+            ],
+        ) {
+            Ok(row) if row == 0 => reply!("'{}' already exists as a command", command.command),
+            Ok(_row) => reply!("added '{}' as a command", command.command),
+            Err(err) => {
+                // this isn't really reachable, but unsafe code is unsafe
+                warn!(
+                    "{} tried to add '{}' as a command, sql error: {}",
+                    req.sender(),
+                    command.command,
+                    err
+                );
+                reply!("couldn't add '{}' as a command", command.command)
+            }
+        }
+    }
+
+    fn edit_command(&mut self, req: &Request) -> Option<Response> {
+        require_priviledges!(&req, "you cannot do that");
+
+        let (command, description) = match Self::arg_parts(&req) {
+            Some((head, tail)) => (head, tail),
+            None => return reply!("invalid arguments"),
+        };
+
+        let conn = database::get_connection();
+        match conn.execute(
+            "UPDATE UserCommands SET description = ? WHERE command = ?",
+            &[&description as &dyn ToSql, &command],
+        ) {
+            Ok(_row) => reply!("edited '{}'", command),
+            Err(err) => {
+                warn!(
+                    "{} tried to edit '{}', sql error: {}",
+                    req.sender(),
+                    command,
+                    err
+                );
+                reply!("couldn't edit '{}'", command)
+            }
+        }
+    }
+
+    fn info_command(&mut self, req: &Request) -> Option<Response> {
+        require_priviledges!(&req, "you cannot do that");
+
+        let command = match Self::try_get_command(req.args()) {
+            None => return reply!("'{}' isn't a command", req.args()),
+            Some(command) => command,
+        };
+
+        // hmm
+        let conn = database::get_connection();
+        let user = match UserStore::get_user_by_id(&conn, command.creator) {
+            Some(user) => user.display,
+            None => "unknown".to_string(),
+        };
+
+        multi!(
+            reply!("{} -- {}", command.command, command.description),
+            reply!("{}", command.body),
+            reply!(
+                "created by {}, at {}. used {} times",
+                user,
+                Duration::from_secs(command.created_at as u64).as_readable_time(),
+                command.uses.commas(),
+            )
+        )
+    }
+
+    fn remove_command(&mut self, req: &Request) -> Option<Response> {
+        require_priviledges!(&req, "you cannot do that");
+
+        let (command, _) = match Self::arg_parts(&req) {
+            Some((head, tail)) => (head, tail),
+            None => return reply!("invalid arguments"),
+        };
+
+        let conn = database::get_connection();
+        conn.execute("DELETE FROM UserCommands WHERE command = ?", &[&command])
+            .expect("valid sql");
+
+        reply!("if that was a command, its no longer one")
+    }
+
+    fn help_command(&mut self, _req: &Request) -> Option<Response> {
+        fn wrap<'a>(input: impl Iterator<Item = &'a String>) -> Vec<String> {
+            const WIDTH: usize = 40;
+            let (mut lines, mut line) = (vec![], String::new());
+            for command in input {
+                if line.len() + command.len() > WIDTH {
+                    lines.push(line.clone());
+                    line.clear();
+                }
+                if !line.is_empty() {
+                    line.push(' ');
+                }
+                line.push_str(&command);
+            }
+            if !line.is_empty() {
+                lines.push(line)
+            }
+            lines
+        }
+
+        // TODO look up specific commands
+
+        let system = wrap(
+            // sadness
+            Registry::commands()
+                .iter()
+                .map(|cmd| cmd.name().to_string())
+                .collect::<Vec<_>>()
+                .iter(),
+        );
+        let user = wrap(Self::fetch_command_names().iter());
+
+        multi!(
+            whisper!("system commands:"),
+            multi(system.iter().map(|s| whisper!("{}", s))),
+            whisper!("user commands:"),
+            multi(user.iter().map(|s| whisper!("{}", s))),
+        )
+    }
+
+    fn try_get_command(name: &str) -> Option<UserCommand> {
+        let conn = database::get_connection();
+        let command = conn
+            .prepare(
+                r#"SELECT command, body, description, creator, created_at, uses, disabled                     
+                    FROM UserCommands WHERE command = ?"#,
+            )
+            .expect("valid sql")
+            .query_map(&[&name], |row| UserCommand {
+                command: row.get(0),
+                body: row.get(1),
+                description: row.get(2),
+                creator: row.get(3),
+                created_at: row.get(4),
+                uses: row.get(5),
+                disabled: row.get(6)
+            })
+            .expect("valid sql")
+            .next();
+
+        command?.ok()
+    }
+
+    fn fetch_command_names() -> Vec<String> {
+        let conn = database::get_connection();
+        let mut commands = conn
+            .prepare("SELECT command FROM UserCommands")
+            .expect("valid sql")
+            .query_map(NO_PARAMS, |row| row.get(0))
+            .expect("valid sql")
+            .filter_map(|s| s.ok())
+            .collect::<Vec<_>>();
+
+        commands.sort_unstable();
+        commands
+    }
+
+    fn disable_bad_command(cmd: impl AsRef<str>) {
+        let conn = database::get_connection();
+        let command = cmd.as_ref();
+
+        conn.execute(
+            "UPDATE UserCommands SET disabled = ? WHERE command = ?",
+            &[&true as &dyn ToSql, &command],
+        )
+        .expect("valid sql");
+
+        info!("disabled bad command: {}", command);
+    }
+
+    fn is_available(cmd: impl AsRef<str>) -> bool {
+        Registry::is_available(&cmd.as_ref())
+    }
+
+    fn arg_parts(req: &Request) -> Option<(String, String)> {
+        let mut iter = req.args_iter();
+        let head = iter.next()?.to_string();
+        let tail = iter.map(str::trim).fold(String::new(), |mut acc, c| {
+            if !acc.is_empty() {
+                acc.push_str(" ");
+            }
+            acc.push_str(c);
+            acc
+        });
+        Some((head, tail))
+    }
+    // end of user commands
+
+    fn version_command(&mut self, _req: &Request) -> Option<Response> {
+        let rev = option_env!("SHAKEN_GIT_REV").expect("get rev");
+        let branch = option_env!("SHAKEN_GIT_BRANCH").expect("get branch");
 
         reply!(
             "https://github.com/museun/shaken ({} on '{}' branch)",
@@ -64,136 +358,41 @@ impl Builtin {
         )
     }
 
-    fn editor_command(&self, _req: &Request<'_>) -> Option<Response> {
-        multi!(
-            say!("The editor is Visual Studio Code."),
-            say!("..and the theme is https://github.com/museun/museun-theme")
-        )
+    fn viewers_command(&mut self, _req: &Request) -> Option<Response> {
+        let streams = self.twitch.get_streams(&[self.channel.as_str()]);
+        let stream = match streams {
+            Some(ref s) if !s.is_empty() => &s[0],
+            _ => return reply!("the stream doesn't seem to be live"),
+        };
+
+        if stream.live.is_empty() || stream.live == "" {
+            return reply!("the stream doesn't seem to be live");
+        }
+
+        reply!("viewers: {}", stream.viewer_count.commas())
     }
 
-    fn github_command(&self, _req: &Request<'_>) -> Option<Response> {
-        say!("I upload some of these projects to: https://github.com/museun")
-    }
+    fn uptime_command(&mut self, _req: &Request) -> Option<Response> {
+        let streams = self.twitch.get_streams(&[self.channel.as_str()]);
+        let stream = match streams {
+            Some(ref s) if !s.is_empty() => &s[0],
+            _ => return reply!("the stream doesn't seem to be live"),
+        };
 
-    fn shaken_command(&self, _req: &Request<'_>) -> Option<Response> {
-        say!("I try to impersonate The Bard, by being trained on all of his works.")
-    }
-
-    fn viewers_command(&self, _req: &Request<'_>) -> Option<Response> {
-        let streams = self.twitch.get_streams(&[&self.channel]);
-        maybe!(streams.is_none());
-
-        let streams = streams.unwrap();
-        maybe!(streams.is_empty());
-
-        let stream = &streams[0];
-        maybe!(stream.live.is_empty() || stream.live == "");
-
-        let viewers = stream.viewer_count.commas();
-        reply!("viewers: {}", viewers)
-    }
-
-    fn uptime_command(&self, _req: &Request<'_>) -> Option<Response> {
-        let timecode = Self::get_uptime_from_obs();
-
-        let streams = self.twitch.get_streams(&[&self.channel]);
-        maybe!(streams.is_none());
-
-        let streams = streams.unwrap();
-        maybe!(streams.is_empty());
-
-        let stream = &streams[0];
-        maybe!(stream.live.is_empty() || stream.live == "");
+        if stream.live.is_empty() || stream.live == "" {
+            return reply!("the stream doesn't seem to be live");
+        }
 
         let start = stream
             .started_at
             .parse::<DateTime<Utc>>()
-            .expect("to parse datetime");
+            .expect("parse datetime");
 
         let dur = (Utc::now() - start)
             .to_std()
-            .expect("to convert to std duration");
+            .expect("convert to std duration");
 
-        let mut msg = format!("uptime from twitch: {}", dur.as_readable_time());
-        if let Some(timecode) = timecode {
-            // 01:40:05.671
-            let mut map = [("hours", 0), ("minutes", 0), ("seconds", 0)];
-
-            // trim off the .nnn
-            for (i, part) in timecode[..timecode.len() - 4]
-                .split_terminator(':')
-                .take(3)
-                .enumerate()
-            {
-                map[i] = (map[i].0, part.parse::<u64>().unwrap());
-            }
-
-            let timecode = crate::util::format_time_map(&map);
-            msg.push_str(&format!(", obs says: {}", &timecode));
-        }
-
-        // TODO: say! doesn't do whispers
-        say!("{}", msg)
-    }
-
-    fn get_uptime_from_obs() -> Option<String> {
-        fn get_inner(tx: &crossbeam_channel::Sender<String>) -> Option<()> {
-            let conn = tungstenite::connect(::url::Url::parse("ws://localhost:45454").unwrap());
-            if conn.is_err() {
-                return None;
-            }
-
-            let (mut socket, _r) = conn.unwrap();
-
-            // this should really be done by serde, but we're only going to send 1 message
-            // for now
-            let msg = r#"{"request-type":"GetStreamingStatus", "message-id":"0"}"#.to_string();
-            socket
-                .write_message(tungstenite::Message::Text(msg))
-                .expect("must be able to write this");
-
-            let msg = socket
-                .read_message()
-                .map_err(|e| error!("cannot read message from websocket: {}", e))
-                .ok()?;
-
-            let msg = msg
-                .to_text()
-                .map_err(|e| error!("cannot convert message to text: {}", e))
-                .ok()?;
-
-            let val = serde_json::from_str::<serde_json::Value>(&msg)
-                .map_err(|e| error!("cannot parse json: {}", e))
-                .ok()?;
-
-            if val["streaming"].is_boolean() && val["streaming"].as_bool().unwrap() {
-                let timecode = val["stream-timecode"].as_str()?;
-                let ts = timecode.to_string();
-                tx.send(ts);
-                Some(())
-            } else {
-                None
-            }
-        }
-
-        let (tx, rx) = crossbeam_channel::bounded(1);
-        let tx = tx.clone();
-        // wtf is this
-        ::std::thread::spawn(move || {
-            if get_inner(&tx).is_none() {
-                drop(tx)
-            }
-        });
-
-        use crossbeam_channel::after;
-        let timeout = ::std::time::Duration::from_millis(3000);
-        select!{
-            recv(rx, msg) => msg,
-            recv(after(timeout)) =>{
-                warn!("timed out when trying to get the uptime from obs");
-                None
-            },
-        }
+        say!("uptime: {}", dur.as_readable_time())
     }
 }
 
@@ -204,9 +403,9 @@ mod tests {
 
     #[test]
     fn autojoin() {
-        let builtin = &Builtin::new();
-        let mut env = Environment::new();
-        env.add(builtin);
+        let db = database::get_connection();
+        let mut builtin = Builtin::create().unwrap();
+        let mut env = Environment::new(&db, &mut builtin);
 
         env.push_raw(":test.localhost 001 museun :Welcome to IRC");
         env.step();
@@ -215,34 +414,19 @@ mod tests {
 
     #[test]
     fn autopong() {
-        let builtin = &Builtin::new();
-        let mut env = Environment::new();
-        env.add(builtin);
-
+        let db = database::get_connection();
+        let mut builtin = Builtin::create().unwrap();
+        let mut env = Environment::new(&db, &mut builtin);
         env.push_raw("PING :foobar");
         env.step();
         assert_eq!(env.pop_raw(), Some("PONG :foobar".into()));
     }
 
     #[test]
-    fn shaken_command() {
-        let builtin = &Builtin::new();
-        let mut env = Environment::new();
-        env.add(builtin);
-
-        env.push("!shaken");
-        env.step();
-        assert_eq!(
-            env.pop(),
-            Some("I try to impersonate The Bard, by being trained on all of his works.".into())
-        );
-    }
-
-    #[test]
     fn version_command() {
-        let builtin = Builtin::new();
-        let mut env = Environment::new();
-        env.add(&builtin);
+        let db = database::get_connection();
+        let mut builtin = Builtin::create().unwrap();
+        let mut env = Environment::new(&db, &mut builtin);
 
         env.push("!version");
         env.step();
@@ -254,28 +438,160 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // this requires mocking a twitch response
-    fn viewers_command() {
-        let builtin = &Builtin::new();
-        let mut env = Environment::new();
-        env.add(builtin);
+    fn add_command() {
+        let db = database::get_connection();
+        let mut builtin = Builtin::create().unwrap();
+        let mut env = Environment::new(&db, &mut builtin);
 
-        env.push("!viewers");
+        env.push_owner("!add !test this is a test");
         env.step();
+        assert_eq!(env.pop().unwrap(), "@test: added '!test' as a command");
 
-        warn!("{:#?}", env.pop());
+        env.push_owner("!add !test this is a test");
+        env.step();
+        assert_eq!(
+            env.pop().unwrap(),
+            "@test: '!test' already exists as a command"
+        );
+
+        Registry::register(&CommandBuilder::command("!foo").namespace("bar").build())
+            .expect("reserve foo");
+
+        env.push_owner("!add !foo this is a test");
+        env.step();
+        assert_eq!(env.pop().unwrap(), "@test: '!foo' is a reserved name");
     }
 
     #[test]
-    #[ignore] // this requires mocking a twitch response, and an obs response
-    fn uptime_command() {
-        let builtin = &Builtin::new();
-        let mut env = Environment::new();
-        env.add(builtin);
+    fn edit_command() {
+        let db = database::get_connection();
+        let mut builtin = Builtin::create().unwrap();
+        let mut env = Environment::new(&db, &mut builtin);
 
-        env.push("!uptime");
+        env.push_owner("!add !test this is a test");
+        env.step();
+        env.drain();
+
+        env.push_owner("!edit !test with different flavor text");
+        env.step();
+        assert_eq!(env.pop().unwrap(), "@test: edited '!test'");
+
+        let cmd = Builtin::try_get_command("!test").unwrap();
+        assert_eq!(cmd.command, "!test".to_string());
+        assert_eq!(cmd.description, "with different flavor text".to_string());
+    }
+
+    #[test]
+    fn info_command() {
+        let db = database::get_connection();
+        let mut builtin = Builtin::create().unwrap();
+        let mut env = Environment::new(&db, &mut builtin);
+
+        env.push_owner("!info !test");
+        env.step();
+        assert_eq!(env.pop().unwrap(), "@test: '!test' isn't a command");
+
+        env.push_owner("!add !test this is a test");
+        env.step();
+        env.drain();
+
+        env.push_owner("!info !test");
+        env.step();
+        assert_eq!(
+            env.pop().unwrap(),
+            "@test: !test -- no description provided"
+        );
+        assert_eq!(env.pop().unwrap(), "@test: this is a test");
+        assert!(env.pop().unwrap().starts_with("@test: created by test"));
+    }
+
+    #[test]
+    fn remove_command() {
+        let db = database::get_connection();
+        let mut builtin = Builtin::create().unwrap();
+        let mut env = Environment::new(&db, &mut builtin);
+
+        env.push_owner("!remove !test");
+        env.step();
+        assert_eq!(
+            env.pop().unwrap(),
+            "@test: if that was a command, its no longer one"
+        );
+
+        env.push_owner("!add !test this is a test");
+        env.step();
+        env.drain();
+
+        env.push_owner("!remove !test");
+        env.step();
+        assert_eq!(
+            env.pop().unwrap(),
+            "@test: if that was a command, its no longer one"
+        );
+    }
+
+    #[test]
+    fn help_command() {
+        let db = database::get_connection();
+        let mut builtin = Builtin::create().unwrap();
+        let mut env = Environment::new(&db, &mut builtin);
+
+        use rand::distributions::Alphanumeric;
+        use rand::prelude::*;
+        let mut rng = thread_rng();
+
+        let mut next = || {
+            let n = rng.gen_range(3, 8);
+            std::iter::repeat(())
+                .map(|_| rng.sample(Alphanumeric))
+                .take(n)
+                .collect::<String>()
+        };
+
+        for _ in 0..20 {
+            env.push_owner(&format!("!add !{} foobar", next()));
+            env.step();
+        }
+        env.drain();
+
+        env.push_owner("!help !test");
         env.step();
 
-        warn!("{:#?}", env.pop());
+        let expected = Registry::commands().len() // system
+                        + Builtin::fetch_command_names().len(); // user
+
+        let mut max = 0;
+        while let Some(n) = env.pop() {
+            max += n.chars().filter(|&c| c == '!').count()
+        }
+
+        assert_eq!(max, expected);
+    }
+
+    #[allow(dead_code)]
+    fn dump() {
+        use rusqlite::{types::ValueRef, NO_PARAMS};
+
+        let conn = database::get_connection();
+        let mut statement = conn
+            .prepare("select * from usercommands")
+            .expect("valid sql");
+        let mut rows = statement.query(NO_PARAMS).expect("valid sql");
+        while let Some(Ok(row)) = rows.next() {
+            let mut s = String::new();
+            for n in 0..row.column_count() {
+                if !s.is_empty() {
+                    s.push(' ');
+                }
+                s.push_str(&match row.get_raw(n) {
+                    ValueRef::Null => "null".into(),
+                    ValueRef::Integer(n) => format!("{}", n),
+                    ValueRef::Real(n) => format!("{}", n),
+                    ValueRef::Text(s) => s.into(),
+                    ValueRef::Blob(b) => format!("{:?}", b),
+                });
+            }
+            debug!("{}", s)
+        }
     }
 }

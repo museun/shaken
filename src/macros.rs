@@ -78,32 +78,6 @@ macro_rules! privmsg {
 }
 
 #[macro_export]
-macro_rules! command_list {
-    ($(($name:expr,$cmd:expr)),* $(,)*) => {{
-        use crate::prelude::Command;
-        let mut list = Vec::new();
-        $(
-            list.push(Command::new($name, $cmd));
-        )*
-        list.sort_unstable_by(|a,b| b.name().len().cmp(&a.name().len()));
-        list
-    }};
-}
-
-#[macro_export]
-macro_rules! dispatch_commands {
-    ($this:expr, $req:expr) => {{
-        for cmd in &$this.commands {
-            if let Some(req) = $req.search(cmd.name()) {
-                trace!("calling '{}' with {:?}", cmd.name(), &req);
-                return cmd.call($this, &req);
-            }
-        }
-        None
-    }};
-}
-
-#[macro_export]
 macro_rules! require_owner {
     ($req:expr) => {{
         if !$req.is_from_owner() {
@@ -120,22 +94,49 @@ macro_rules! require_owner {
 }
 
 #[macro_export]
-macro_rules! every {
-    ($func:expr) => {
-        every!($func, (), 1000)
-    };
+macro_rules! require_broadcaster {
+    ($req:expr) => {{
+        if !$req.is_from_broadcaster() {
+            return None;
+        };
+        $req
+    }};
+    ($req:expr, $reason:expr) => {{
+        if !$req.is_from_broadcaster() {
+            return reply!($reason);
+        };
+        $req
+    }};
+}
 
-    // default to one second
-    ($func:expr, $this:expr) => {
-        every!($func, $this, 1000)
-    };
+#[macro_export]
+macro_rules! require_moderator {
+    ($req:expr) => {{
+        if !$req.is_from_moderator() {
+            return None;
+        };
+        $req
+    }};
+    ($req:expr, $reason:expr) => {{
+        if !$req.is_from_moderator() {
+            return reply!($reason);
+        };
+        $req
+    }};
+}
 
-    ($func:expr, $this:expr, $dur:expr) => {{
-        use {crate::prelude::Every, std::sync::Arc};
-        let this = Arc::new(parking_lot::RwLock::new($this));
-        (
-            Arc::clone(&this),
-            Every::new(Arc::clone(&this), $func, $dur),
-        )
+#[macro_export]
+macro_rules! require_priviledges {
+    ($req:expr) => {{
+        if !$req.is_from_owner() && !$req.is_from_broadcaster() && !$req.is_from_moderator() {
+            return None;
+        };
+        $req
+    }};
+    ($req:expr, $reason:expr) => {{
+        if !$req.is_from_owner() && !$req.is_from_broadcaster() && !$req.is_from_moderator() {
+            return reply!($reason);
+        };
+        $req
     }};
 }

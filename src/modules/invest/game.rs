@@ -2,7 +2,7 @@
 use crate::database::get_connection;
 
 use rand::prelude::*;
-use rusqlite::Connection; // TODO re-export this
+use rusqlite::{Connection, NO_PARAMS};
 
 const INVEST_TABLE: &str = r#"
 BEGIN;
@@ -254,7 +254,7 @@ impl InvestGame {
             WHERE Max < Current;
         "#;
 
-        let _ = conn.execute(S, &[]);
+        let _ = conn.execute(S, NO_PARAMS);
     }
 
     pub fn get_collected(conn: &Connection) -> Credit {
@@ -262,7 +262,7 @@ impl InvestGame {
             .prepare("SELECT Total FROM InvestStats WHERE ID = 0 LIMIT 1")
             .expect("valid sql");
         let mut iter = stmt
-            .query_map(&[], |row| row.get::<_, i64>(0) as usize)
+            .query_map(NO_PARAMS, |row| row.get::<_, i64>(0) as usize)
             .expect("to get total");
         iter.next().expect("to get total").expect("to get total")
     }

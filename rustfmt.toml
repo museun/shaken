@@ -1,5 +1,5 @@
 wrap_comments = true
-normalize_comments = true
+# normalize_comments = true
 format_strings = true
 format_macro_matchers = true
 fn_single_line = false

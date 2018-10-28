@@ -3,19 +3,19 @@ use crate::prelude::*;
 // this is used so modules can express their commands
 pub struct Command<T>
 where
-    T: Module,
+    T: Module + ?Sized,
 {
     name: String,
-    func: fn(&T, &Request<'_>) -> Option<Response>,
+    func: fn(&mut T, &Request) -> Option<Response>,
 }
 
 impl<T> Command<T>
 where
     T: Module,
 {
-    pub fn new(name: &str, func: fn(&T, &Request<'_>) -> Option<Response>) -> Self {
+    pub fn new<S: ToString>(name: S, func: fn(&mut T, &Request) -> Option<Response>) -> Self {
         Self {
-            name: name.into(),
+            name: name.to_string(),
             func,
         }
     }
@@ -24,7 +24,7 @@ where
         &self.name
     }
 
-    pub fn call(&self, recv: &T, req: &Request<'_>) -> Option<Response> {
+    pub fn call(&self, recv: &mut T, req: &Request) -> Option<Response> {
         trace!("calling");
         (self.func)(recv, req)
     }

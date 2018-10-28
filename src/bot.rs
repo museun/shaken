@@ -1,49 +1,79 @@
 use crate::prelude::*;
-
 use crossbeam_channel as channel;
-use parking_lot::Mutex;
-
-use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
 
-pub struct Bot<'a, T>
-where
-    T: irc::Conn + 'static,
-{
-    conn: Arc<Mutex<irc::Connection<T>>>,
-    modules: Vec<&'a dyn Module>,
-    inspect: Box<dyn Fn(&irc::Message, &Response) + 'a>,
+pub type Receiver = channel::Receiver<Event>;
+pub type Sender = channel::Sender<(Option<irc::Message>, Response)>;
+
+#[derive(Debug, Clone)]
+pub enum Event {
+    Message(irc::Message, Option<Request>),
+    Inspect(irc::Message, Response),
+    Tick(Instant),
 }
 
-impl<'a, T> Bot<'a, T>
-where
-    T: irc::Conn + 'static,
-{
-    /// just clone the connection
-    pub fn new(conn: T) -> Self {
-        let conn = irc::Connection::new(conn);
+pub struct Bot {
+    out_tx: channel::Sender<String>,
+    inspect_tx: channel::Sender<(irc::Message, Response)>,
+}
 
-        Self {
-            conn: Arc::new(Mutex::new(conn)),
-            modules: vec![],
-            inspect: Box::new(|_, _| {}),
+impl Bot {
+    pub fn create(mut conn: irc::TcpConn) -> (Self, Receiver) {
+        let (in_tx, in_rx) = channel::unbounded();
+        let (out_tx, out_rx) = channel::unbounded::<String>();
+        let (inspect_tx, inspect_rx) = channel::bounded(4);
+
+        thread::spawn(move || {
+            let tick = channel::tick(Duration::from_millis(1000));
+
+            loop {
+                if let Some(data) = out_rx.try_recv() {
+                    conn.write(&data)
+                }
+                match conn.try_read() {
+                    Some(irc::ReadStatus::Data(msg)) => {
+                        let msg = irc::Message::parse(&msg);
+                        let req = Request::try_from(&msg);
+                        in_tx.send(Event::Message(msg, req))
+                    }
+                    Some(irc::ReadStatus::Nothing) => {}
+                    _ => {
+                        drop(in_tx);
+                        return;
+                    }
+                };
+
+                if let Some(tick) = tick.try_recv() {
+                    in_tx.send(Event::Tick(tick))
+                }
+
+                if let Some((msg, resp)) = inspect_rx.try_recv() {
+                    in_tx.send(Event::Inspect(msg, resp))
+                }
+            }
+        });
+
+        (Bot { out_tx, inspect_tx }, in_rx)
+    }
+
+    pub fn send(&self, data: impl Into<String>) {
+        self.out_tx.send(data.into());
+    }
+
+    pub fn process(&self, rx: channel::Receiver<(Option<irc::Message>, Response)>) {
+        for (msg, resp) in rx {
+            let msg = msg.as_ref();
+            if let Some(msg) = msg {
+                self.inspect_tx.send((msg.clone(), resp.clone()));
+            }
+
+            if let Some(resp) = resp.build(msg) {
+                resp.into_iter()
+                    .inspect(|s| trace!("writing response: {}", s))
+                    .for_each(|m| self.send(m));
+            }
         }
-    }
-
-    pub(crate) fn get_conn_mut(&mut self) -> Arc<Mutex<irc::Connection<T>>> {
-        Arc::clone(&self.conn)
-    }
-
-    pub fn add(&mut self, m: &'a dyn Module) {
-        self.modules.push(m)
-    }
-
-    pub fn set_inspect<F>(&mut self, f: F)
-    where
-        F: Fn(&irc::Message, &Response) + 'a,
-    {
-        self.inspect = Box::new(f)
     }
 
     pub fn register(&self, nick: &str) {
@@ -54,178 +84,12 @@ where
         self.send("CAP REQ :twitch.tv/membership");
         self.send("CAP REQ :twitch.tv/commands");
 
-        self.send(&format!("PASS {}", env!("SHAKEN_TWITCH_PASSWORD")));
-        self.send(&format!("NICK {}", &nick));
+        self.send(format!("PASS {}", env!("SHAKEN_TWITCH_PASSWORD")));
+        self.send(format!("NICK {}", &nick));
 
         // this would be needed for a real irc server
         // self.send(&format!("USER {} * 8 :{}", "shaken", "shaken bot"));
 
         trace!("registered");
     }
-
-    pub fn send(&self, data: &str) {
-        self.conn.lock().write(data);
-    }
-
-    pub fn run(&self) {
-        trace!("starting run loop");
-        let (quittx, quitrx): (channel::Sender<()>, channel::Receiver<()>) = channel::bounded(0);
-
-        let (tx, rx) = channel::bounded(10);
-        let out = tx.clone();
-        let quit = quitrx.clone();
-        thread::spawn(move || {
-            let ticker = channel::tick(Duration::from_millis(1000));
-            loop {
-                select! {
-                    recv(ticker, _) => {
-                        out.send(ReadType::Tick(Instant::now()));
-                    },
-                    recv(quit, _) => {
-                        break;
-                    }
-                }
-            }
-        });
-
-        let out = tx.clone();
-        let quit = quittx.clone();
-        let conn = Arc::clone(&self.conn);
-        thread::spawn(move || loop {
-            if let Some(ref mut conn) = conn.try_lock_for(Duration::from_millis(50)) {
-                match conn.try_read() {
-                    Some(irc::ReadStatus::Data(msg)) => {
-                        out.send(ReadType::Message(msg));
-                    }
-                    Some(irc::ReadStatus::Nothing) => {
-                        continue;
-                    }
-                    _ => {
-                        quit.send(());
-                        return;
-                    }
-                }
-            }
-        });
-
-        let rx = rx.clone();
-        while let Some(_) = { rx.recv().and_then(|next| self.step(&next)) } {}
-        trace!("ending the run loop");
-    }
-
-    fn try_make_request(msg: &irc::Message) -> Option<Request<'_>> {
-        let id = Self::add_user_from_msg(&msg);
-        trace!("trying to make request for: `{}` {:?}", id, msg);
-        match &msg.command[..] {
-            "PRIVMSG" | "WHISPER" => {
-                // sanity check
-                if let Some(irc::Prefix::User { .. }) = msg.prefix {
-                    // HACK: this is ugly
-                    Request::try_parse(msg.target(), id, &msg.data)
-                } else {
-                    None
-                }
-            }
-            _ => None,
-        }
-    }
-
-    pub fn step(&self, next: &ReadType) -> Option<()> {
-        let mut out = vec![];
-        if let ReadType::Message(..) = next {
-            trace!("dispatching to modules");
-        }
-
-        let ctx = match next {
-            ReadType::Message(data) => {
-                trace!("handling message");
-                let msg = irc::Message::parse(&data);
-                let req = Self::try_make_request(&msg);
-
-                for module in &self.modules {
-                    match &msg.command[..] {
-                        "PRIVMSG" | "WHISPER" => {
-                            // try commands first
-                            if let Some(req) = &req {
-                                out.push(module.command(req))
-                            }
-                            // then passives
-                            out.push(module.passive(&msg));
-                        }
-                        // other message types go to the event handler
-                        _ => out.push(module.event(&msg)),
-                    }
-                }
-
-                Some(msg.clone()) // whatever
-            }
-            ReadType::Tick(dt) => {
-                for module in &self.modules {
-                    out.push(module.tick(*dt))
-                }
-                None
-            }
-        };
-
-        if let ReadType::Message(..) = next {
-            trace!("done dispatching to modules");
-        }
-
-        if let ReadType::Message(..) = next {
-            trace!("collecting to send");
-        }
-
-        for resp in out.into_iter().filter_map(|s| s) {
-            let ctx = ctx.as_ref();
-            if ctx.is_some() {
-                (self.inspect)(ctx.unwrap(), &resp);
-            }
-
-            resp.build(ctx)
-                .into_iter()
-                .inspect(|s| trace!("writing response: {}", s))
-                .for_each(|m| self.send(&m));
-        }
-
-        if let ReadType::Message(..) = next {
-            trace!("done sending");
-        }
-
-        Some(())
-    }
-
-    fn add_user_from_msg(msg: &irc::Message) -> i64 {
-        macro_rules! expect {
-            ($e:expr) => {
-                $e.expect("user tags to be well formed")
-            };
-        };
-
-        let user = match &msg.command[..] {
-            "PRIVMSG" | "WHISPER" => Some(User {
-                display: expect!(msg.tags.get_display()).to_string(),
-                color: expect!(msg.tags.get_color()),
-                userid: expect!(msg.tags.get_userid()),
-            }),
-            // this is /our/ user
-            "GLOBALUSERSTATE" => Some(User {
-                display: expect!(msg.tags.get_display()).to_string(),
-                color: RGB::from("fc0fc0"),
-                userid: expect!(msg.tags.get_userid()),
-            }),
-            _ => return -1,
-        }
-        .unwrap();
-
-        trace!("trying to add user {:?}", user);
-        let conn = get_connection();
-        let id = UserStore::create_user(&conn, &user);
-        trace!("added user {:?}: {}", user, id);
-        id
-    }
-}
-
-pub enum ReadType {
-    Tick(Instant),
-    Message(String),
 }

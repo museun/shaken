@@ -10,65 +10,81 @@ pub enum Response {
     Command { cmd: IrcCommand },
 }
 
-// TODO look at this. it looks way too nested
 impl Response {
-    pub(crate) fn build(&self, context: Option<&irc::Message>) -> Vec<String> {
+    pub(crate) fn build(&self, context: Option<&irc::Message>) -> Option<Vec<String>> {
         match self {
             Response::Reply { data } => {
-                let context = context.expect("reply requires a context");
-                if let Some(irc::Prefix::User { ref nick, .. }) = context.prefix {
-                    let conn = crate::database::get_connection();
-                    if let Some(user) = UserStore::get_user_by_name(&conn, &nick) {
-                        match &context.command[..] {
-                            "PRIVMSG" => {
-                                return vec![format!(
-                                    "PRIVMSG {} :@{}: {}",
-                                    context.target(),
-                                    user.display,
-                                    data
-                                )]
-                            }
-                            "WHISPER" => {
-                                return vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)]
-                            }
-                            _ => unreachable!(),
-                        }
+                let context = context.or_else(|| {
+                    warn!("Reply requires a message context, ignoring");
+                    None
+                })?;
+                let nick = match context.prefix {
+                    Some(irc::Prefix::User { ref nick, .. }) => nick,
+                    _ => unreachable!(),
+                };
+                let user = match UserStore::get_user_by_name(&get_connection(), &nick) {
+                    Some(user) => user,
+                    None => unreachable!(),
+                };
+                match context.command.as_str() {
+                    "PRIVMSG" => {
+                        return Some(vec![format!(
+                            "PRIVMSG {} :@{}: {}",
+                            context.target(),
+                            user.display,
+                            data
+                        )])
                     }
+                    "WHISPER" => {
+                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)])
+                    }
+                    _ => unreachable!(),
                 }
             }
             Response::Say { data } => {
-                let context = context.expect("say requires a context");
-                return vec![format!("PRIVMSG {} :{}", context.target(), data)];
+                let context = context.or_else(|| {
+                    warn!("Say requires a message context, ignoring");
+                    None
+                })?;
+                return Some(vec![format!("PRIVMSG {} :{}", context.target(), data)]);
             }
             Response::Action { data } => {
-                let context = context.expect("action requires a context");
-                return vec![format!(
+                let context = context.or_else(|| {
+                    warn!("Action requires a message context, ignoring");
+                    None
+                })?;
+                return Some(vec![format!(
                     "PRIVMSG {} :\x01ACTION {}\x01",
                     context.target(),
                     data
-                )];
+                )]);
             }
             Response::Whisper { data } => {
-                let context = context.expect("whisper requires a context");
+                let context = context.or_else(|| {
+                    warn!("Whisper requires a message context, ignoring");
+                    None
+                })?;
                 if let Some(irc::Prefix::User { ref nick, .. }) = context.prefix {
                     let conn = crate::database::get_connection();
                     if let Some(user) = UserStore::get_user_by_name(&conn, &nick) {
-                        return vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)];
+                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)]);
                     }
                 }
             }
             Response::Multi { data } => {
-                return data
-                    .iter()
-                    .map(|s| s.build(context))
-                    .flat_map(|s| s.into_iter())
-                    .collect();
+                return Some(
+                    data.iter()
+                        .map(|s| s.build(context))
+                        .flat_map(|s| s)
+                        .flat_map(|s| s.into_iter())
+                        .collect(),
+                );
             }
             Response::Command { cmd } => match cmd {
-                IrcCommand::Join { channel } => return vec![format!("JOIN {}", channel)],
-                IrcCommand::Raw { data } => return vec![data.clone()],
+                IrcCommand::Join { channel } => return Some(vec![format!("JOIN {}", channel)]),
+                IrcCommand::Raw { data } => return Some(vec![data.clone()]),
                 IrcCommand::Privmsg { target, data } => {
-                    return vec![format!("PRIVMSG {} :{}", target, data)]
+                    return Some(vec![format!("PRIVMSG {} :{}", target, data)])
                 }
             },
         }
@@ -97,6 +113,7 @@ pub fn join(ch: &str) -> Option<Response> {
     })
 }
 
+/*
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,3 +337,4 @@ mod tests {
         );
     }
 }
+*/

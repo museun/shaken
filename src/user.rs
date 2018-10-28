@@ -1,11 +1,34 @@
 use crate::prelude::*;
-use rusqlite::{self, Connection};
+use rusqlite::{self, types::ToSql, Connection};
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct User {
     pub userid: i64,
     pub display: String,
     pub color: RGB,
+}
+
+impl User {
+    pub fn from_msg(msg: &irc::Message) -> Option<i64> {
+        let user = match msg.command.as_str() {
+            "PRIVMSG" | "WHISPER" => User {
+                userid: msg.tags.get_userid()?,
+                display: msg.tags.get_display()?.to_string(),
+                color: msg.tags.get_color()?,
+            },
+            "GLOBALUSERSTATE" => User {
+                userid: msg.tags.get_userid()?,
+                display: msg.tags.get_display()?.to_string(),
+                // TODO get this from the config
+                // or from the database
+                color: RGB::from("fc0fc0"),
+            },
+            _ => return None,
+        };
+
+        let conn = database::get_connection();
+        Some(UserStore::create_user(&conn, &user))
+    }
 }
 
 pub struct UserStore;
@@ -18,8 +41,6 @@ impl UserStore {
     // XXX: default color for the bot: fc0fc0
     pub fn get_bot(conn: &Connection, name: &str) -> Option<User> {
         Self::ensure_table(conn);
-
-        trace!("get bot by name: {}", name);
         let stmt = conn
             .prepare(
                 "SELECT ID, Display, Color FROM Users WHERE DISPLAY = ? COLLATE NOCASE LIMIT 1",
@@ -31,8 +52,6 @@ impl UserStore {
 
     pub fn get_user_by_id(conn: &Connection, id: i64) -> Option<User> {
         Self::ensure_table(conn);
-
-        trace!("get user by id: {}", id);
         let stmt = conn
             .prepare("SELECT ID, Display, Color FROM Users WHERE ID = ? LIMIT 1")
             .expect("valid sql");
@@ -42,8 +61,6 @@ impl UserStore {
 
     pub fn get_user_by_name(conn: &Connection, name: &str) -> Option<User> {
         Self::ensure_table(conn);
-
-        trace!("get user by name: {}", name);
         let stmt = conn
             .prepare(
                 "SELECT ID, Display, Color FROM Users WHERE DISPLAY = ? COLLATE NOCASE LIMIT 1",
@@ -73,11 +90,7 @@ impl UserStore {
                 .map_err(|e| {
                     error!("cannot get user for '{}': {}", q, e);
                 })
-                .ok()
-                .and_then(|user| {
-                    trace!("got user: {:?}", user);
-                    Some(user)
-                });
+                .ok();
         }
         None
     }
@@ -87,9 +100,9 @@ impl UserStore {
 
         match conn.execute(
             r#"UPDATE Users SET Color = ? where ID = ?"#,
-            &[&color.to_string(), &id],
+            &[&color.to_string() as &dyn ToSql, &id],
         ) {
-            Ok(row) => debug!("updated id ({}) at {}", id, row),
+            Ok(_row) => {}
             Err(err) => error!("cannot insert {} into table: {}", id, err),
         };
     }
@@ -101,18 +114,18 @@ impl UserStore {
 
         match conn.execute(
             r#"INSERT OR IGNORE INTO Users (ID, Display, Color) VALUES (?, ?, ?)"#,
-            &[&user.userid, &user.display, &color],
+            &[&user.userid as &dyn ToSql, &user.display, &color],
         ) {
-            Ok(row) if row == 0 => debug!("user({:?}) already exists", user),
-            Ok(row) => debug!("added user({:?}) at {}", user, row),
+            Ok(row) if row == 0 => {}
+            Ok(_row) => {}
             Err(err) => error!("cannot insert user({:?}) into table: {}", user, err),
         };
 
         match conn.execute(
             r#"UPDATE Users SET Display = ? where ID = ?"#,
-            &[&user.display, &user.userid],
+            &[&user.display as &dyn ToSql, &user.userid],
         ) {
-            Ok(row) => debug!("updated user({:?}) at {}", user, row),
+            Ok(_row) => {}
             Err(err) => error!("cannot insert user({:?}) into table: {}", user, err),
         };
 

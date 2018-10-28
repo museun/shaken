@@ -1,61 +1,57 @@
 use crate::prelude::*;
-
-use parking_lot::Mutex;
-
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 use std::{fmt, str};
 
 pub struct TwitchPoll {
-    poll: Mutex<Option<Poll>>,
-    start: Mutex<Option<Instant>>,
-    duration: AtomicUsize,
-    running: AtomicBool, // this is so we don't have to lock the mutex every tick
-    commands: Vec<Command<TwitchPoll>>,
+    poll: Option<Poll>,
+    start: Option<Instant>,
+    duration: usize,
+    running: bool,
+    map: CommandMap<TwitchPoll>,
 }
 
 impl Module for TwitchPoll {
-    fn command(&self, req: &Request<'_>) -> Option<Response> {
-        dispatch_commands!(&self, &req)
+    fn command(&mut self, req: &Request) -> Option<Response> {
+        let map = self.map.shallow_clone();
+        map.dispatch(self, req)
     }
 
-    fn tick(&self, dt: Instant) -> Option<Response> {
+    fn tick(&mut self, dt: Instant) -> Option<Response> {
         self.handle_tick(dt)
     }
 }
 
-impl Default for TwitchPoll {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl TwitchPoll {
-    pub fn new() -> Self {
-        Self {
-            running: AtomicBool::new(false),
-            poll: Mutex::new(None),
-            start: Mutex::new(None),
-            duration: AtomicUsize::new(0),
-
-            commands: command_list!(
+    pub fn create() -> Result<Self, ModuleError> {
+        let map = CommandMap::create(
+            "TwitchPoll",
+            &[
                 ("!poll", Self::poll_command),
                 ("!poll start", Self::poll_start_command),
                 ("!poll stop", Self::poll_stop_command),
                 ("!vote", Self::poll_vote_command),
-            ),
-        }
+            ],
+        )?;
+
+        Ok(Self {
+            poll: None,
+            start: None,
+            duration: 0,
+            running: false,
+            map,
+        })
     }
 
-    fn poll_command(&self, req: &Request<'_>) -> Option<Response> {
-        let req = require_owner!(&req);
+    fn poll_command(&mut self, req: &Request) -> Option<Response> {
+        require_broadcaster!(&req);
+
         let poll = match Self::parse_poll(req.target(), req.args()) {
             Ok(poll) => poll,
             Err(err) => return reply!("{}", err),
         };
 
-        if self.running.load(Ordering::Relaxed) {
+        if self.running {
             return reply!("poll is already running. use !poll stop to stop it");
         }
 
@@ -71,15 +67,15 @@ impl TwitchPoll {
             )
         );
 
-        *self.poll.lock() = Some(poll);
+        std::mem::replace(&mut self.poll, Some(poll));
         res
     }
 
-    fn poll_start_command(&self, req: &Request<'_>) -> Option<Response> {
-        let req = require_owner!(&req);
+    fn poll_start_command(&mut self, req: &Request) -> Option<Response> {
+        require_broadcaster!(&req);
 
-        let poll = self.poll.lock();
-        if poll.is_none() {
+        if self.poll.is_none() {
+            warn!("no poll");
             return reply!("no poll has been configured. use !poll title | options | ...");
         }
 
@@ -94,9 +90,9 @@ impl TwitchPoll {
             None => return reply!("I don't know how long that is"),
         };
 
-        self.running.store(true, Ordering::Relaxed);
-        self.duration.store(dur, Ordering::Relaxed);
-        let _ = { self.start.lock().get_or_insert(Instant::now()) };
+        self.running = true;
+        self.duration = dur;
+        std::mem::replace(&mut self.start, Some(Instant::now()));
 
         say!(
             "starting the poll for the next {} seconds. use '!vote n' to vote for that option",
@@ -104,35 +100,34 @@ impl TwitchPoll {
         )
     }
 
-    fn poll_stop_command(&self, req: &Request<'_>) -> Option<Response> {
-        require_owner!(&req);
+    fn poll_stop_command(&mut self, req: &Request) -> Option<Response> {
+        require_broadcaster!(&req);
 
-        if !self.running.load(Ordering::Relaxed) {
+        if !self.running {
             return reply!("no poll is running");
         }
 
         info!("stopping poll");
-        self.running.store(false, Ordering::Relaxed);
-        self.duration.store(0, Ordering::Relaxed);
-        let _ = { self.start.lock().take() };
-        let _ = { self.poll.lock().take() };
+        self.running = false;
+        self.duration = 0;
+        self.start.take();
+        self.poll.take();
 
         None
     }
 
-    fn poll_vote_command(&self, req: &Request<'_>) -> Option<Response> {
-        debug!("{:#?}", self.poll);
-        debug!("{:#?}", self.start);
-        debug!("{:#?}", self.duration);
-        debug!("{:#?}", self.running);
-
-        if !self.running.load(Ordering::Relaxed) {
+    fn poll_vote_command(&mut self, req: &Request) -> Option<Response> {
+        if !self.running {
             debug!("poll not running");
             return None;
         }
 
-        let poll = &mut *self.poll.lock();
-        let poll = poll.as_mut().expect("poll to be configured");
+        if self.poll.is_none() {
+            warn!("tried to vote on an inactive poll. this shouldn't be reachable");
+            return None;
+        }
+
+        let poll = self.poll.as_mut().unwrap();
         let max = poll.choices.len();
 
         let n = match req.args_iter().next().and_then(|a| {
@@ -143,10 +138,9 @@ impl TwitchPoll {
                 .parse::<usize>()
                 .ok()
         }) {
-            Some(n) if n == 0 => return reply!("what option is that?"),
-            Some(n) if n > max => return reply!("what option is that?"),
-            Some(n) => n,
+            Some(n) if n == 0 || n > max => return reply!("what option is that?"),
             None => return reply!("what option is that?"),
+            Some(n) => n,
         };
 
         trace!("attempting to vote for {}", n);
@@ -155,15 +149,15 @@ impl TwitchPoll {
         None
     }
 
-    fn handle_tick(&self, _dt: Instant) -> Option<Response> {
-        if !self.running.load(Ordering::Relaxed) || self.start.lock().is_none() {
+    fn handle_tick(&mut self, _dt: Instant) -> Option<Response> {
+        if !self.running || self.start.is_none() {
             return None;
         }
 
         let dt = Instant::now(); // don't trust the delta
 
-        let deadline = Duration::from_secs(self.duration.load(Ordering::Relaxed) as u64);
-        if let Some(start) = *self.start.lock() {
+        let deadline = Duration::from_secs(self.duration as u64);
+        if let Some(start) = self.start {
             warn!("{:?} - {:?} < {:?}", dt, start, deadline);
             if dt - start < deadline {
                 return None;
@@ -171,15 +165,11 @@ impl TwitchPoll {
         }
 
         info!("tallying the poll");
-        self.running.store(false, Ordering::Relaxed);
+        self.running = false;
 
-        // clean up the mutexes
         let mut poll = {
-            self.start.lock().take();
-
-            let poll = &mut *self.poll.lock();
-            let poll = poll.take();
-            poll.expect("poll to be running")
+            self.start.take();
+            self.poll.take().expect("poll should have been running")
         };
 
         let target = poll.target.clone(); // this is dumb
@@ -197,13 +187,9 @@ impl TwitchPoll {
     }
 
     fn parse_poll(target: &str, data: &str) -> Result<Poll, ParseError> {
-        let mut iter = data
-            .split('|')
-            .map(str::trim)
-            .map(|s| if s.is_empty() { None } else { Some(s) })
-            .filter_map(|s| s);
-
+        let mut iter = data.split('|').map(str::trim).filter(|s| !s.is_empty());
         let title = iter.next().ok_or_else(|| ParseError::Title)?;
+
         let options = iter.collect::<Vec<_>>();
         if options.is_empty() {
             return Err(ParseError::Options);
@@ -220,12 +206,24 @@ enum ParseError {
 }
 
 impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            ParseError::Title => write!(f, "no title provided"),
-            ParseError::Options => write!(f, "no options provided"),
+            ParseError::Title => {
+                write!(f, "no title was provided. use !poll title | options | ...")
+            }
+            ParseError::Options => write!(
+                f,
+                "no options were provided. use !poll title | options | ..."
+            ),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+struct Choice {
+    pos: usize,
+    count: usize,
+    option: String,
 }
 
 #[derive(Debug)]
@@ -236,28 +234,17 @@ struct Poll {
     seen: HashSet<i64>,
 }
 
-#[derive(Debug, Clone)]
-struct Choice {
-    pos: usize,
-    count: usize,
-    option: String,
-}
-
 impl Poll {
-    pub fn new<S, V>(target: S, title: S, choices: V) -> Self
-    where
-        S: AsRef<str>,
-        V: AsRef<[S]>,
-    {
+    pub fn new<'a, S: Into<String>>(target: S, title: S, choices: impl AsRef<[&'a str]>) -> Self {
         Self {
-            target: target.as_ref().into(),
-            title: title.as_ref().into(),
+            target: target.into(),
+            title: title.into(),
             choices: choices
                 .as_ref()
                 .iter()
                 .enumerate()
                 .map(|(i, f)| Choice {
-                    option: f.as_ref().to_string(),
+                    option: f.to_string(),
                     pos: i,
                     count: 0,
                 })
@@ -295,9 +282,11 @@ mod tests {
         let poll = TwitchPoll::parse_poll(
             "#testing",
             "this is a test | option a|option b            |          option c",
-        );
-        let poll = poll.unwrap();
-        assert_eq!(poll.title, "this is a test".to_owned());
+        )
+        .unwrap();
+
+        assert_eq!(poll.title, "this is a test");
+
         let expected = vec!["option a", "option b", "option c"];
         poll.choices
             .iter()
@@ -307,147 +296,150 @@ mod tests {
 
     #[test]
     fn poll_command() {
-        let poll = TwitchPoll::new();
-        let mut env = Environment::new();
-        env.add(&poll);
+        let db = database::get_connection();
+        let mut poll = TwitchPoll::create().unwrap();
+        let mut env = Environment::new(&db, &mut poll);
 
         env.push("!poll");
-        env.step();
+        env.step_wait(false);
         assert_eq!(env.pop(), None);
 
-        env.push_owner("!poll");
+        env.push_broadcaster("!poll");
         env.step();
-        assert_eq!(env.pop(), Some("@test: no title provided".into()));
+        assert_eq!(
+            env.pop().unwrap(),
+            "@test: no title was provided. use !poll title | options | ..."
+        );
 
-        env.push_owner("!poll test poll");
+        env.push_broadcaster("!poll test poll");
         env.step();
-        assert_eq!(env.pop(), Some("@test: no options provided".into()));
+        assert_eq!(
+            env.pop().unwrap(),
+            "@test: no options were provided. use !poll title | options | ..."
+        );
 
-        env.push_owner("!poll test poll | option a | option b");
+        env.push_broadcaster("!poll test poll | option a | option b");
         env.step();
-        assert_eq!(env.pop(), Some("is this poll correct?".into()));
-        assert_eq!(env.pop(), Some("test poll".into()));
-        assert_eq!(env.pop(), Some("#1: option a".into()));
-        assert_eq!(env.pop(), Some("#2: option b".into()));
+        assert_eq!(env.pop().unwrap(), "is this poll correct?");
+        assert_eq!(env.pop().unwrap(), "test poll");
+        assert_eq!(env.pop().unwrap(), "#1: option a");
+        assert_eq!(env.pop().unwrap(), "#2: option b");
     }
 
     #[test]
     fn poll_start_command() {
-        let poll = TwitchPoll::new();
-        let mut env = Environment::new();
-        env.add(&poll);
+        let db = database::get_connection();
+        let mut poll = TwitchPoll::create().unwrap();
+        let mut env = Environment::new(&db, &mut poll);
 
         env.push("!poll start");
-        env.step();
+        env.step_wait(false);
         assert_eq!(env.pop(), None);
 
-        env.push_owner("!poll start");
+        env.push_broadcaster("!poll start");
         env.step();
         assert_eq!(
-            env.pop(),
-            Some("@test: no poll has been configured. use !poll title | options | ...".into())
+            env.pop().unwrap(),
+            "@test: no poll has been configured. use !poll title | options | ..."
         );
 
-        env.push_owner("!poll test poll | option a | option b");
+        env.push_broadcaster("!poll test poll | option a | option b");
         env.step();
         env.drain();
 
-        env.push_owner("!poll start");
+        env.push_broadcaster("!poll start");
         env.step();
-        assert_eq!(
-            env.pop(),
-            Some("@test: I don't know how long that is".into())
-        );
+        assert_eq!(env.pop().unwrap(), "@test: I don't know how long that is");
 
-        env.push_owner("!poll start 160");
+        env.push_broadcaster("!poll start 160");
         env.step();
         assert_eq!(
-            env.pop(),
-            Some(
-                "starting the poll for the next 160 seconds. use '!vote n' to vote for that option"
-                    .into()
-            )
+            env.pop().unwrap(),
+            "starting the poll for the next 160 seconds. use '!vote n' to vote for that option"
         );
     }
 
     #[test]
     fn poll_stop_command() {
-        let poll = TwitchPoll::new();
-        let mut env = Environment::new();
-        env.add(&poll);
+        let db = database::get_connection();
+        let mut poll = TwitchPoll::create().unwrap();
+        {
+            let mut env = Environment::new(&db, &mut poll);
 
-        env.push("!poll stop");
-        env.step();
-        assert_eq!(env.pop(), None);
+            env.push("!poll stop");
+            env.step_wait(false);
+            assert_eq!(env.pop(), None);
 
-        env.push_owner("!poll stop");
-        env.step();
-        assert_eq!(env.pop(), Some("@test: no poll is running".into()));
+            env.push_broadcaster("!poll stop");
+            env.step();
+            assert_eq!(env.pop().unwrap(), "@test: no poll is running");
 
-        env.push_owner("!poll test poll | option a | option b");
-        env.step();
-        env.drain();
+            env.push_broadcaster("!poll test poll | option a | option b");
+            env.step();
+            env.drain();
 
-        env.push_owner("!poll start 160");
-        env.step();
-        env.drain();
+            env.push_broadcaster("!poll start 160");
+            env.step();
+            env.drain();
 
-        env.push_owner("!poll stop");
-        env.step();
+            env.push_broadcaster("!poll stop");
+            env.step_wait(false);
 
-        assert!(poll.poll.lock().is_none());
-        assert!(poll.start.lock().is_none());
-        assert_eq!(poll.duration.load(Ordering::Relaxed), 0);
-        assert_eq!(poll.running.load(Ordering::Relaxed), false);
+            env.push_broadcaster("!poll stop");
+            env.step();
+            assert_eq!(env.pop().unwrap(), "@test: no poll is running");
+        }
 
-        env.push_owner("!poll stop");
-        env.step();
-        assert_eq!(env.pop(), Some("@test: no poll is running".into()));
+        assert!(poll.poll.is_none());
+        assert!(poll.start.is_none());
+        assert_eq!(poll.duration, 0);
+        assert_eq!(poll.running, false);
     }
 
     #[test]
     fn poll_vote_command() {
-        let poll = TwitchPoll::new();
-        let mut env = Environment::new();
-        env.add(&poll);
+        let db = database::get_connection();
+        let mut poll = TwitchPoll::create().unwrap();
+        let mut env = Environment::new(&db, &mut poll);
 
         env.push("!poll vote");
-        env.step();
+        env.step_wait(false);
         assert_eq!(env.pop(), None);
 
-        env.push_owner("!poll test poll | option a | option b");
-        env.step();
+        env.push_broadcaster("!poll test poll | option a | option b");
+        env.step_wait(false);
 
-        env.push_owner("!poll start 1");
-        env.step();
+        env.push_broadcaster("!poll start 1");
+        env.step_wait(false);
 
         env.push_user("!vote 1", ("test", 1001));
-        env.step();
+        env.step_wait(false);
 
         env.push_user("!vote 2", ("test", 1002));
-        env.step();
+        env.step_wait(false);
 
         env.push_user("!vote 3", ("test", 1003));
-        env.step();
+        env.step_wait(false);
 
         env.push_user("!vote 1", ("test", 1003));
-        env.step();
+        env.step_wait(false);
 
         env.push_user("!vote 2", ("test", 1002));
-        env.step();
+        env.step_wait(false);
 
         env.push("!vote 1");
-        env.step();
+        env.step_wait(false);
 
-        env.push_owner("!vote 1");
-        env.step();
+        env.push_broadcaster("!vote 1");
+        env.step_wait(false);
 
         env.drain();
 
-        ::std::thread::sleep(::std::time::Duration::from_secs(1));
+        // TODO don't do this
+        std::thread::sleep(std::time::Duration::from_secs(1));
         env.tick();
 
-        assert_eq!(env.pop(), Some("(4 votes) #1 option a".into()));
-        assert_eq!(env.pop(), Some("(1 votes) #2 option b".into()));
+        assert_eq!(env.pop().unwrap(), "(3 votes) #1 option a");
+        assert_eq!(env.pop().unwrap(), "(1 votes) #2 option b");
     }
 }

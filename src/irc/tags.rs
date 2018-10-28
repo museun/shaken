@@ -1,5 +1,6 @@
 use crate::color::RGB;
 
+use std::str::FromStr;
 use std::{collections::HashMap, ops::Range};
 
 #[derive(Debug, Default, PartialEq, Clone)]
@@ -8,6 +9,8 @@ pub struct Tags(HashMap<String, String>);
 impl Tags {
     pub fn new(input: &str) -> Self {
         let mut map = HashMap::new();
+        // TODO make sure the message starts with @
+        let input = &input[1..];
         for part in input.split_terminator(';') {
             if let Some(index) = part.find('=') {
                 let (k, v) = (&part[..index], &part[index + 1..]);
@@ -52,12 +55,56 @@ impl Tags {
         })
     }
 
+    pub fn has_badge(&self, badge: &Badge) -> bool {
+        match self.get("badges") {
+            Some(badges) => badges
+                .split(',')
+                .map(|s| {
+                    let mut t = s.split('/');
+                    (t.next(), t.next()) // badge, version
+                })
+                .filter_map(|(s, _)| s.and_then(|s| Badge::from_str(s).ok()))
+                .any(|b| b == *badge),
+            None => false,
+        }
+    }
+
     pub fn get<S>(&self, s: S) -> Option<&str>
     where
         S: AsRef<str>,
     {
         let s = s.as_ref();
         self.0.get(s).map(|n| n.as_ref())
+    }
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub enum Badge {
+    Admin,
+    Broadcaster,
+    GlobalMod,
+    Moderator,
+    Subscriber,
+    Staff,
+    Turbo,
+    /*
+     * and bits */
+}
+
+impl FromStr for Badge {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let res = match s.to_ascii_lowercase().as_str() {
+            "admin" => Badge::Admin,
+            "broadcaster" => Badge::Broadcaster,
+            "global_mod" => Badge::GlobalMod,
+            "moderator" => Badge::Moderator,
+            "subscriber" => Badge::Subscriber,
+            "staff" => Badge::Staff,
+            "turbo" => Badge::Turbo,
+            _ => return Err(()),
+        };
+        Ok(res)
     }
 }
 

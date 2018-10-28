@@ -26,8 +26,6 @@ pub fn get_connection() -> Connection {
     ));
 
     TEST_DB_ID.with(|id| {
-        trace!("getting db conn: {}", id);
-
         Connection::open_with_flags(
             &id,
             OpenFlags::SQLITE_OPEN_URI | OpenFlags::SQLITE_OPEN_READ_WRITE,

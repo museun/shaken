@@ -1,89 +1,43 @@
 use crate::prelude::*;
 
-use crossbeam_channel as channel;
-use tungstenite as ws;
-
-use std::net::{TcpListener, TcpStream};
-use std::thread;
-use std::time::Duration;
-
-#[derive(Debug, Clone, Serialize)]
-struct Message {
-    pub userid: String, // not sure about the lifetime yet
-    pub timestamp: usize,
-    pub color: RGB,
-    pub display: String,
-    pub data: String,
-    pub kappas: Vec<irc::Kappa>,
-}
-
 pub struct Display {
-    queue: channel::Sender<Message>,
-    buf: channel::Receiver<Message>,
     name: String,
+    map: CommandMap<Display>,
 }
 
 impl Module for Display {
-    fn command(&self, req: &Request<'_>) -> Option<Response> {
-        if let Some(req) = req.search("!color") {
-            return self.color_command(&req);
+    fn command(&mut self, req: &Request) -> Option<Response> {
+        let map = self.map.shallow_clone();
+        map.dispatch(self, req)
+    }
+
+    fn passive(&mut self, msg: &irc::Message) -> Option<Response> {
+        // TODO: this only handles PRIVMSG
+        if msg.command.as_str() == "PRIVMSG" {
+            self.handle_passive(msg);
         }
         None
     }
 
-    fn passive(&self, msg: &irc::Message) -> Option<Response> {
-        // for now
-        match &msg.command[..] {
-            "PRIVMSG" => self.handle_passive(msg),
-            _ => None,
-        }
+    fn inspect(&mut self, msg: &irc::Message, resp: &Response) {
+        self.inspect_event(msg, resp);
     }
 }
 
-impl Default for Display {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-// never forget .or_else::<HashMap<String, RGB>, _>(|_: Option<()>|
-// Ok(HashMap::new()))
+// never forget
+// .or_else::<HashMap<String, RGB>, _>(|_: Option<()>| Ok(HashMap::new()))
 impl Display {
-    pub fn new() -> Self {
+    pub fn create() -> Result<Self, ModuleError> {
+        let map = CommandMap::create("Display", &[("!color", Display::color_command)])?;
         let config = Config::load();
 
-        let (tx, rx) = channel::bounded(16); // only buffer 16 messages
-        Self::drain_to_client(&rx, config.websocket.address.clone());
-        Self {
-            queue: tx,
-            buf: rx.clone(),
+        Ok(Self {
             name: config.twitch.name.clone(),
-        }
+            map,
+        })
     }
 
-    pub fn inspect(&self, msg: &irc::Message, resp: &Response) {
-        if &msg.command[..] != "PRIVMSG" {
-            return;
-        }
-
-        match resp {
-            Response::Command { .. } | Response::Action { .. } | Response::Whisper { .. } => {
-                return;
-            }
-            _ => {}
-        };
-
-        let conn = crate::database::get_connection();
-        if let Some(user) = UserStore::get_bot(&conn, &self.name) {
-            for out in resp.build(Some(&msg)) {
-                let msg = irc::Message::parse(&out);
-                println!("<{}> {}", &user.color.format(&user.display), &msg.data);
-                self.push_message(&user, &msg);
-            }
-        }
-    }
-
-    fn color_command(&self, req: &Request<'_>) -> Option<Response> {
+    fn color_command(&mut self, req: &Request) -> Option<Response> {
         let id = req.sender();
         let part = req.args_iter().next()?;
 
@@ -92,112 +46,41 @@ impl Display {
             return reply!("don't use that color");
         }
 
-        let conn = crate::database::get_connection();
+        let conn = database::get_connection();
         UserStore::update_color_for_id(&conn, id, &color);
         None
     }
 
-    fn handle_passive(&self, msg: &irc::Message) -> Option<Response> {
-        let conn = crate::database::get_connection();
+    fn handle_passive(&self, msg: &irc::Message) -> Option<()> {
+        let conn = database::get_connection();
         let user = UserStore::get_user_by_id(&conn, msg.tags.get_userid()?)?;
 
         if !msg.data.starts_with('!') {
             println!("<{}> {}", user.color.format(&user.display), &msg.data);
         }
-
-        self.push_message(&user, &msg);
         None
     }
 
-    fn push_message(&self, user: &User, msg: &irc::Message) {
-        let ts = crate::util::get_timestamp();
-        let display = Message {
-            userid: user.userid.to_string(),
-            timestamp: ts as usize,
-            color: user.color.clone(),
-            display: user.display.clone(),
-            data: msg.data.clone(),
-            kappas: msg.tags.get_kappas().or_else(|| Some(vec![])).unwrap(),
+    fn inspect_event(&self, msg: &irc::Message, resp: &Response) -> Option<()> {
+        match resp {
+            Response::Command { .. } | Response::Action { .. } | Response::Whisper { .. } => {
+                return None
+            }
+            _ => {}
         };
 
-        if self.queue.is_full() {
-            trace!("queue is full, dropping one");
-            let _ = self.buf.recv();
+        let conn = database::get_connection();
+        let user = UserStore::get_bot(&conn, &self.name)?;
+        let resp = resp.build(Some(msg))?;
+        for out in resp {
+            let msg = irc::Message::parse(&out);
+            println!(
+                "<{}> {}",                         //
+                &user.color.format(&user.display), //
+                &msg.data
+            ); //
         }
-        trace!("queue at: {}", self.queue.len());
-        self.queue.send(display);
-    }
-
-    fn drain_to_client(rx: &channel::Receiver<Message>, addr: String) {
-        let rx = rx.clone();
-        thread::spawn(move || {
-            let listener = TcpListener::bind(&addr)
-                .unwrap_or_else(|_| panic!("must be able to bind to {}", &addr));
-            info!("websocket listening on: {}", addr);
-
-            for stream in listener.incoming() {
-                debug!("got a tcp conn for websocket");
-                if let Ok(stream) = stream {
-                    debug!("turned it into a websocket");
-                    let rx = rx.clone();
-                    Self::handle_connection(stream, &rx);
-                }
-            }
-        });
-    }
-
-    fn handle_connection(stream: TcpStream, rx: &channel::Receiver<Message>) {
-        let mut socket = match ws::accept(stream) {
-            Ok(stream) => stream,
-            Err(err) => {
-                warn!("could not accept stream as a websocket: {}", err);
-                return;
-            }
-        };
-
-        trace!("waiting for handshake");
-        // TODO make this a proper handshake
-        match socket.read_message() {
-            Ok(_msg) => (),
-            Err(err) => {
-                warn!("could not read initial message from client: {}", err);
-                return;
-            }
-        };
-
-        let tick = channel::tick(Duration::from_millis(1000));
-        let read = |msg, socket: &mut ws::WebSocket<TcpStream>| {
-            let json = serde_json::to_string(&msg).expect("well-formed structs");
-            trace!("writing: {}", json);
-            socket.write_message(ws::Message::Text(json)).is_ok()
-        };
-
-        let interval = |socket: &mut ws::WebSocket<TcpStream>| {
-            let ts = crate::util::get_timestamp();
-            // TODO make this less bad
-            let ts = ts.to_string().as_bytes().to_vec();
-            if let Err(err) = socket.write_message(ws::Message::Ping(ts)) {
-                warn!("couldn't send the ping: {:?}", err);
-                return false;
-            }
-            // is this needed?
-            if let Err(err) = socket.write_pending() {
-                warn!("couldn't send the ping: {:?}", err);
-                return false;
-            }
-            if let Err(err) = socket.read_message() {
-                warn!("couldn't get pong from client: {}", err);
-                return false;
-            }
-            true
-        };
-
-        'read: loop {
-            select!{
-                recv(rx, msg) => { if !read(msg, &mut socket) { break 'read; } },
-                recv(tick) => { if !interval(&mut socket) { break 'read; } }
-            }
-        }
+        None
     }
 }
 
@@ -208,17 +91,16 @@ mod tests {
 
     #[test]
     fn color_command() {
-        let display = Display::new();
-        let mut env = Environment::new();
-        env.add(&display);
+        let db = database::get_connection();
+        let mut display = Display::create().unwrap();
+        let mut env = Environment::new(&db, &mut display);
 
         env.push("!color #111111");
         env.step();
-
         assert_eq!(env.pop(), Some("@test: don't use that color".into()));
 
         env.push("!color #FFFFFF");
-        env.step();
+        env.step_wait(false);
 
         let conn = env.get_db_conn();
         let user = UserStore::get_user_by_id(&conn, 1000).unwrap();

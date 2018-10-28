@@ -18,69 +18,55 @@ impl TwitchClient {
         }
     }
 
-    pub fn get_streams<V, S>(&self, user_logins: V) -> Option<Vec<Stream>>
-    where
-        S: AsRef<str>,
-        V: AsRef<[S]>,
-    {
+    pub fn get_streams<'a>(&self, user_logins: impl AsRef<[&'a str]>) -> Option<Vec<Stream>> {
         let mut map = Vec::new();
-        for login in user_logins.as_ref() {
-            map.push(("user_login", login.as_ref()));
+        for &login in user_logins.as_ref() {
+            map.push(("user_login", login));
         }
 
         self.get_response("streams", &map)
     }
 
-    pub fn get_streams_from_ids<V, S>(&self, ids: V) -> Option<Vec<Stream>>
-    where
-        S: AsRef<str>,
-        V: AsRef<[S]>,
-    {
+    pub fn get_streams_from_ids<'a>(&self, ids: impl AsRef<[&'a str]>) -> Option<Vec<Stream>> {
         let mut map = Vec::new();
-        for id in ids.as_ref() {
-            map.push(("user_id	", id.as_ref()));
+        for &id in ids.as_ref() {
+            map.push(("user_id	", id));
         }
 
         self.get_response("streams", &map)
     }
 
-    pub fn get_users<V, S>(&self, user_logins: V) -> Option<Vec<User>>
-    where
-        S: AsRef<str>,
-        V: AsRef<[S]>,
-    {
+    pub fn get_users<'a>(&self, user_logins: impl AsRef<[&'a str]>) -> Option<Vec<User>> {
         let mut map = Vec::new();
-        for login in user_logins.as_ref() {
-            map.push(("login", login.as_ref()));
+        for &login in user_logins.as_ref() {
+            map.push(("login", login));
         }
 
         self.get_response("users", &map)
     }
 
-    pub fn get_users_from_ids<V, S>(&self, ids: V) -> Option<Vec<User>>
-    where
-        S: AsRef<str>,
-        V: AsRef<[S]>,
-    {
+    pub fn get_users_from_ids<'a>(&self, ids: impl AsRef<[&'a str]>) -> Option<Vec<User>> {
         let mut map = Vec::new();
-        for id in ids.as_ref() {
-            map.push(("id", id.as_ref()));
+        for &id in ids.as_ref() {
+            map.push(("id", id));
         }
 
         self.get_response("users", &map)
     }
 
-    pub(crate) fn get_response<T, S, V>(&self, ep: &str, map: V) -> Option<Vec<T>>
+    pub(crate) fn get_response<'a, T>(
+        &self,
+        ep: &str,
+        map: impl AsRef<[(&'a str, &'a str)]>,
+    ) -> Option<Vec<T>>
     where
         for<'de> T: serde::Deserialize<'de>,
-        S: AsRef<str>,
-        V: AsRef<[(S, S)]>,
     {
         const BASE_URL: &str = "https://api.twitch.tv/helix";
 
         let mut query = String::from("?");
         for (k, v) in map.as_ref() {
-            query.push_str(&format!("{}={}&", encode(k.as_ref()), encode(v.as_ref()),));
+            query.push_str(&format!("{}={}&", encode(k), encode(v)));
         }
 
         let mut vec = Vec::new();
