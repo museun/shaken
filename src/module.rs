@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
 
-type Func<T> = fn(&mut T, &Request) -> Option<Response>;
+type Func<T> = fn(&mut T, &Request) -> Option<Response>; // this is for you, clippy.
 pub struct CommandMap<T>(Arc<HashMap<&'static str, Func<T>>>);
 
 impl<T> CommandMap<T> {
@@ -16,6 +16,7 @@ impl<T> CommandMap<T> {
             let cmd = CommandBuilder::command(*k)
                 .namespace(namespace.to_string())
                 .build();
+
             if let Err(RegistryError::AlreadyExists) = Registry::register(&cmd) {
                 warn!("{} already exists", cmd.name());
                 return Err(ModuleError::CommandAlreadyExists);

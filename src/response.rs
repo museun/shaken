@@ -22,10 +22,7 @@ impl Response {
                     Some(irc::Prefix::User { ref nick, .. }) => nick,
                     _ => unreachable!(),
                 };
-                let user = match UserStore::get_user_by_name(&get_connection(), &nick) {
-                    Some(user) => user,
-                    None => unreachable!(),
-                };
+                let user = UserStore::get_user_by_name(&get_connection(), &nick)?;
                 match context.command.as_str() {
                     "PRIVMSG" => {
                         return Some(vec![format!(
