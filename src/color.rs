@@ -1,33 +1,30 @@
 use std::fmt::{self, Write};
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
-pub struct RGB((u8, u8, u8));
+pub struct RGB(pub u8, pub u8, pub u8);
 
 impl fmt::Display for RGB {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (r, g, b) = self.0;
+        let (r, g, b) = (self.0, self.1, self.2);
         write!(f, "#{:02X}{:02X}{:02X}", r, g, b)
     }
 }
 
 impl From<(u8, u8, u8)> for RGB {
     fn from(rgb: (u8, u8, u8)) -> Self {
-        let (r, g, b) = rgb;
-        RGB((r, g, b))
+        RGB(rgb.0, rgb.1, rgb.2)
     }
 }
 
 impl From<&str> for RGB {
     fn from(s: &str) -> Self {
-        let (r, g, b) = Self::hex_to_rgb(&s);
-        RGB::from((r, g, b))
+        RGB::from(Self::hex_to_rgb(&s))
     }
 }
 
 impl From<&String> for RGB {
     fn from(s: &String) -> Self {
-        let (r, g, b) = Self::hex_to_rgb(&s);
-        RGB::from((r, g, b))
+        RGB::from(Self::hex_to_rgb(&s))
     }
 }
 
@@ -81,8 +78,7 @@ impl RGB {
         }
 
         let mut buf = String::new();
-        write!(buf, "{}", wrap(self.0, s)).unwrap();
-
+        write!(buf, "{}", wrap((self.0, self.1, self.2), s)).unwrap();
         buf
     }
 }
@@ -101,7 +97,7 @@ impl HSL {
     #[allow(clippy::many_single_char_names)]
     pub fn from_color(color: &RGB) -> Self {
         use std::cmp::{max, min};
-        let (r, g, b) = color.0;
+        let (r, g, b) = (color.0, color.1, color.2);
         let max = max(max(r, g), b);
         let min = min(min(r, g), b);
         let (r, g, b) = (

@@ -1,8 +1,16 @@
 use crate::prelude::*;
 
+use std::sync::{Arc, Mutex};
+
+mod transport;
+pub use self::transport::{Message, Transport};
+
+pub mod transports;
+
 pub struct Display {
     name: String,
     map: CommandMap<Display>,
+    transports: Vec<Arc<Mutex<Transport>>>,
 }
 
 impl Module for Display {
@@ -27,13 +35,14 @@ impl Module for Display {
 // never forget
 // .or_else::<HashMap<String, RGB>, _>(|_: Option<()>| Ok(HashMap::new()))
 impl Display {
-    pub fn create() -> Result<Self, ModuleError> {
+    pub fn create(transports: Vec<Arc<Mutex<Transport>>>) -> Result<Self, ModuleError> {
         let map = CommandMap::create("Display", &[("!color", Display::color_command)])?;
         let config = Config::load();
 
         Ok(Self {
             name: config.twitch.name.clone(),
             map,
+            transports,
         })
     }
 
@@ -58,6 +67,11 @@ impl Display {
         if !msg.data.starts_with('!') {
             println!("<{}> {}", user.color.format(&user.display), &msg.data);
         }
+
+        let msg = Message::new(msg, user);
+        for transport in &self.transports {
+            transport.lock().unwrap().send(msg.clone())
+        }
         None
     }
 
@@ -78,7 +92,12 @@ impl Display {
                 "<{}> {}",                         //
                 &user.color.format(&user.display), //
                 &msg.data
-            ); //
+            );
+
+            let msg = Message::new(&msg, user.clone());
+            for transport in &self.transports {
+                transport.lock().unwrap().send(msg.clone())
+            }
         }
         None
     }
@@ -92,7 +111,7 @@ mod tests {
     #[test]
     fn color_command() {
         let db = database::get_connection();
-        let mut display = Display::create().unwrap();
+        let mut display = Display::create(vec![]).unwrap();
         let mut env = Environment::new(&db, &mut display);
 
         env.push("!color #111111");

@@ -1,7 +1,10 @@
+cargo-features = ["default-run"]
+
 [package]
 name = "shaken"
 version = "0.1.0"
 authors = ["museun <museun@outlook.com>"]
+default-run = "shaken"
 edition = "2018"
 
 [dependencies]
@@ -19,6 +22,10 @@ serde = "1.0.70"
 serde_derive = "1.0.70"
 serde_json = "1.0.24"
 toml = "0.4.6"
+
+termcolor = "1.0.4"
+atty = "0.2.11"
+unicode-segmentation = "1.2.1"
 
 curl = "0.4.12"
 

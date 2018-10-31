@@ -57,7 +57,9 @@ fn run(config: &Config, conn: irc::TcpConn) {
     if let Ok(bard) = Shakespeare::create(BrainMarkov(address.into())) {
         modules.push(Arc::new(Mutex::new(bard)))
     }
-    if let Ok(display) = Display::create() {
+    if let Ok(display) = Display::create(vec![
+        Arc::new(Mutex::new(transports::SocketTransport::new())), // json over tcp
+    ]) {
         modules.push(Arc::new(Mutex::new(display)))
     }
     if let Ok(poll) = TwitchPoll::create() {

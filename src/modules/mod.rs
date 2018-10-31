@@ -5,7 +5,8 @@ mod shakespeare;
 pub use self::shakespeare::*;
 
 mod display;
-pub use self::display::*;
+pub use self::display::transports;
+pub use self::display::{Display, Message as DisplayMessage, Transport};
 
 mod invest;
 pub use self::invest::*;

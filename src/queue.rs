@@ -12,10 +12,12 @@ impl<T> Queue<T> {
     }
 
     pub fn push(&mut self, element: T) -> Option<T> {
-        let mut out = None;
-        if self.queue.len() == self.queue.capacity() {
-            out = self.queue.pop_front();
-        }
+        let out = if self.queue.len() == self.queue.capacity() {
+            self.queue.pop_front()
+        } else {
+            None
+        };
+
         self.queue.push_back(element);
         out
     }
@@ -30,5 +32,9 @@ impl<T> Queue<T> {
 
     pub fn queue(&self) -> &VecDeque<T> {
         &self.queue
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &T> {
+        self.queue.iter()
     }
 }

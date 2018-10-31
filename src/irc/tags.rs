@@ -35,6 +35,19 @@ impl Tags {
             })
     }
 
+    pub fn get_badges(&self) -> Option<Vec<Badge>> {
+        let s = self
+            .get("badges")?
+            .split(',')
+            .map(|s| {
+                let mut t = s.split('/');
+                (t.next(), t.next()) // badge, version
+            })
+            .filter_map(|(s, _)| s.and_then(|s| Badge::from_str(s).ok()))
+            .collect::<Vec<_>>();
+        Some(s)
+    }
+
     pub fn get_color(&self) -> Option<RGB> {
         self.get("color")
             .and_then(|s| Some(RGB::from(s)))
@@ -78,7 +91,7 @@ impl Tags {
     }
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum Badge {
     Admin,
     Broadcaster,
@@ -108,7 +121,7 @@ impl FromStr for Badge {
     }
 }
 
-#[derive(PartialEq, Debug, Clone, Serialize)]
+#[derive(PartialEq, Debug, Clone, Deserialize, Serialize)]
 pub struct Kappa {
     pub ranges: Vec<Range<u16>>,
     pub id: usize,
