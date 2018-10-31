@@ -8,6 +8,7 @@ pub struct Request {
     target: String,
     broadcaster: bool,
     moderator: bool,
+    color: RGB,
 }
 
 impl Request {
@@ -29,6 +30,7 @@ impl Request {
                         target: target.to_string(),
                         broadcaster,
                         moderator,
+                        color: msg.tags.get_color().unwrap(),
                     });
                 }
             }
@@ -65,6 +67,10 @@ impl Request {
             .any(|&id| id == self.sender)
     }
 
+    pub fn color(&self) -> RGB {
+        self.color.clone()
+    }
+
     pub fn is_from_moderator(&self) -> bool {
         self.moderator
     }
@@ -93,6 +99,7 @@ impl Request {
                 target: self.target.clone(),
                 moderator: self.moderator,
                 broadcaster: self.broadcaster,
+                color: self.color.clone(),
             });
         }
 

@@ -48,6 +48,7 @@ impl Tags {
         Some(s)
     }
 
+    // TODO remove this option..
     pub fn get_color(&self) -> Option<RGB> {
         self.get("color")
             .and_then(|s| Some(RGB::from(s)))

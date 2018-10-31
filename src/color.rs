@@ -3,6 +3,12 @@ use std::fmt::{self, Write};
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 pub struct RGB(pub u8, pub u8, pub u8);
 
+impl Default for RGB {
+    fn default() -> Self {
+        RGB(255, 255, 255)
+    }
+}
+
 impl fmt::Display for RGB {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let (r, g, b) = (self.0, self.1, self.2);

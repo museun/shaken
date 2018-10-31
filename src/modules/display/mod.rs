@@ -50,10 +50,16 @@ impl Display {
         let id = req.sender();
         let part = req.args_iter().next()?;
 
-        let color = RGB::from(part);
-        if color.is_dark() {
-            return reply!("don't use that color");
-        }
+        let color = match part.to_ascii_lowercase().as_str() {
+            "reset" => req.color(),
+            _ => {
+                let color = RGB::from(part);
+                if color.is_dark() {
+                    return reply!("don't use that color");
+                }
+                color
+            }
+        };
 
         let conn = database::get_connection();
         UserStore::update_color_for_id(&conn, id, &color);
