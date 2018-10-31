@@ -1,8 +1,7 @@
-use std::env;
 use std::io::prelude::*;
 use std::io::BufReader;
 use std::net::TcpStream;
-use std::str;
+use std::{env, str};
 
 use shaken::modules::DisplayMessage;
 
@@ -19,7 +18,14 @@ fn main() {
         None => die(format!("usage: {} addr:port", name)),
     };
 
-    if let Err(err) = Client::connect(&arg) {
+    let max = if let Some((w, _)) = term_size::dimensions() {
+        println!("{}", w);
+        w - 5
+    } else {
+        60 - 5
+    } - (NAME_MAX + 2);
+
+    if let Err(err) = Client::connect(&arg, max as usize) {
         die(format!("client error: {:?}", err))
     }
 }
@@ -31,7 +37,7 @@ fn die(s: impl AsRef<str>) -> ! {
 
 struct Client;
 impl Client {
-    pub fn connect(addr: &str) -> Result<(), Error> {
+    pub fn connect(addr: &str, max: usize) -> Result<(), Error> {
         let conn = TcpStream::connect(addr).map_err(|_e| Error::CannotConnect)?;
         let mut reader = BufReader::new(conn).lines();
 
@@ -48,8 +54,8 @@ impl Client {
             let msg = serde_json::from_str::<DisplayMessage>(&line).expect("valid json");
             let mut buf = buffer.buffer();
             let mut buf = Self::add_name(&msg, &mut buf);
-            let lines = Self::split_lines(&msg);
-            let buf = Self::print_lines(&lines, &mut buf);
+            let lines = Self::split_lines(&msg, max);
+            let buf = Self::print_lines(&lines, &mut buf, max);
             buffer.print(&buf).expect("print");
         }
         Ok(())
@@ -67,25 +73,25 @@ impl Client {
         buf
     }
 
-    fn split_lines(msg: &DisplayMessage) -> Vec<String> {
+    fn split_lines(msg: &DisplayMessage, max: usize) -> Vec<String> {
         let mut lines = vec![];
         let mut line = String::new();
         for s in msg.data.split_word_bounds() {
-            if s.len() > LINE_MAX {
+            if s.len() > max {
                 let mut tmp = String::new();
                 for c in s.chars() {
-                    if line.len() == LINE_MAX {
+                    if line.len() == max {
                         lines.push(line.clone());
                         line.clear();
                     }
-                    if tmp.len() == LINE_MAX {
+                    if tmp.len() == max {
                         line.push_str(&tmp);
                         tmp.clear();
                     }
                     tmp.push(c);
                 }
 
-                if line.len() == LINE_MAX {
+                if line.len() == max {
                     lines.push(line.clone());
                     line.clear();
                 }
@@ -94,7 +100,7 @@ impl Client {
                 }
                 continue;
             }
-            if line.len() + s.len() > LINE_MAX {
+            if line.len() + s.len() > max {
                 lines.push(line.clone());
                 line.clear();
             }
@@ -106,7 +112,7 @@ impl Client {
         lines
     }
 
-    fn print_lines<'a>(lines: &[String], buf: &'a mut Buffer) -> &'a mut Buffer {
+    fn print_lines<'a>(lines: &[String], buf: &'a mut Buffer, max: usize) -> &'a mut Buffer {
         let pad: String = std::iter::repeat(" ")
             .take(NAME_MAX + 2)
             .collect::<String>(); // probably should be passed in as an arg
@@ -122,7 +128,7 @@ impl Client {
                 continue;
             }
             if i < lines.len() - 1 {
-                let len = LINE_MAX.saturating_sub(s.len()) + 3;
+                let len = max.saturating_sub(s.len()) + 3;
                 writeln!(buf, "{: >width$}", RIGHT_FRINGE, width = len);
             } else {
                 writeln!(buf);
@@ -132,16 +138,9 @@ impl Client {
     }
 }
 
-const LINE_MAX: usize = 60;
 const NAME_MAX: usize = 10;
 const LEFT_FRINGE: char = '\u{1F4A9}';
 const RIGHT_FRINGE: char = '\u{1F6BD}';
-
-//\u{2502}  // thin
-//\u{257F}  // split
-
-// \u{2937}
-// \u{2936}
 
 fn truncate(mut s: String) -> String {
     if s.len() <= NAME_MAX {
@@ -157,22 +156,3 @@ fn truncate(mut s: String) -> String {
 enum Error {
     CannotConnect,
 }
-
-// the more I look at this, the more I'll decide on what to do with it
-// I like the match for match, but..
-// match msg.badges.iter().fold((false, false), |(mut b, mut m), c| {
-//     match c {
-//         irc::Badge::Broadcaster => b = true,
-//         irc::Badge::Moderator => m = true,
-//         _ => {}
-//     };
-//     (b, m)
-// }) {
-//     (true, _) => {
-//         write!(buf, "\u{1F3A5}  ");
-//     }
-//     (_, true) => {
-//         write!(buf, "\u{1F6E1}  ");
-//     }
-//     _ => {}
-// };

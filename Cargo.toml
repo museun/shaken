@@ -30,3 +30,4 @@ unicode-segmentation = "1.2.1"
 curl = "0.4.12"
 
 rusqlite = { version = "0.15.0", features = ["bundled", "chrono"]}
+term_size = "0.3.1"
