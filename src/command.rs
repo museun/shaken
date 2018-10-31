@@ -13,9 +13,12 @@ impl<T> Command<T>
 where
     T: Module,
 {
-    pub fn new<S: ToString>(name: S, func: fn(&mut T, &Request) -> Option<Response>) -> Self {
+    pub fn new<S>(name: S, func: fn(&mut T, &Request) -> Option<Response>) -> Self
+    where
+        S: Into<String>,
+    {
         Self {
-            name: name.to_string(),
+            name: name.into(),
             func,
         }
     }

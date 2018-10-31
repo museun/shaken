@@ -8,13 +8,14 @@ pub struct CommandMap<T>(Arc<HashMap<&'static str, Func<T>>>);
 
 impl<T> CommandMap<T> {
     pub fn create(
-        namespace: impl ToString,
+        namespace: impl Into<String>,
         commands: &[(&'static str, Func<T>)],
     ) -> Result<CommandMap<T>, ModuleError> {
         let mut map = HashMap::new();
+        let namespace = namespace.into();
         for (k, v) in commands.into_iter() {
             let cmd = CommandBuilder::command(*k)
-                .namespace(namespace.to_string())
+                .namespace(namespace.clone())
                 .build();
 
             if let Err(RegistryError::AlreadyExists) = Registry::register(&cmd) {
