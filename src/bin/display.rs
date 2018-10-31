@@ -19,7 +19,6 @@ fn main() {
     };
 
     let max = if let Some((w, _)) = term_size::dimensions() {
-        println!("{}", w);
         w - 5
     } else {
         60 - 5
