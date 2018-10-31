@@ -23,7 +23,7 @@ impl<'a> Markov for BrainMarkov<'a> {
 
 pub struct Shakespeare {
     map: CommandMap<Shakespeare>,
-    markov: Box<dyn Markov>,
+    markovs: Vec<Box<dyn Markov>>,
 
     previous: Option<Instant>,
     limit: Duration,
@@ -45,13 +45,13 @@ impl Module for Shakespeare {
 }
 
 impl Shakespeare {
-    pub fn create<M: Markov + 'static>(markov: M) -> Result<Self, ModuleError> {
+    pub fn create(markovs: Vec<Box<Markov>>) -> Result<Self, ModuleError> {
         let map = CommandMap::create("Shakespeare", &[("!speak", Self::speak_command)])?;
         let config = Config::load();
 
         Ok(Self {
             map,
-            markov: Box::new(markov),
+            markovs,
 
             previous: None,
             limit: Duration::from_secs(config.shakespeare.interval as u64),
@@ -109,6 +109,14 @@ impl Shakespeare {
     }
 
     fn generate(&mut self) -> Option<String> {
+        let mut rng = thread_rng();
+        rng.shuffle(&mut self.markovs);
+        let markov = if let Some(brain) = self.markovs.get(0) {
+            brain
+        } else {
+            return None;
+        };
+
         let now = Instant::now();
         if let Some(prev) = self.previous {
             if now.duration_since(prev) < self.limit {
@@ -124,7 +132,7 @@ impl Shakespeare {
         }
 
         loop {
-            let data = match self.markov.get_next() {
+            let data = match markov.get_next() {
                 Some(data) => data,
                 None => {
                     warn!("cannot get a response from the brain");
@@ -172,7 +180,7 @@ mod tests {
     #[test]
     fn speak_command() {
         let db = database::get_connection();
-        let mut shakespeare = Shakespeare::create(TestMarkov {}).unwrap();
+        let mut shakespeare = Shakespeare::create(vec![Box::new(TestMarkov {})]).unwrap();
         let mut env = Environment::new(&db, &mut shakespeare);
 
         env.push("!speak");
@@ -191,7 +199,7 @@ mod tests {
     #[test]
     fn auto_speak() {
         let db = database::get_connection();
-        let mut shakespeare = Shakespeare::create(TestMarkov {}).unwrap();
+        let mut shakespeare = Shakespeare::create(vec![Box::new(TestMarkov {})]).unwrap();
         shakespeare.bypass = 0;
         let mut env = Environment::new(&db, &mut shakespeare);
 
@@ -206,7 +214,7 @@ mod tests {
     #[test]
     fn check_mentions() {
         let db = database::get_connection();
-        let mut shakespeare = Shakespeare::create(TestMarkov {}).unwrap();
+        let mut shakespeare = Shakespeare::create(vec![Box::new(TestMarkov {})]).unwrap();
         let mut env = Environment::new(&db, &mut shakespeare);
 
         env.push("hey @shaken_bot");

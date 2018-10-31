@@ -53,8 +53,11 @@ fn run(config: &Config, conn: irc::TcpConn) {
         modules.push(Arc::new(Mutex::new(builtin)));
     }
     // TODO configure 'brain' here
-    let address = "http://localhost:7878/markov/next";
-    if let Ok(bard) = Shakespeare::create(BrainMarkov(address.into())) {
+
+    if let Ok(bard) = Shakespeare::create(vec![
+        Box::new(BrainMarkov("http://localhost:7878/markov/next".into())),
+        Box::new(BrainMarkov("http://localhost:7879/markov/next".into())),
+    ]) {
         modules.push(Arc::new(Mutex::new(bard)))
     }
     if let Ok(display) = Display::create(vec![
