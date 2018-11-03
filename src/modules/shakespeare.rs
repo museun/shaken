@@ -145,6 +145,7 @@ impl Shakespeare {
         if bypass || thread_rng().gen_bool(self.chance) {
             trace!("automatically trying to speak");
             let resp = self.generate()?;
+            std::thread::sleep(Duration::from_millis(thread_rng().gen_range(150, 750)));
             return say!("{}", resp);
         }
         None
