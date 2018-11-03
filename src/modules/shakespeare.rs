@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use rand::prelude::*;
+use std::borrow::Cow;
 use std::time::{Duration, Instant};
 
 pub trait Markov: Send {
@@ -7,14 +8,15 @@ pub trait Markov: Send {
 }
 
 pub struct NullMarkov;
+
 impl Markov for NullMarkov {
     fn get_next(&self) -> Option<String> {
         None
     }
 }
 
-use std::borrow::Cow;
 pub struct BrainMarkov<'a>(pub Cow<'a, str>);
+
 impl<'a> Markov for BrainMarkov<'a> {
     fn get_next(&self) -> Option<String> {
         util::http_get(&self.0)
@@ -29,7 +31,7 @@ pub struct Shakespeare {
     limit: Duration,
     interval: f64,
     chance: f64,
-    bypass: usize,
+    bypass: usize, // is this even needed?
     name: String,
 }
 
@@ -40,13 +42,25 @@ impl Module for Shakespeare {
     }
 
     fn passive(&mut self, msg: &irc::Message) -> Option<Response> {
-        self.check_mentions(&msg).or_else(|| self.auto_speak())
+        self.check_mentions(&msg).or_else(|| {
+            if !msg.data.starts_with('!') {
+                self.auto_speak()
+            } else {
+                None
+            }
+        })
     }
 }
 
 impl Shakespeare {
     pub fn create(markovs: Vec<Box<Markov>>) -> Result<Self, ModuleError> {
-        let map = CommandMap::create("Shakespeare", &[("!speak", Self::speak_command)])?;
+        let map = CommandMap::create(
+            "Shakespeare",
+            &[
+                ("!speak configure", Self::configure_command),
+                ("!speak", Self::speak_command),
+            ],
+        )?;
         let config = Config::load();
 
         Ok(Self {
@@ -65,6 +79,54 @@ impl Shakespeare {
     fn speak_command(&mut self, _: &Request) -> Option<Response> {
         let resp = self.generate()?;
         say!("{}", resp)
+    }
+
+    fn configure_command(&mut self, req: &Request) -> Option<Response> {
+        require_priviledges!(&req);
+        let args = req.args_iter().collect::<Vec<_>>();
+        if args.is_empty() {
+            return reply!("what do you want to configure: interval, chance, bypass");
+        }
+
+        let res = match args.as_slice() {
+            ["interval", n] => {
+                if let Ok(n) = n.parse::<f64>() {
+                    self.interval = n;
+                    reply!("done")
+                } else {
+                    reply!("that is not a number")
+                }
+            }
+            ["chance", n] => {
+                if let Ok(n) = n.parse::<f64>() {
+                    if n > 1.0 || n < 0.0 {
+                        return reply!("chance has to be 0.0 <= chance <= 1.0");
+                    }
+                    self.chance = n;
+                    reply!("done")
+                } else {
+                    reply!("that is not a number")
+                }
+            }
+            ["bypass", n] => {
+                if let Ok(n) = n.parse::<usize>() {
+                    self.bypass = n;
+                    reply!("done")
+                } else {
+                    reply!("that is not a number")
+                }
+            }
+            ["interval"] | ["chance"] | ["bypass"] => reply!("provide a value, please"),
+            _ => reply!("I don't know how to configure that"),
+        };
+
+        let mut config = Config::load();
+        config.shakespeare.chance = self.chance;
+        config.shakespeare.interval = self.interval as usize; // what
+        config.shakespeare.bypass = self.bypass;
+        config.save();
+
+        res
     }
 
     fn auto_speak(&mut self) -> Option<Response> {
@@ -90,6 +152,7 @@ impl Shakespeare {
 
     fn check_mentions(&mut self, msg: &irc::Message) -> Option<Response> {
         let conn = get_connection();
+        // TODO why is this a thing
         let user = UserStore::get_bot(&conn, &self.name)?;
 
         // what is this
@@ -155,14 +218,14 @@ impl Shakespeare {
 }
 
 fn prune(s: &str) -> &str {
-    let mut pos = 0;
+    let mut pos = 0usize;
     for c in s.chars().rev() {
         if c.is_alphabetic() {
             break;
         }
         pos += 1
     }
-    &s[..s.len() - pos]
+    &s[..s.len() - pos] // keep atleast one form of punctuation at the end
 }
 
 #[cfg(test)]
@@ -194,6 +257,66 @@ mod tests {
         env.push("!speak");
         env.step_wait(false);
         assert_eq!(env.pop(), None);
+    }
+
+    #[test]
+    fn configure_command() {
+        let db = database::get_connection();
+        let mut shakespeare = Shakespeare::create(vec![Box::new(TestMarkov {})]).unwrap();
+        {
+            let mut env = Environment::new(&db, &mut shakespeare);
+
+            env.push("!speak configure");
+            env.step_wait(false);
+            assert_eq!(env.pop(), None);
+
+            env.push_broadcaster("!speak configure");
+            env.step();
+            assert_eq!(
+                env.pop().unwrap(),
+                "@test: what do you want to configure: interval, chance, bypass"
+            );
+
+            env.push_broadcaster("!speak configure interval");
+            env.step();
+            assert_eq!(env.pop().unwrap(), "@test: provide a value, please");
+
+            env.push_broadcaster("!speak configure interval one");
+            env.step();
+            assert_eq!(env.pop().unwrap(), "@test: that is not a number");
+
+            env.push_broadcaster("!speak configure interval 1");
+            env.step();
+            assert_eq!(env.pop().unwrap(), "@test: done");
+
+            env.push_broadcaster("!speak configure chance 1.2");
+            env.step();
+            assert_eq!(
+                env.pop().unwrap(),
+                "@test: chance has to be 0.0 <= chance <= 1.0"
+            );
+
+            env.push_broadcaster("!speak configure chance 0.2");
+            env.step();
+            assert_eq!(env.pop().unwrap(), "@test: done");
+
+            env.push_broadcaster("!speak configure bypass 1");
+            env.step();
+            assert_eq!(env.pop().unwrap(), "@test: done");
+
+            env.push_broadcaster("!speak configure foobar 1");
+            env.step();
+            assert_eq!(
+                env.pop().unwrap(),
+                "@test: I don't know how to configure that"
+            );
+        }
+
+        assert_eq!(shakespeare.interval, 1.0);
+        assert_eq!(shakespeare.chance, 0.2);
+        assert_eq!(shakespeare.bypass, 1);
+
+        // env.drain_and_log();
     }
 
     #[test]

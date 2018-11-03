@@ -133,8 +133,6 @@ mod tests {
 
     #[test]
     fn color_command() {
-        init_test_logger(Some(LogLevel::Trace));
-
         let db = database::get_connection();
         let mut display = Display::create(vec![]).unwrap();
         let mut env = Environment::new(&db, &mut display);
