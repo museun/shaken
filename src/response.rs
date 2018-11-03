@@ -43,7 +43,20 @@ impl Response {
                     warn!("Say requires a message context, ignoring");
                     None
                 })?;
-                return Some(vec![format!("PRIVMSG {} :{}", context.target(), data)]);
+                let nick = match context.prefix {
+                    Some(irc::Prefix::User { ref nick, .. }) => nick,
+                    _ => unreachable!(),
+                };
+                let user = UserStore::get_user_by_name(&get_connection(), &nick)?;
+                match context.command.as_str() {
+                    "PRIVMSG" => {
+                        return Some(vec![format!("PRIVMSG {} :{}", context.target(), data)])
+                    }
+                    "WHISPER" => {
+                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)])
+                    }
+                    _ => unreachable!(),
+                }
             }
             Response::Action { data } => {
                 let context = context.or_else(|| {

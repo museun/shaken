@@ -52,8 +52,8 @@ fn run(config: &Config, conn: irc::TcpConn) {
     if let Ok(builtin) = Builtin::create() {
         modules.push(Arc::new(Mutex::new(builtin)));
     }
-    // TODO configure 'brain' here
 
+    // TODO configure 'brain' here
     if let Ok(bard) = Shakespeare::create(vec![
         Box::new(BrainMarkov("http://localhost:7878/markov/next".into())),
         Box::new(BrainMarkov("http://localhost:7879/markov/next".into())),

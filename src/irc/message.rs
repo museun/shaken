@@ -14,22 +14,24 @@ pub struct Message {
 impl Message {
     // TODO: should probably return a result
     pub fn parse(input: &str) -> Message {
-        let (input, tags) = if !input.starts_with(':') && !input.starts_with("PING") {
-            Self::parse_tags(&input)
-        } else {
-            (input, irc::Tags::default())
-        };
+        // TODO tags parsing is wrong
+        let (input, tags) =
+            if !input.starts_with(':') && !input.starts_with("PING") && input.starts_with('@') {
+                Self::parse_tags(&input)
+            } else {
+                (input, irc::Tags::default())
+            };
 
         let prefix = irc::Prefix::parse(&input);
 
-        let iter = input
+        let skip = if prefix.is_some() { 1 } else { 0 };
+        let mut args = input
             .split_whitespace()
-            .skip(if prefix.is_some() { 1 } else { 0 });
-
-        let mut args = iter
+            .skip(skip)
             .take_while(|s| !s.starts_with(':'))
             .map(|s| s.into())
             .collect::<Vec<_>>();
+
         let command = args.remove(0);
 
         let data = if let Some(pos) = &input[1..].find(':') {

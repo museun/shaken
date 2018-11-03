@@ -20,9 +20,11 @@ impl Module for Display {
     }
 
     fn passive(&mut self, msg: &irc::Message) -> Option<Response> {
-        // TODO: this only handles PRIVMSG
-        if msg.command.as_str() == "PRIVMSG" {
-            self.handle_passive(msg);
+        match msg.command.as_str() {
+            "PRIVMSG" | "ACTION" => {
+                self.handle_passive(msg);
+            }
+            _ => {}
         }
         None
     }
@@ -70,8 +72,18 @@ impl Display {
         let conn = database::get_connection();
         let user = UserStore::get_user_by_id(&conn, msg.tags.get_userid()?)?;
 
-        if !msg.data.starts_with('!') {
-            println!("<{}> {}", user.color.format(&user.display), &msg.data);
+        match msg.command.as_str() {
+            "ACTION" => println!(
+                "* {} {}",
+                user.color.format(&user.display),
+                &msg.data[8..msg.data.len() - 1]
+            ),
+            "WHISPER" => return None,
+            _ => {
+                if !msg.data.starts_with('!') {
+                    println!("<{}> {}", user.color.format(&user.display), &msg.data);
+                }
+            }
         }
 
         let msg = Message::new(msg, user);
@@ -94,6 +106,11 @@ impl Display {
         let resp = resp.build(Some(msg))?;
         for out in resp {
             let msg = irc::Message::parse(&out);
+            if msg.data.starts_with('/') || msg.command.as_str() == "WHISPER" {
+                return None;
+            }
+            debug!("{:?}", msg);
+
             println!(
                 "<{}> {}",                         //
                 &user.color.format(&user.display), //
@@ -116,6 +133,8 @@ mod tests {
 
     #[test]
     fn color_command() {
+        init_test_logger(Some(LogLevel::Trace));
+
         let db = database::get_connection();
         let mut display = Display::create(vec![]).unwrap();
         let mut env = Environment::new(&db, &mut display);

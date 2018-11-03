@@ -51,27 +51,35 @@ impl<'a> Buffer<'a> {
     }
 
     pub fn print(mut self) {
-        self.add_name();
+        self.add_name(self.msg.is_action);
         self.split_lines();
         self.write_lines();
         self.writer.print(&self.buf).expect("print");
     }
 
-    fn add_name(&mut self) {
+    fn add_name(&mut self, action: bool) {
+        let mut name = self.msg.name.clone();
+        let name = self.truncate(&mut name);
+        let pad = self.opts.name_max.saturating_sub(name.len()) + 1;
+
+        if action {
+            write!(self.buf, "{:>offset$}", "*", offset = pad);
+        } else {
+            write!(self.buf, "{:>offset$}", " ", offset = pad);
+        }
+
         let mut spec = ColorSpec::new();
         let (r, g, b) = (self.msg.color.0, self.msg.color.1, self.msg.color.2);
         spec.set_fg(Some(Color::Rgb(r, g, b)));
         self.buf.set_color(&spec).expect("set color");
-
-        let mut name = self.msg.name.clone();
-        let name = self.truncate(&mut name);
-        write!(
-            self.buf,
-            "{:>offset$}: ",
-            name,
-            offset = self.opts.name_max + 1
-        );
+        write!(self.buf, "{}", name);
         self.buf.reset().expect("reset");
+
+        if action {
+            write!(self.buf, " ");
+        } else {
+            write!(self.buf, ": ");
+        }
     }
 
     fn write_lines(&mut self) {
