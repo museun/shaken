@@ -170,6 +170,12 @@ impl Client {
 
         while let Some(Ok(line)) = reader.next() {
             let msg = serde_json::from_str::<DisplayMessage>(&line).expect("valid json");
+
+            // hardcoded shaken id for now
+            if msg.data.starts_with('!') || (msg.userid == "241015868" && msg.data.starts_with('@'))
+            {
+                continue;
+            }
             Buffer::new(&buffer, &opts, &msg).print();
         }
         Ok(())
