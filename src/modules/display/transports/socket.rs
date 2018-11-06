@@ -16,7 +16,7 @@ pub struct SocketTransport {
 }
 
 impl SocketTransport {
-    pub fn new() -> Self {
+    pub fn start() -> Self {
         let (tx, rx) = channel::bounded(MAX_MESSAGES);
         Self::run_loop(rx.clone());
         Self { tx, rx }
