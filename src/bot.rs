@@ -84,7 +84,15 @@ impl Bot {
         self.send("CAP REQ :twitch.tv/membership");
         self.send("CAP REQ :twitch.tv/commands");
 
-        self.send(format!("PASS {}", env!("SHAKEN_TWITCH_PASSWORD")));
+        let password = match std::env::var("SHAKEN_TWITCH_PASSWORD") {
+            Ok(password) => password,
+            Err(_err) => {
+                error!("env variable must be set: SHAKEN_TWITCH_PASSWORD");
+                std::process::exit(1);
+            }
+        };
+
+        self.send(format!("PASS {}", password));
         self.send(format!("NICK {}", &nick));
 
         // this would be needed for a real irc server

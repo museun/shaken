@@ -13,9 +13,15 @@ impl Default for TwitchClient {
 
 impl TwitchClient {
     pub fn new() -> Self {
-        Self {
-            client_id: env!("SHAKEN_TWITCH_CLIENT_ID").to_string(),
-        }
+        let client_id = match std::env::var("SHAKEN_TWITCH_CLIENT_ID") {
+            Ok(client_id) => client_id,
+            Err(_err) => {
+                error!("env variable must be set: SHAKEN_TWITCH_CLIENT_ID");
+                std::process::exit(1);
+            }
+        };
+
+        Self { client_id }
     }
 
     pub fn get_streams<'a>(&self, user_logins: impl AsRef<[&'a str]>) -> Option<Vec<Stream>> {
