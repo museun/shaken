@@ -145,7 +145,7 @@ impl<'a> Buffer<'a> {
     }
 
     fn truncate<'b>(&self, name: &'b mut String) -> &'b String {
-        let max = self.opts.name_max;
+        let max = self.opts.name_max - 1;
         if name.len() <= max {
             return name;
         }
