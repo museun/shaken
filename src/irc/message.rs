@@ -15,6 +15,7 @@ impl Message {
     // TODO: should probably return a result
     pub fn parse(input: &str) -> Message {
         // TODO tags parsing is wrong
+        // TODO is it still wrong?
         let (input, tags) =
             if !input.starts_with(':') && !input.starts_with("PING") && input.starts_with('@') {
                 Self::parse_tags(&input)
