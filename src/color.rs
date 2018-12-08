@@ -102,7 +102,7 @@ impl fmt::Display for HSL {
 
 impl HSL {
     pub fn from_color(color: &RGB) -> Self {
-        #![allow(clippy::many_single_char_names)]
+        #![allow(clippy::unknown_clippy_lints, clippy::many_single_char_names)]
         use std::cmp::{max, min};
 
         let (r, g, b) = (color.0, color.1, color.2);
