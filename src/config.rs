@@ -1,3 +1,5 @@
+use serde_derive::{Deserialize, Serialize};
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
     pub twitch: Twitch,
@@ -71,6 +73,7 @@ const CONFIG_FILE: &str = "shaken.toml"; // hardcoded
 impl Config {
     #[cfg(not(test))]
     pub fn load() -> Self {
+        use log::*;
         use std::fs;
         use std::io::ErrorKind;
 
@@ -110,7 +113,9 @@ impl Config {
     #[cfg(not(test))]
     #[allow(dead_code)]
     pub fn save(&self) {
+        use log::*;
         use std::{fs, io::Write};
+
         let s = toml::to_string_pretty(&self).expect("to generate correct config");
         let mut f = fs::File::create(CONFIG_FILE)
             .map_err(|e| {

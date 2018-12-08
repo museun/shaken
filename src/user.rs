@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use log::*;
 use rusqlite::{self, types::ToSql, Connection};
 
 #[derive(Clone, PartialEq, Debug)]

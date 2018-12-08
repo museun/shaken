@@ -1,8 +1,8 @@
 use crate::prelude::*;
-use std::time::Duration;
-
 use chrono::prelude::*;
+use log::*;
 use rusqlite::{types::ToSql, Connection, NO_PARAMS};
+use std::time::Duration;
 
 use crate::module::CommandMap;
 

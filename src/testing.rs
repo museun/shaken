@@ -4,8 +4,9 @@ use crate::prelude::*;
 use std::collections::VecDeque;
 
 use crossbeam_channel as channel;
+use crossbeam_channel::select;
+use log::*;
 use rusqlite::Connection;
-
 use simplelog::{Config as LogConfig, LevelFilter, TermLogger};
 
 pub enum LogLevel {
@@ -109,14 +110,14 @@ impl<'a> Environment<'a> {
         trace!("(msg) -> {:?}", msg);
         trace!("(req) -> {:?}", req);
 
-        out_tx.send(Event::Message(msg, req));
+        out_tx.send(Event::Message(msg, req.map(Box::new)));
 
         drop(out_tx);
         self.module.handle(out_rx, self.in_tx.clone());
 
         let msg = if wait {
             use std::time::Duration;
-            select!{
+            select! {
                 recv(self.in_rx, msg) => msg,
                 recv(channel::after(Duration::from_millis(5000))) => panic!("test timed out")
             }
@@ -149,7 +150,7 @@ impl<'a> Environment<'a> {
         drop(out_tx);
         self.module.handle(out_rx, self.in_tx.clone());
 
-        let msg = select!{
+        let msg = select! {
             recv(self.in_rx, msg) => msg,
             recv(channel::after(Duration::from_millis(5000))) => panic!("test timed out")
         };

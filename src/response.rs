@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use log::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Response {
@@ -30,10 +31,10 @@ impl Response {
                             context.target(),
                             user.display,
                             data
-                        )])
+                        )]);
                     }
                     "WHISPER" => {
-                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)])
+                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)]);
                     }
                     _ => unreachable!(),
                 }
@@ -50,10 +51,10 @@ impl Response {
                 let user = UserStore::get_user_by_name(&get_connection(), &nick)?;
                 match context.command.as_str() {
                     "PRIVMSG" => {
-                        return Some(vec![format!("PRIVMSG {} :{}", context.target(), data)])
+                        return Some(vec![format!("PRIVMSG {} :{}", context.target(), data)]);
                     }
                     "WHISPER" => {
-                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)])
+                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)]);
                     }
                     _ => unreachable!(),
                 }
@@ -94,7 +95,7 @@ impl Response {
                 IrcCommand::Join { channel } => return Some(vec![format!("JOIN {}", channel)]),
                 IrcCommand::Raw { data } => return Some(vec![data.clone()]),
                 IrcCommand::Privmsg { target, data } => {
-                    return Some(vec![format!("PRIVMSG {} :{}", target, data)])
+                    return Some(vec![format!("PRIVMSG {} :{}", target, data)]);
                 }
             },
         }

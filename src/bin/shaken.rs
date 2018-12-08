@@ -60,11 +60,6 @@ fn run(config: &Config, conn: irc::TcpConn) {
     ]) {
         modules.push(Arc::new(Mutex::new(bard)))
     }
-    if let Ok(display) = Display::create(vec![
-        Arc::new(Mutex::new(transports::SocketTransport::start())), // json over tcp
-    ]) {
-        modules.push(Arc::new(Mutex::new(display)))
-    }
     if let Ok(poll) = TwitchPoll::create() {
         modules.push(Arc::new(Mutex::new(poll)))
     }

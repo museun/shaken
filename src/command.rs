@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use log::*;
 
 // this is used so modules can express their commands
 pub struct Command<T>

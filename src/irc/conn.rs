@@ -1,3 +1,4 @@
+use log::*;
 use std::io::{self, prelude::*, BufRead, BufReader, BufWriter, Lines};
 use std::net::{self, TcpStream, ToSocketAddrs};
 use std::time::Duration;

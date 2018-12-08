@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 use crate::database::get_connection;
-
+use log::*;
 use rand::prelude::*;
 use rusqlite::{Connection, NO_PARAMS};
 

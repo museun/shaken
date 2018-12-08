@@ -1,3 +1,4 @@
+use serde_derive::{Deserialize, Serialize};
 use std::fmt::{self, Write};
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -100,9 +101,10 @@ impl fmt::Display for HSL {
 }
 
 impl HSL {
-    #[allow(clippy::many_single_char_names)]
     pub fn from_color(color: &RGB) -> Self {
+        #![allow(clippy::many_single_char_names)]
         use std::cmp::{max, min};
+
         let (r, g, b) = (color.0, color.1, color.2);
         let max = max(max(r, g), b);
         let min = min(min(r, g), b);

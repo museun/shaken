@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use crossbeam_channel as channel;
+use log::*;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -8,14 +9,14 @@ pub type Sender = channel::Sender<(Option<irc::Message>, Response)>;
 
 #[derive(Debug, Clone)]
 pub enum Event {
-    Message(irc::Message, Option<Request>),
-    Inspect(irc::Message, Response),
+    Message(irc::Message, Option<Box<Request>>),
+    Inspect(irc::Message, Box<Response>),
     Tick(Instant),
 }
 
 pub struct Bot {
     out_tx: channel::Sender<String>,
-    inspect_tx: channel::Sender<(irc::Message, Response)>,
+    inspect_tx: channel::Sender<(irc::Message, Box<Response>)>,
 }
 
 impl Bot {
@@ -35,7 +36,7 @@ impl Bot {
                     Some(irc::ReadStatus::Data(msg)) => {
                         let msg = irc::Message::parse(&msg);
                         let req = Request::try_from(&msg);
-                        in_tx.send(Event::Message(msg, req))
+                        in_tx.send(Event::Message(msg, req.map(Box::new)))
                     }
                     Some(irc::ReadStatus::Nothing) => {}
                     _ => {
@@ -65,7 +66,7 @@ impl Bot {
         for (msg, resp) in rx {
             let msg = msg.as_ref();
             if let Some(msg) = msg {
-                self.inspect_tx.send((msg.clone(), resp.clone()));
+                self.inspect_tx.send((msg.clone(), Box::new(resp.clone())));
             }
 
             if let Some(resp) = resp.build(msg) {
