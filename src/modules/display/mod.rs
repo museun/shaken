@@ -10,7 +10,7 @@ pub mod transports;
 pub struct Display {
     name: String,
     map: CommandMap<Display>,
-    transports: Vec<Arc<Mutex<Transport>>>,
+    transports: Vec<Arc<Mutex<dyn Transport>>>,
 }
 
 impl Module for Display {
@@ -37,7 +37,7 @@ impl Module for Display {
 // never forget
 // .or_else::<HashMap<String, RGB>, _>(|_: Option<()>| Ok(HashMap::new()))
 impl Display {
-    pub fn create(transports: Vec<Arc<Mutex<Transport>>>) -> Result<Self, ModuleError> {
+    pub fn create(transports: Vec<Arc<Mutex<dyn Transport>>>) -> Result<Self, ModuleError> {
         let map = CommandMap::create("Display", &[("!color", Display::color_command)])?;
         let config = Config::load();
 

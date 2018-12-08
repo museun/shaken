@@ -53,7 +53,7 @@ impl Module for Shakespeare {
 }
 
 impl Shakespeare {
-    pub fn create(markovs: Vec<Box<Markov>>) -> Result<Self, ModuleError> {
+    pub fn create(markovs: Vec<Box<dyn Markov>>) -> Result<Self, ModuleError> {
         let map = CommandMap::create(
             "Shakespeare",
             &[

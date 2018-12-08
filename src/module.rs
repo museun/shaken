@@ -13,7 +13,7 @@ impl<T> CommandMap<T> {
     ) -> Result<CommandMap<T>, ModuleError> {
         let mut map = HashMap::new();
         let namespace = namespace.into();
-        for (k, v) in commands.into_iter() {
+        for (k, v) in commands.iter() {
             let cmd = CommandBuilder::command(*k)
                 .namespace(namespace.clone())
                 .build();

@@ -206,7 +206,7 @@ enum ParseError {
 }
 
 impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ParseError::Title => {
                 write!(f, "no title was provided. use !poll title | options | ...")
