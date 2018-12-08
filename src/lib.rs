@@ -18,8 +18,6 @@ pub mod module;
 pub mod twitch;
 pub mod util;
 
-pub mod queue;
-
 // actual bot modules
 pub mod modules;
 
