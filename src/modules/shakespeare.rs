@@ -215,13 +215,7 @@ impl Shakespeare {
 }
 
 fn prune(s: &str) -> &str {
-    let mut pos = 0usize;
-    for c in s.chars().rev() {
-        if c.is_alphabetic() {
-            break;
-        }
-        pos += 1
-    }
+    let pos = s.chars().rev().take_while(|c| !c.is_alphabetic()).count();
     &s[..s.len() - pos] // keep atleast one form of punctuation at the end
 }
 
