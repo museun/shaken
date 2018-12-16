@@ -174,13 +174,8 @@ impl Shakespeare {
     }
 
     fn generate(&mut self) -> Option<String> {
-        let mut rng = thread_rng();
-        rng.shuffle(&mut self.markovs);
-        let markov = if let Some(brain) = self.markovs.get(0) {
-            brain
-        } else {
-            return None;
-        };
+        self.markovs.shuffle(&mut thread_rng());
+        let markov = self.markovs.get(0)?;
 
         let now = Instant::now();
         if let Some(prev) = self.previous {
