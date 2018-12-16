@@ -74,20 +74,16 @@ where
     S: AsRef<str>,
     V: AsRef<[(S, u64)]>,
 {
-    fn plural(n: u64, s: &str) -> String {
+    fn plural((s, n): (&str, u64)) -> String {
         format!("{} {}", n, if n > 1 { s } else { &s[..s.len() - 1] })
     }
 
     let mut list = list
         .as_ref()
         .iter()
-        .filter_map(|(s, n)| {
-            if *n > 0 {
-                Some(plural(*n, s.as_ref()))
-            } else {
-                None
-            }
-        })
+        .map(|(s, n)| (s.as_ref(), *n))
+        .filter(|&(_, n)| n > 0)
+        .map(plural)
         .collect::<Vec<_>>();
 
     let len = list.len();
