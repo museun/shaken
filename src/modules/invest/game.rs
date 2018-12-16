@@ -107,7 +107,7 @@ impl InvestGame {
             .prepare("SELECT * FROM Invest ORDER BY Current DESC LIMIT ?")
             .expect("valid sql");
 
-        let mut iter = stmt
+        let iter = stmt
             .query_map(&[&bound], |row| InvestUser {
                 id: row.get(0),
                 max: un!(row, 1),
@@ -119,11 +119,7 @@ impl InvestGame {
             .map_err(|_e| { /* log this */ })
             .expect("to get rows");
 
-        let mut out = vec![];
-        while let Some(Ok(row)) = iter.next() {
-            out.push(row)
-        }
-        out
+        iter.filter_map(|s| s.ok()).collect()
     }
 
     pub fn find(id: i64) -> Option<InvestUser> {
