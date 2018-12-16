@@ -27,38 +27,30 @@ impl TwitchClient {
     }
 
     pub fn get_streams<'a>(&self, user_logins: impl AsRef<[&'a str]>) -> Option<Vec<Stream>> {
-        let mut map = Vec::new();
-        for &login in user_logins.as_ref() {
-            map.push(("user_login", login));
-        }
-
+        let map = std::iter::repeat("user_login")
+            .zip(user_logins.as_ref().iter().cloned())
+            .collect::<Vec<_>>();
         self.get_response("streams", &map)
     }
 
     pub fn get_streams_from_ids<'a>(&self, ids: impl AsRef<[&'a str]>) -> Option<Vec<Stream>> {
-        let mut map = Vec::new();
-        for &id in ids.as_ref() {
-            map.push(("user_id	", id));
-        }
-
+        let map = std::iter::repeat("user_id ")
+            .zip(ids.as_ref().iter().cloned())
+            .collect::<Vec<_>>();
         self.get_response("streams", &map)
     }
 
     pub fn get_users<'a>(&self, user_logins: impl AsRef<[&'a str]>) -> Option<Vec<User>> {
-        let mut map = Vec::new();
-        for &login in user_logins.as_ref() {
-            map.push(("login", login));
-        }
-
+        let map = std::iter::repeat("login")
+            .zip(user_logins.as_ref().iter().cloned())
+            .collect::<Vec<_>>();
         self.get_response("users", &map)
     }
 
     pub fn get_users_from_ids<'a>(&self, ids: impl AsRef<[&'a str]>) -> Option<Vec<User>> {
-        let mut map = Vec::new();
-        for &id in ids.as_ref() {
-            map.push(("id", id));
-        }
-
+        let map = std::iter::repeat("id")
+            .zip(ids.as_ref().iter().cloned())
+            .collect::<Vec<_>>();
         self.get_response("users", &map)
     }
 
@@ -72,10 +64,13 @@ impl TwitchClient {
     {
         const BASE_URL: &str = "https://api.twitch.tv/helix";
 
-        let mut query = String::from("?");
-        for (k, v) in map.as_ref() {
-            query.push_str(&format!("{}={}&", encode(k), encode(v)));
-        }
+        let query = std::iter::once("?".into()) // TODO use a fold here
+            .chain(
+                map.as_ref()
+                    .iter()
+                    .map(|(k, v)| format!("{}={}&", encode(k), encode(v))),
+            )
+            .collect::<String>();
 
         let mut vec = Vec::new();
         let mut easy = Easy::new();
@@ -102,10 +97,7 @@ impl TwitchClient {
         }
 
         let value = serde_json::from_slice::<serde_json::Value>(&vec)
-            .map_err(|err| {
-                error!("parse json: {}", err);
-                err
-            })
+            .map_err(|err| error!("parse json: {}", err))
             .ok()?;
 
         let value = value
@@ -117,21 +109,15 @@ impl TwitchClient {
             .clone(); // why is this being cloned?
 
         serde_json::from_value(value)
-            .map_err(|e| {
-                error!("cannot convert : {}", e);
-                e
-            })
+            .map_err(|e| error!("cannot convert : {}", e))
             .ok()
     }
 
     pub fn get_names_for<S: AsRef<str>>(ch: S) -> Option<Names> {
         let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch.as_ref());
-        if let Some(resp) = crate::util::http_get(&url) {
-            return serde_json::from_str::<Names>(&resp)
-                .map_err(|e| error!("cannot parse json: {}", e))
-                .ok();
-        }
-        None
+        serde_json::from_str::<Names>(&crate::util::http_get(&url)?)
+            .map_err(|e| error!("cannot parse json: {}", e))
+            .ok()
     }
 }
 
