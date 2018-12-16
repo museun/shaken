@@ -240,10 +240,10 @@ impl Builtin {
     }
 
     fn help_command(&mut self, _req: &Request) -> Option<Response> {
-        fn wrap<'a>(input: impl Iterator<Item = &'a String>) -> Vec<String> {
+        fn wrap(input: impl IntoIterator<Item = String>) -> Vec<String> {
             const WIDTH: usize = 40;
             let (mut lines, mut line) = (vec![], String::new());
-            for command in input {
+            for command in input.into_iter() {
                 if line.len() + command.len() > WIDTH {
                     lines.push(line.clone());
                     line.clear();
@@ -262,14 +262,11 @@ impl Builtin {
         // TODO look up specific commands
 
         let system = wrap(
-            // sadness
             Registry::commands()
-                .iter()
-                .map(|cmd| cmd.name().to_string())
-                .collect::<Vec<_>>()
-                .iter(),
+                .into_iter()
+                .map(|cmd| cmd.name().to_string()),
         );
-        let user = wrap(Self::fetch_command_names().iter());
+        let user = wrap(Self::fetch_command_names());
 
         multi!(
             whisper!("system commands:"),
