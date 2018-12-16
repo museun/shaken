@@ -81,19 +81,12 @@ impl UserStore {
                 display: row.get(1),
                 color: RGB::from(&row.get::<_, String>(2)),
             })
-            .map_err(|e| {
-                error!("cannot get user for '{}': {}", q, e);
-            })
+            .map_err(|e| error!("cannot get user for '{}': {}", q, e))
             .ok()?;
 
-        if let Some(user) = iter.next() {
-            return user
-                .map_err(|e| {
-                    error!("cannot get user for '{}': {}", q, e);
-                })
-                .ok();
-        }
-        None
+        iter.next()?
+            .map_err(|e| error!("cannot get user for '{}': {}", q, e))
+            .ok()
     }
 
     pub fn update_color_for_id(conn: &Connection, id: i64, color: &RGB) {
