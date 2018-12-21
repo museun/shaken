@@ -117,4 +117,5 @@ pub trait Module: Send {
 #[derive(Debug, PartialEq)]
 pub enum Error {
     CommandAlreadyExists,
+    CannotStart,
 }

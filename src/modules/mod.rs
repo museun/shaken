@@ -9,3 +9,6 @@ pub use self::invest::*;
 
 mod twitchpoll;
 pub use self::twitchpoll::*;
+
+mod currentsong;
+pub use self::currentsong::*;

@@ -141,3 +141,14 @@ pub fn get_timestamp() -> u64 {
         .unwrap();
     ts.as_secs() * 1000 + u64::from(ts.subsec_nanos()) / 1_000_000
 }
+
+pub fn encode(data: &str) -> String {
+    let mut res = String::new();
+    for ch in data.as_bytes().iter() {
+        match *ch as char {
+            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => res.push(*ch as char),
+            ch => res.push_str(format!("%{:02X}", ch as u32).as_str()),
+        }
+    }
+    res
+}

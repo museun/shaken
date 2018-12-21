@@ -1,4 +1,6 @@
 #![allow(dead_code)]
+use super::*;
+
 use curl::easy::{Easy, List};
 use log::*;
 use serde_derive::Deserialize;
@@ -68,7 +70,7 @@ impl TwitchClient {
             .chain(
                 map.as_ref()
                     .iter()
-                    .map(|(k, v)| format!("{}={}&", encode(k), encode(v))),
+                    .map(|(k, v)| format!("{}={}&", util::encode(k), util::encode(v))),
             )
             .collect::<String>();
 
@@ -119,17 +121,6 @@ impl TwitchClient {
             .map_err(|e| error!("cannot parse json: {}", e))
             .ok()
     }
-}
-
-fn encode(data: &str) -> String {
-    let mut res = String::new();
-    for ch in data.as_bytes().iter() {
-        match *ch as char {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => res.push(*ch as char),
-            ch => res.push_str(format!("%{:02X}", ch as u32).as_str()),
-        }
-    }
-    res
 }
 
 #[derive(Deserialize, Debug)]
