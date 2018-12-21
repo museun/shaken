@@ -159,7 +159,7 @@ impl Shakespeare {
 
         // what is this
         fn trim_then_check(s: &str, nick: &str) -> bool {
-            let s = s.trim_right_matches(|c: char| !c.is_ascii_alphanumeric());
+            let s = s.trim_end_matches(|c: char| !c.is_ascii_alphanumeric());
             !s.is_empty() && s[1..].eq_ignore_ascii_case(nick)
         }
 
