@@ -118,11 +118,11 @@ impl<'a> Environment<'a> {
         let msg = if wait {
             use std::time::Duration;
             select! {
-                recv(self.in_rx, msg) => msg,
-                recv(channel::after(Duration::from_millis(5000))) => panic!("test timed out")
+                recv(self.in_rx) -> msg => msg.ok(),
+                recv(channel::after(Duration::from_millis(5000))) -> _ => panic!("test timed out")
             }
         } else {
-            self.in_rx.try_recv()
+            self.in_rx.try_recv().ok()
         };
 
         if let Some((msg, resp)) = msg {
@@ -151,11 +151,11 @@ impl<'a> Environment<'a> {
         self.module.handle(out_rx, self.in_tx.clone());
 
         let msg = select! {
-            recv(self.in_rx, msg) => msg,
-            recv(channel::after(Duration::from_millis(5000))) => panic!("test timed out")
+            recv(self.in_rx) -> msg => msg,
+            recv(channel::after(Duration::from_millis(5000))) -> _ => panic!("test timed out")
         };
 
-        if let Some((msg, resp)) = msg {
+        if let Ok((msg, resp)) = msg {
             if let Some(msg) = msg.as_ref() {
                 self.module.inspect(&msg.clone(), &resp.clone());
             }

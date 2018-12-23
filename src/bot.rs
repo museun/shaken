@@ -29,14 +29,14 @@ impl Bot {
             let tick = channel::tick(Duration::from_millis(1000));
 
             loop {
-                if let Some(data) = out_rx.try_recv() {
+                if let Ok(data) = out_rx.try_recv() {
                     conn.write(&data)
                 }
                 match conn.try_read() {
                     Some(irc::ReadStatus::Data(msg)) => {
                         let msg = irc::Message::parse(&msg);
                         let req = Request::try_from(&msg);
-                        in_tx.send(Event::Message(msg, req.map(Box::new)))
+                        in_tx.send(Event::Message(msg, req.map(Box::new)));
                     }
                     Some(irc::ReadStatus::Nothing) => {}
                     _ => {
@@ -45,12 +45,12 @@ impl Bot {
                     }
                 };
 
-                if let Some(tick) = tick.try_recv() {
-                    in_tx.send(Event::Tick(tick))
+                if let Ok(tick) = tick.try_recv() {
+                    in_tx.send(Event::Tick(tick));
                 }
 
-                if let Some((msg, resp)) = inspect_rx.try_recv() {
-                    in_tx.send(Event::Inspect(msg, resp))
+                if let Ok((msg, resp)) = inspect_rx.try_recv() {
+                    in_tx.send(Event::Inspect(msg, resp));
                 }
             }
         });

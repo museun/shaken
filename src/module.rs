@@ -61,7 +61,7 @@ pub trait Module: Send {
     fn handle(&mut self, rx: Receiver, tx: Sender) {
         // TODO handle panics here
         let mut resp = vec![];
-        while let Some(ev) = rx.recv() {
+        while let Ok(ev) = rx.recv() {
             let msg = match ev {
                 Event::Message(msg, req) => {
                     match msg.command.as_str() {
@@ -88,7 +88,7 @@ pub trait Module: Send {
             };
 
             for resp in resp.drain(..).filter_map(|s| s) {
-                tx.send((Some(msg.clone()), resp))
+                tx.send((Some(msg.clone()), resp));
             }
         }
     }
