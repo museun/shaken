@@ -3,7 +3,7 @@ use log::*;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Response {
-    Multi { data: Vec<Box<Response>> },
+    Multi { data: Vec<Response> },
     Reply { data: String },
     Say { data: String },
     Action { data: String },
@@ -106,7 +106,7 @@ impl Response {
 
 pub fn multi(iter: impl Iterator<Item = Option<Response>>) -> Option<Response> {
     Some(Response::Multi {
-        data: iter.filter_map(|s| s).map(Box::new).collect(),
+        data: iter.filter_map(|s| s).collect(),
     })
 }
 

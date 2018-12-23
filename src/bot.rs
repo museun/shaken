@@ -36,7 +36,7 @@ impl Bot {
                     Some(irc::ReadStatus::Data(msg)) => {
                         let msg = irc::Message::parse(&msg);
                         let req = Request::try_from(&msg);
-                        in_tx.send(Event::Message(msg, req.map(Box::new)));
+                        let _ = in_tx.send(Event::Message(msg, req.map(Box::new)));
                     }
                     Some(irc::ReadStatus::Nothing) => {}
                     _ => {
@@ -46,11 +46,11 @@ impl Bot {
                 };
 
                 if let Ok(tick) = tick.try_recv() {
-                    in_tx.send(Event::Tick(tick));
+                    let _ = in_tx.send(Event::Tick(tick));
                 }
 
                 if let Ok((msg, resp)) = inspect_rx.try_recv() {
-                    in_tx.send(Event::Inspect(msg, resp));
+                    let _ = in_tx.send(Event::Inspect(msg, resp));
                 }
             }
         });
@@ -59,14 +59,14 @@ impl Bot {
     }
 
     pub fn send(&self, data: impl Into<String>) {
-        self.out_tx.send(data.into());
+        let _ = self.out_tx.send(data.into());
     }
 
     pub fn process(&self, rx: channel::Receiver<(Option<irc::Message>, Response)>) {
         for (msg, resp) in rx {
             let msg = msg.as_ref();
             if let Some(msg) = msg {
-                self.inspect_tx.send((msg.clone(), Box::new(resp.clone())));
+                let _ = self.inspect_tx.send((msg.clone(), Box::new(resp.clone())));
             }
 
             if let Some(resp) = resp.build(msg) {

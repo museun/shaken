@@ -16,7 +16,7 @@ macro_rules! multi {
 
         $(
             if let Some(arg) = $arg {
-                vec.push(Box::new(arg));
+                vec.push(arg);
             }
         )*
 

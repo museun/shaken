@@ -110,7 +110,7 @@ impl<'a> Environment<'a> {
         trace!("(msg) -> {:?}", msg);
         trace!("(req) -> {:?}", req);
 
-        out_tx.send(Event::Message(msg, req.map(Box::new)));
+        let _ = out_tx.send(Event::Message(msg, req.map(Box::new)));
 
         drop(out_tx);
         self.module.handle(out_rx, self.in_tx.clone());
@@ -145,7 +145,7 @@ impl<'a> Environment<'a> {
         use std::time::{Duration, Instant};
 
         let (out_tx, out_rx) = channel::unbounded();
-        out_tx.send(Event::Tick(Instant::now()));
+        let _ = out_tx.send(Event::Tick(Instant::now()));
 
         drop(out_tx);
         self.module.handle(out_rx, self.in_tx.clone());

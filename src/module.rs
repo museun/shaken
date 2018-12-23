@@ -77,7 +77,7 @@ pub trait Module: Send {
                 }
                 Event::Tick(dt) => {
                     if let Some(resp) = self.tick(dt) {
-                        tx.send((None, resp));
+                        let _ = tx.send((None, resp));
                     }
                     continue;
                 }
@@ -88,7 +88,7 @@ pub trait Module: Send {
             };
 
             for resp in resp.drain(..).filter_map(|s| s) {
-                tx.send((Some(msg.clone()), resp));
+                let _ = tx.send((Some(msg.clone()), resp));
             }
         }
     }

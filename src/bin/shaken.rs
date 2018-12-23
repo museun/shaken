@@ -99,7 +99,7 @@ fn run(config: &Config, conn: irc::TcpConn) {
 
         for event in events {
             for input in &inputs {
-                input.send(event.clone());
+                let _ = input.send(event.clone());
             }
         }
         drop(inputs)
