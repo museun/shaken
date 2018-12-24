@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::fmt::{self, Write};
+use std::fmt;
 
 #[derive(Debug, Copy, Clone, PartialEq, Deserialize, Serialize)]
 pub struct RGB(pub u8, pub u8, pub u8);
@@ -12,14 +12,14 @@ impl Default for RGB {
 
 impl fmt::Display for RGB {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (r, g, b) = (self.0, self.1, self.2);
+        let RGB(r, g, b) = self;
         write!(f, "#{:02X}{:02X}{:02X}", r, g, b)
     }
 }
 
 impl From<(u8, u8, u8)> for RGB {
-    fn from(rgb: (u8, u8, u8)) -> Self {
-        RGB(rgb.0, rgb.1, rgb.2)
+    fn from((r, g, b): (u8, u8, u8)) -> Self {
+        RGB(r, g, b)
     }
 }
 
@@ -39,7 +39,7 @@ impl From<Option<&String>> for RGB {
     fn from(s: Option<&String>) -> Self {
         match s {
             Some(s) => RGB::from(s),
-            None => RGB::from((255, 255, 255)),
+            None => RGB(255, 255, 255),
         }
     }
 }
@@ -69,33 +69,27 @@ impl RGB {
     }
 
     pub fn is_dark(self) -> bool {
-        let (_, _, l) = HSL::from_color(self).0;
+        let HSL(_, _, l) = HSL::from_color(self);
         l < 30.0
     }
 
     pub fn is_light(self) -> bool {
-        let (_, _, l) = HSL::from_color(self).0;
+        let HSL(_, _, l) = HSL::from_color(self);
         l > 80.0
     }
 
     pub fn format(self, s: &str) -> String {
-        fn wrap(rgb: (u8, u8, u8), s: &str) -> String {
-            let (r, g, b) = rgb;
-            format!("\x1B[38;2;{};{};{}m{}\x1B[m", r, g, b, s)
-        }
-
-        let mut buf = String::new();
-        write!(buf, "{}", wrap((self.0, self.1, self.2), s)).unwrap();
-        buf
+        let RGB(r, g, b) = self;
+        format!("\x1B[38;2;{};{};{}m{}\x1B[m", r, g, b, s)
     }
 }
 
-#[derive(PartialEq, Debug)]
-pub struct HSL((f64, f64, f64)); // H S L
+#[derive(PartialEq, Copy, Clone, Debug)]
+pub struct HSL(f64, f64, f64); // H S L
 
 impl fmt::Display for HSL {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let (h, s, l) = self.0;
+        let HSL(h, s, l) = self;
         write!(f, "{:.2}%, {:.2}%, {:.2}%", h, s, l)
     }
 }
@@ -119,7 +113,7 @@ impl HSL {
         let delta: f64 = max - min;
         // this checks for grey
         if delta == 0.0 {
-            return HSL((0.0, 0.0, ((l * 100.0).round() / 100.0) * 100.0));
+            return HSL(0.0, 0.0, ((l * 100.0).round() / 100.0) * 100.0);
         }
 
         let s = if l < 0.5 {
@@ -146,7 +140,7 @@ impl HSL {
         let s = ((s * 100.0).round() / 100.0) * 100.0;
         let l = ((l * 100.0).round() / 100.0) * 100.0;
 
-        HSL((h, s, l))
+        HSL(h, s, l)
     }
 }
 
@@ -156,26 +150,26 @@ mod tests {
     #[test]
     fn hsl() {
         let colors = &[
-            (RGB(0, 0, 0), HSL((0.0, 0.0, 0.0)), "black"),
-            (RGB(255, 255, 255), HSL((0.0, 0.0, 100.0)), "white"),
-            (RGB(255, 0, 0), HSL((0.0, 100.0, 50.0)), "red"),
-            (RGB(0, 255, 0), HSL((120.0, 100.0, 50.0)), "lime"),
-            (RGB(0, 0, 255), HSL((240.0, 100.0, 50.0)), "blue"),
-            (RGB(255, 255, 0), HSL((60.0, 100.0, 50.0)), "yellow"),
-            (RGB(0, 255, 255), HSL((180.0, 100.0, 50.0)), "cyan"),
-            (RGB(255, 0, 255), HSL((300.0, 100.0, 50.0)), "magneta"),
-            (RGB(192, 192, 192), HSL((0.0, 0.0, 75.0)), "silver"),
-            (RGB(128, 128, 128), HSL((0.0, 0.0, 50.0)), "gray"),
-            (RGB(128, 0, 0), HSL((0.0, 100.0, 25.0)), "maroon"),
-            (RGB(128, 128, 0), HSL((60.0, 100.0, 25.0)), "olive"),
-            (RGB(0, 128, 0), HSL((120.0, 100.0, 25.0)), "green"),
-            (RGB(128, 0, 128), HSL((300.0, 100.0, 25.0)), "purple"),
-            (RGB(0, 128, 128), HSL((180.0, 100.0, 25.0)), "teal"),
-            (RGB(0, 0, 128), HSL((240.0, 100.0, 25.0)), "navy"),
+            (RGB(0, 0, 0), HSL(0.0, 0.0, 0.0), "black"),
+            (RGB(255, 255, 255), HSL(0.0, 0.0, 100.0), "white"),
+            (RGB(255, 0, 0), HSL(0.0, 100.0, 50.0), "red"),
+            (RGB(0, 255, 0), HSL(120.0, 100.0, 50.0), "lime"),
+            (RGB(0, 0, 255), HSL(240.0, 100.0, 50.0), "blue"),
+            (RGB(255, 255, 0), HSL(60.0, 100.0, 50.0), "yellow"),
+            (RGB(0, 255, 255), HSL(180.0, 100.0, 50.0), "cyan"),
+            (RGB(255, 0, 255), HSL(300.0, 100.0, 50.0), "magneta"),
+            (RGB(192, 192, 192), HSL(0.0, 0.0, 75.0), "silver"),
+            (RGB(128, 128, 128), HSL(0.0, 0.0, 50.0), "gray"),
+            (RGB(128, 0, 0), HSL(0.0, 100.0, 25.0), "maroon"),
+            (RGB(128, 128, 0), HSL(60.0, 100.0, 25.0), "olive"),
+            (RGB(0, 128, 0), HSL(120.0, 100.0, 25.0), "green"),
+            (RGB(128, 0, 128), HSL(300.0, 100.0, 25.0), "purple"),
+            (RGB(0, 128, 128), HSL(180.0, 100.0, 25.0), "teal"),
+            (RGB(0, 0, 128), HSL(240.0, 100.0, 25.0), "navy"),
         ];
 
-        for (rgb, hsl, name) in colors {
-            assert_eq!(*hsl, HSL::from_color(&rgb), "{}", name)
+        for &(rgb, hsl, name) in colors.iter() {
+            assert_eq!(hsl, HSL::from_color(rgb), "{}", name)
         }
     }
 

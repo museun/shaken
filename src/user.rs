@@ -218,11 +218,11 @@ mod tests {
             },
         );
 
-        UserStore::update_color_for_id(&conn, 1005, &crate::color::RGB::from("#FFFFFF"));
+        UserStore::update_color_for_id(&conn, 1005, crate::color::RGB::from("#FFFFFF"));
         let user = UserStore::get_user_by_id(&conn, 1005);
         assert_eq!(user, None);
 
-        UserStore::update_color_for_id(&conn, 1004, &crate::color::RGB::from("#FFFFFF"));
+        UserStore::update_color_for_id(&conn, 1004, crate::color::RGB::from("#FFFFFF"));
         let user = UserStore::get_user_by_id(&conn, 1004);
         assert_eq!(
             user,
