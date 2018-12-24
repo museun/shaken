@@ -1,4 +1,4 @@
-#![allow(dead_code)] // testing stuff probably won't be used in debug/release builds
+#![allow(dead_code)]
 use crate::prelude::*;
 
 use std::collections::VecDeque;

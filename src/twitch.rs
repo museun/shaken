@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use super::*;
 
 use curl::easy::{Easy, List};

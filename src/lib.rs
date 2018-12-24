@@ -1,4 +1,3 @@
-#![allow(clippy::unreadable_literal)]
 #[macro_use]
 pub mod macros;
 

@@ -210,16 +210,15 @@ impl Invest {
         }
 
         let conn = get_connection();
-        let list = InvestGame::get_top_n(n as i16, &SortBy::Current)
-            .iter()
+        let list = InvestGame::get_top_n(&conn, n as i16)
+            .into_iter()
             .enumerate()
             .map(|(i, iu)| {
                 let user = UserStore::get_user_by_id(&conn, iu.id).expect("user to exist");
                 format!("(#{}) {}: {}", i + 1, &user.display, iu.current.commas())
-            })
-            .collect::<Vec<_>>(); // this collect is needed
+            });
 
-        reply!("{}", crate::util::join_with(list.iter(), ", "))
+        reply!("{}", crate::util::join_with(list, ", "))
     }
 
     fn stats_command(&mut self, req: &Request) -> Option<Response> {

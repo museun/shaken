@@ -1,5 +1,5 @@
-#![allow(dead_code)]
 use crate::database::get_connection;
+
 use log::*;
 use rand::prelude::*;
 use rusqlite::{Connection, NO_PARAMS};
@@ -36,26 +36,12 @@ pub enum InvestError {
     NotEnoughCredits { have: Credit, want: Credit },
     CannotInsert { id: i64 },
     UserNotFound { id: i64 },
-    NoRowsFound { id: i64 },
 }
 
 #[derive(Debug, PartialEq)]
 pub enum Investment {
     Success { old: Credit, new: Credit },
     Failure { old: Credit, new: Credit },
-}
-
-pub enum IncrementType {
-    Line,
-    Emote(usize), // count (for decay)
-}
-
-pub enum SortBy {
-    Current,
-    Max,
-    Total,
-    Success,
-    Failure,
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -85,22 +71,12 @@ impl InvestGame {
             .expect("to create Invest table");
     }
 
-    pub fn get_top_n(bound: i16, sort: &SortBy) -> Vec<InvestUser> {
-        let conn = get_connection();
-
+    pub fn get_top_n(conn: &Connection, bound: i16) -> Vec<InvestUser> {
         macro_rules! un {
             ($e:expr, $n:expr) => {
                 $e.get::<_, i64>($n) as usize
             };
         }
-
-        let _sort = match sort {
-            SortBy::Current => "Current",
-            SortBy::Max => "Max",
-            SortBy::Total => "Total",
-            SortBy::Success => "Success",
-            SortBy::Failure => "Failure",
-        };
 
         // TODO make this work for the other constraints
         let mut stmt = conn
@@ -170,12 +146,6 @@ impl InvestGame {
         "#;
         let conn = get_connection();
         let _ = conn.execute(S, &[&id]);
-    }
-
-    pub fn update(user: &InvestUser) {
-        trace!("updating: {:?}", user);
-        let conn = get_connection();
-        let _ = Self::update_user(&conn, &user);
     }
 
     pub fn invest(chance: f64, id: i64, want: Credit) -> InvestResult<Investment> {
