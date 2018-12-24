@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use crate::prelude::*;
 
 use std::collections::VecDeque;
@@ -9,6 +8,7 @@ use log::*;
 use rusqlite::Connection;
 use simplelog::{Config as LogConfig, LevelFilter, TermLogger};
 
+#[allow(dead_code)]
 pub enum LogLevel {
     Trace,
     Debug,
@@ -17,6 +17,7 @@ pub enum LogLevel {
     Error,
 }
 
+#[allow(dead_code)]
 pub fn init_test_logger(filter: Option<LogLevel>) {
     let filter = match filter.unwrap_or(LogLevel::Trace) {
         LogLevel::Trace => LevelFilter::Trace,
@@ -85,14 +86,17 @@ impl<'a> Environment<'a> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn get_db_conn(&self) -> &Connection {
         &self.db
     }
 
+    #[allow(dead_code)]
     pub fn module(&self) -> &dyn Module {
         &*self.module
     }
 
+    #[allow(dead_code)]
     pub fn module_mut(&mut self) -> &mut dyn Module {
         self.module
     }
@@ -190,6 +194,7 @@ impl<'a> Environment<'a> {
         ))
     }
 
+    #[allow(dead_code)]
     pub fn push_mod(&mut self, data: &str) {
         self.push_raw(&format!(
             "@badges=moderator/1;user-id={};display-name={};color=#FFFFFF :{}!user@irc.test \
@@ -234,6 +239,7 @@ impl<'a> Environment<'a> {
         USER_ID
     }
 
+    #[allow(dead_code)]
     pub fn get_user_name(&self) -> &str {
         USER_NAME
     }
@@ -243,6 +249,7 @@ impl<'a> Environment<'a> {
     }
 
     /// this logs to the warn level
+    #[allow(dead_code)]
     pub fn drain_and_log(&mut self) {
         while let Some(resp) = self.pop() {
             warn!("{:#?}", resp);

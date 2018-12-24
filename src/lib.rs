@@ -20,7 +20,7 @@ pub mod util;
 // actual bot modules
 pub mod modules;
 
-// testing utilities
+#[cfg(test)]
 pub(crate) mod testing;
 
 pub mod prelude {
