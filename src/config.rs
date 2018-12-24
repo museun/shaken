@@ -39,6 +39,7 @@ pub struct WebSocket {
 }
 
 impl Default for Config {
+    #[allow(clippy::unreadable_literal)]
     fn default() -> Self {
         Self {
             twitch: Twitch {

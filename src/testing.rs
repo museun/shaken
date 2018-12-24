@@ -206,6 +206,7 @@ impl<'a> Environment<'a> {
         ))
     }
     pub fn push_owner(&mut self, data: &str) {
+        #[allow(clippy::unreadable_literal)]
         self.push_raw(&format!(
             "@badges=turbo/1;user-id={};display-name={};color=#FFFFFF :{}!user@irc.test PRIVMSG \
              #test :{}",
