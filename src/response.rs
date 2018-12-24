@@ -100,7 +100,7 @@ impl Response {
             },
         }
 
-        panic!("invalid bot state");
+        unreachable!()
     }
 }
 
