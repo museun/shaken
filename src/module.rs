@@ -1,8 +1,10 @@
 use crate::prelude::*;
-use log::*;
-use std::collections::HashMap;
+
 use std::sync::Arc;
 use std::time::Instant;
+
+use hashbrown::HashMap;
+use log::*;
 
 type Func<T> = fn(&mut T, &Request) -> Option<Response>; // this is for you, clippy.
 pub struct CommandMap<T>(Arc<HashMap<&'static str, Func<T>>>);

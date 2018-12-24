@@ -3,7 +3,7 @@ use super::*;
 
 use curl::easy::{Easy, List};
 use log::*;
-use serde_derive::Deserialize;
+use serde::Deserialize;
 
 pub struct TwitchClient {
     client_id: String,

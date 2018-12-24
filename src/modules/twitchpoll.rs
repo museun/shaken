@@ -1,8 +1,10 @@
 use crate::prelude::*;
-use log::*;
-use std::collections::HashSet;
+
 use std::time::{Duration, Instant};
 use std::{fmt, str};
+
+use hashbrown::HashSet;
+use log::*;
 
 pub struct TwitchPoll {
     poll: Option<Poll>,

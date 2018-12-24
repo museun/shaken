@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use chrono::prelude::*;
 use log::*;
-use serde_derive::Deserialize;
+use serde::Deserialize;
 
 pub struct CurrentSong {
     map: CommandMap<CurrentSong>,
@@ -175,7 +175,7 @@ impl CurrentSong {
             return self.paste.clone().ok_or_else(|| Error::IxPaste); // shouldn't happen
         }
 
-        let out = songs.iter().map(|song| {
+        let out = songs.iter().rev().map(|song| {
             let start = Utc.timestamp(song.timestamp as i64, 0);
             format!(
                 "#{}\t{}\nlink\thttps://www.youtube.com/watch?v={}\nat\t{}\n\n", //

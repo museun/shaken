@@ -1,12 +1,13 @@
 use crate::prelude::*;
+
 mod game;
 use self::game::*;
 
-use rand::prelude::*;
-
-use std::collections::HashMap;
 use std::str;
 use std::time::{Duration, Instant};
+
+use hashbrown::HashMap;
+use rand::prelude::*;
 
 pub struct Invest {
     config: config::Invest,

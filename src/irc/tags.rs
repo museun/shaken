@@ -1,8 +1,11 @@
 use crate::color::RGB;
-use log::*;
-use serde_derive::{Deserialize, Serialize};
+
+use std::ops::Range;
 use std::str::FromStr;
-use std::{collections::HashMap, ops::Range};
+
+use hashbrown::HashMap;
+use log::*;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Default, PartialEq, Clone)]
 pub struct Tags(HashMap<String, String>);
