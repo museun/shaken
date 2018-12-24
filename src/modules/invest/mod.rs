@@ -302,7 +302,11 @@ enum NumType {
 fn parse_number_or_context(data: &str) -> Option<NumType> {
     const CONTEXTS: [&str; 3] = ["all", "half", "random"];
 
-    let num: String = data.chars().take_while(char::is_ascii_digit).collect();
+    let num = data
+        .chars()
+        .take_while(char::is_ascii_digit)
+        .collect::<String>();
+
     if let Ok(num) = num.parse::<usize>() {
         return Some(NumType::Num(num));
     }
