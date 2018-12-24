@@ -192,13 +192,7 @@ impl TwitchPoll {
     fn parse_poll(target: &str, data: &str) -> Result<Poll, ParseError> {
         let mut iter = data.split('|').map(str::trim).filter(|s| !s.is_empty());
         let title = iter.next().ok_or_else(|| ParseError::Title)?;
-
-        let options = iter.collect::<Vec<_>>();
-        if options.is_empty() {
-            return Err(ParseError::Options);
-        }
-
-        Ok(Poll::new(target, title, &options))
+        Poll::new(target, title, iter)
     }
 }
 
@@ -238,22 +232,32 @@ struct Poll {
 }
 
 impl Poll {
-    pub fn new<'a, S: Into<String>>(target: S, title: S, choices: impl AsRef<[&'a str]>) -> Self {
-        Self {
-            target: target.into(),
-            title: title.into(),
-            choices: choices
-                .as_ref()
-                .iter()
-                .enumerate()
-                .map(|(i, f)| Choice {
-                    option: f.to_string(),
-                    pos: i,
-                    count: 0,
-                })
-                .collect(),
-            seen: HashSet::new(),
+    pub fn new<S, I>(target: S, title: S, choices: I) -> Result<Self, ParseError>
+    where
+        S: ToString,
+        I: IntoIterator,
+        I::Item: ToString,
+    {
+        let choices = choices
+            .into_iter()
+            .enumerate()
+            .map(|(i, f)| Choice {
+                option: f.to_string(),
+                pos: i,
+                count: 0,
+            })
+            .collect::<Vec<_>>();
+
+        if choices.is_empty() {
+            return Err(ParseError::Options);
         }
+
+        Ok(Self {
+            target: target.to_string(),
+            title: title.to_string(),
+            choices,
+            seen: HashSet::new(),
+        })
     }
 
     pub fn vote(&mut self, id: i64, option: usize) {
@@ -269,7 +273,7 @@ impl Poll {
         }
     }
 
-    pub fn tally(&mut self) -> &Vec<Choice> {
+    pub fn tally(&mut self) -> &[Choice] {
         self.choices.sort_by(|l, r| r.count.cmp(&l.count));
         &self.choices
     }
@@ -290,7 +294,7 @@ mod tests {
 
         assert_eq!(poll.title, "this is a test");
 
-        let expected = vec!["option a", "option b", "option c"];
+        let expected = &["option a", "option b", "option c"];
         poll.choices
             .iter()
             .enumerate()

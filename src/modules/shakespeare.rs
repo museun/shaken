@@ -203,13 +203,13 @@ impl Shakespeare {
             trace!("generated a message");
             self.previous = Some(now);
 
-            let data = prune(&data).to_string();
+            let data = prune(&data);
             if data.chars().filter(char::is_ascii_whitespace).count() < 3 {
                 trace!("trying for a better sentence");
                 continue;
             }
 
-            return Some(data + ".");
+            return Some([data, "."].concat());
         }
     }
 }
