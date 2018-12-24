@@ -89,7 +89,7 @@ impl UserStore {
             .ok()
     }
 
-    pub fn update_color_for_id(conn: &Connection, id: i64, color: &RGB) {
+    pub fn update_color_for_id(conn: &Connection, id: i64, color: RGB) {
         Self::ensure_table(conn);
 
         match conn.execute(

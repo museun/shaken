@@ -68,7 +68,7 @@ impl Request {
     }
 
     pub fn color(&self) -> RGB {
-        self.color.clone()
+        self.color
     }
 
     pub fn is_from_moderator(&self) -> bool {
@@ -99,7 +99,7 @@ impl Request {
                 target: self.target.clone(),
                 moderator: self.moderator,
                 broadcaster: self.broadcaster,
-                color: self.color.clone(),
+                color: self.color,
             });
         }
 

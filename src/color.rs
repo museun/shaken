@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::{self, Write};
 
-#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Deserialize, Serialize)]
 pub struct RGB(pub u8, pub u8, pub u8);
 
 impl Default for RGB {
@@ -68,17 +68,17 @@ impl RGB {
         }
     }
 
-    pub fn is_dark(&self) -> bool {
-        let (_, _, l) = HSL::from_color(&self).0;
+    pub fn is_dark(self) -> bool {
+        let (_, _, l) = HSL::from_color(self).0;
         l < 30.0
     }
 
-    pub fn is_light(&self) -> bool {
-        let (_, _, l) = HSL::from_color(&self).0;
+    pub fn is_light(self) -> bool {
+        let (_, _, l) = HSL::from_color(self).0;
         l > 80.0
     }
 
-    pub fn format(&self, s: &str) -> String {
+    pub fn format(self, s: &str) -> String {
         fn wrap(rgb: (u8, u8, u8), s: &str) -> String {
             let (r, g, b) = rgb;
             format!("\x1B[38;2;{};{};{}m{}\x1B[m", r, g, b, s)
@@ -101,7 +101,7 @@ impl fmt::Display for HSL {
 }
 
 impl HSL {
-    pub fn from_color(color: &RGB) -> Self {
+    pub fn from_color(color: RGB) -> Self {
         #![allow(clippy::unknown_clippy_lints, clippy::many_single_char_names)]
         use std::cmp::{max, min};
 
