@@ -89,14 +89,13 @@ impl Tags {
 
     pub fn get<S>(&self, s: S) -> Option<&str>
     where
-        S: AsRef<str>,
+        S: AsRef<str>, // this should be a borrow
     {
-        let s = s.as_ref();
-        self.0.get(s).map(|n| n.as_ref())
+        self.0.get(s.as_ref()).map(|n| n.as_ref())
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
 pub enum Badge {
     Admin,
     Broadcaster,

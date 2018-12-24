@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use rusqlite::{Connection, NO_PARAMS};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Error {
     AlreadyExists,
 }
@@ -15,8 +15,8 @@ pub struct Command {
 }
 
 impl Command {
-    pub fn replace_name(&mut self, name: impl Into<String>) {
-        self.name = name.into()
+    pub fn replace_name(&mut self, name: impl ToString) {
+        self.name = name.to_string()
     }
 
     pub fn name(&self) -> &str {

@@ -116,7 +116,7 @@ pub trait Module: Send {
     fn inspect(&mut self, _msg: &irc::Message, _resp: &Response) {}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum Error {
     CommandAlreadyExists,
     CannotStart,
