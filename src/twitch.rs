@@ -1,5 +1,7 @@
 use super::*;
 
+use std::iter::repeat;
+
 use curl::easy::{Easy, List};
 use log::*;
 use serde::Deserialize;
@@ -27,49 +29,50 @@ impl TwitchClient {
         Self { client_id }
     }
 
-    pub fn get_streams<'a>(&self, user_logins: impl AsRef<[&'a str]>) -> Option<Vec<Stream>> {
-        let map = std::iter::repeat("user_login")
-            .zip(user_logins.as_ref().iter().cloned())
-            .collect::<Vec<_>>();
-        self.get_response("streams", &map)
+    pub fn get_streams<A, I>(&self, user_logins: I) -> Option<Vec<Stream>>
+    where
+        I: IntoIterator<Item = A>,
+        I::Item: AsRef<str>,
+    {
+        self.get_response("streams", repeat("user_login").zip(user_logins))
     }
 
-    pub fn get_streams_from_ids<'a>(&self, ids: impl AsRef<[&'a str]>) -> Option<Vec<Stream>> {
-        let map = std::iter::repeat("user_id ")
-            .zip(ids.as_ref().iter().cloned())
-            .collect::<Vec<_>>();
-        self.get_response("streams", &map)
+    pub fn get_streams_from_ids<A, I>(&self, ids: I) -> Option<Vec<Stream>>
+    where
+        I: IntoIterator<Item = A>,
+        I::Item: AsRef<str>,
+    {
+        self.get_response("streams", repeat("user_id ").zip(ids))
     }
 
-    pub fn get_users<'a>(&self, user_logins: impl AsRef<[&'a str]>) -> Option<Vec<User>> {
-        let map = std::iter::repeat("login")
-            .zip(user_logins.as_ref().iter().cloned())
-            .collect::<Vec<_>>();
-        self.get_response("users", &map)
+    pub fn get_users<A, I>(&self, user_logins: I) -> Option<Vec<User>>
+    where
+        I: IntoIterator<Item = A>,
+        I::Item: AsRef<str>,
+    {
+        self.get_response("users", repeat("login").zip(user_logins))
     }
 
-    pub fn get_users_from_ids<'a>(&self, ids: impl AsRef<[&'a str]>) -> Option<Vec<User>> {
-        let map = std::iter::repeat("id")
-            .zip(ids.as_ref().iter().cloned())
-            .collect::<Vec<_>>();
-        self.get_response("users", &map)
+    pub fn get_users_from_ids<A, I>(&self, ids: I) -> Option<Vec<User>>
+    where
+        I: IntoIterator,
+        I::Item: AsRef<str>,
+    {
+        self.get_response("users", repeat("id").zip(ids))
     }
 
-    pub(crate) fn get_response<'a, T>(
-        &self,
-        ep: &str,
-        map: impl AsRef<[(&'a str, &'a str)]>,
-    ) -> Option<Vec<T>>
+    pub(crate) fn get_response<'a, A, I, T>(&self, ep: &str, map: I) -> Option<Vec<T>>
     where
         for<'de> T: serde::Deserialize<'de>,
+        I: IntoIterator<Item = (&'a str, A)>,
+        A: AsRef<str>,
     {
         const BASE_URL: &str = "https://api.twitch.tv/helix";
 
         let query = std::iter::once("?".into()) // TODO use a fold here
             .chain(
-                map.as_ref()
-                    .iter()
-                    .map(|(k, v)| format!("{}={}&", util::encode(k), util::encode(v))),
+                map.into_iter()
+                    .map(|(k, v)| format!("{}={}&", util::encode(k), util::encode(v.as_ref()))),
             )
             .collect::<String>();
 
