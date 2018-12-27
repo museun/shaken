@@ -73,6 +73,10 @@ fn run(config: &Config, conn: irc::TcpConn) {
         modules.push(Arc::new(Mutex::new(invest)))
     }
 
+    if let Ok(rust) = RustStuff::create() {
+        modules.push(Arc::new(Mutex::new(rust)))
+    }
+
     let (bot, events) = Bot::create(conn);
     bot.register(&config.twitch.name);
 

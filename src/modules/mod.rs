@@ -12,3 +12,6 @@ pub use self::twitchpoll::*;
 
 mod currentsong;
 pub use self::currentsong::*;
+
+mod rust;
+pub use self::rust::*;
