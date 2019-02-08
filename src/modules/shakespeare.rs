@@ -33,7 +33,6 @@ pub struct Shakespeare {
     interval: f64,
     chance: f64,
     bypass: usize, // is this even needed?
-    name: String,
 }
 
 impl Module for Shakespeare {
@@ -73,7 +72,6 @@ impl Shakespeare {
             interval: config.shakespeare.interval as f64,
             chance: config.shakespeare.chance,
             bypass: config.shakespeare.bypass,
-            name: config.twitch.name,
         })
     }
 
