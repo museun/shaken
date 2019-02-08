@@ -113,13 +113,18 @@ impl Builtin {
         }
     }
 
-    // TODO validate that this is a `!command` and not a `command`
     fn add_command(&mut self, req: &Request) -> Option<Response> {
         require_privileges!(&req, "you cannot do that");
 
         let (command, body) = match Self::arg_parts(&req) {
             Some((head, tail)) => (head, tail),
             None => return reply!("invalid arguments"),
+        };
+
+        let command = if !command.starts_with('!') {
+            format!("!{}", command)
+        } else {
+            command
         };
 
         if !Self::is_available(&command) {
