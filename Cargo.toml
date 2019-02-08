@@ -9,11 +9,14 @@ log = "0.4.6"
 simplelog = "0.5.3"
 rand = "0.6.1"
 chrono = "0.4.6"
-crossbeam-channel = "0.3.4"
-scoped_threadpool = "0.1.9"
+
 serde = { version = "1.0.82", features = ["derive"] }
 serde_json = "1.0.33"
 toml = "0.4.10"
-curl = "0.4.19"
+
 rusqlite = { version = "0.16.0", features = ["bundled", "chrono"] }
 hashbrown = "0.1.7"
+
+crossbeam-channel = "0.3.4" # is this used
+scoped_threadpool = "0.1.9" # is this used
+curl = "0.4.19" # get rid of this
