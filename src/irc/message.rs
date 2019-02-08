@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-// TODO get rid of all of these string allocations
 #[derive(Debug, PartialEq, Clone, Default)]
 pub struct Message {
     pub tags: irc::Tags,

@@ -55,11 +55,10 @@ impl Tags {
         Some(s)
     }
 
-    // TODO remove this option..
-    pub fn get_color(&self) -> Option<RGB> {
+    pub fn get_color(&self) -> RGB {
         self.get("color")
             .and_then(|s| Some(RGB::from(s)))
-            .or_else(|| Some(RGB::from((255, 255, 255))))
+            .unwrap_or_else(|| RGB::from((255, 255, 255)))
     }
 
     pub fn get_display(&self) -> Option<&str> {

@@ -33,7 +33,7 @@ impl Request {
                     target: msg.target().to_string(),
                     broadcaster,
                     moderator,
-                    color: msg.tags.get_color().unwrap(),
+                    color: msg.tags.get_color(),
                 })
             }
             _ => None,

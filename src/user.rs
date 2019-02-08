@@ -16,7 +16,7 @@ impl User {
                 User {
                     userid: msg.tags.get_userid()?,
                     display: msg.tags.get_display()?.to_string(),
-                    color: msg.tags.get_color()?,
+                    color: msg.tags.get_color(),
                 },
                 false,
             ),
