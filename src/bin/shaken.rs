@@ -125,14 +125,18 @@ fn create_modules(config: &Config) -> (Vec<LoadedModule>, Vec<&'static str>) {
     create!(Invest::create);
     create!(RustStuff::create);
 
-    create!(
-        Shakespeare::create,
-        vec![Box::new(BrainMarkov(
-            // TODO load this from the config
-            // TODO allow for multiple brains to be configured
-            "http://localhost:7878/markov/next".into()
-        )),]
-    );
+    let brains = config
+        .shakespeare
+        .brains
+        .to_vec()
+        .into_iter()
+        .inspect(|brain| info!("creating BrainMarkov for: {}", brain))
+        .map(|url| Box::new(BrainMarkov(url.into())) as Box<dyn Markov + 'static>)
+        .collect::<Vec<_>>();
+
+    if !brains.is_empty() {
+        create!(Shakespeare::create, brains);
+    }
 
     (modules, disabled)
 }

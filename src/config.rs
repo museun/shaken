@@ -25,6 +25,7 @@ pub struct Shakespeare {
     pub chance: f64,
     pub bypass: usize,
     pub interval: usize,
+    pub brains: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -55,6 +56,7 @@ impl Default for Config {
                 interval: 5,
                 chance: 0.15,
                 bypass: 60,
+                brains: vec![],
             },
             invest: Invest {
                 starting: 0,
