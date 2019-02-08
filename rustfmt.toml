@@ -2,3 +2,4 @@ wrap_comments = true
 format_macro_matchers = true
 imports_layout = "HorizontalVertical"
 edition = "2018"
+newline_style = "Unix"

@@ -23,6 +23,7 @@ pub mod modules;
 #[cfg(test)]
 pub(crate) mod testing;
 
+// TODO: preludes are ugly. rework the re-exports
 pub mod prelude {
     pub use crate::bot::{Bot, Event, Receiver, Sender};
     pub use crate::color::{self, HSL, RGB};
@@ -35,7 +36,7 @@ pub mod prelude {
     pub use crate::response::{join, multi, IrcCommand, Response};
     pub use crate::twitch::{self, TwitchClient};
     pub use crate::user::{User, UserStore};
-    pub use crate::util::{self, CommaSeparated, Timestamp};
+    pub use crate::util::{self, CommaSeparated, HttpError, Timestamp};
 
     pub use crate::registry::{
         Command as RegistryCommand,

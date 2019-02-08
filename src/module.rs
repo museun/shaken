@@ -7,7 +7,14 @@ use hashbrown::HashMap;
 use log::*;
 
 type Func<T> = fn(&mut T, &Request) -> Option<Response>; // this is for you, clippy.
+
 pub struct CommandMap<T>(Arc<HashMap<&'static str, Func<T>>>);
+
+impl<T> Clone for CommandMap<T> {
+    fn clone(&self) -> Self {
+        CommandMap(Arc::clone(&self.0))
+    }
+}
 
 impl<T> CommandMap<T> {
     pub fn create(
@@ -28,10 +35,6 @@ impl<T> CommandMap<T> {
             map.insert(*k, *v);
         }
         Ok(CommandMap(Arc::new(map)))
-    }
-
-    pub fn shallow_clone(&self) -> CommandMap<T> {
-        CommandMap(Arc::clone(&self.0))
     }
 
     // TODO get rid of these dumb allocations

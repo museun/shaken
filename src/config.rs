@@ -1,11 +1,14 @@
+use hashbrown::HashMap;
+use log::*;
 use serde::{Deserialize, Serialize};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
+    pub enabled: Vec<String>,
     pub twitch: Twitch,
     pub shakespeare: Shakespeare,
     pub invest: Invest,
-    pub websocket: WebSocket,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -30,18 +33,17 @@ pub struct Invest {
     pub line_value: usize,
     pub interval: usize,
     pub chance: f64,
-    pub kappas: Vec<[usize; 2]>,
-}
-
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct WebSocket {
-    pub address: String,
+    pub kappas: String,
 }
 
 impl Default for Config {
     #[allow(clippy::unreadable_literal)]
     fn default() -> Self {
         Self {
+            enabled: crate::modules::MODULES
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>(),
             twitch: Twitch {
                 address: "irc.chat.twitch.tv".into(),
                 port: 6667,
@@ -59,71 +61,132 @@ impl Default for Config {
                 line_value: 5,
                 chance: 1.0 / 2.0,
                 interval: 60,
-                kappas: vec![[5, 1], [3, 3], [1, 1]],
-            },
-            websocket: WebSocket {
-                address: "localhost:51000".into(),
+                kappas: "5:1,3:3,1:1".into(),
             },
         }
     }
 }
 
-#[allow(dead_code)]
-const CONFIG_FILE: &str = "shaken.toml"; // hardcoded
-
 impl Config {
-    #[cfg(not(test))]
-    pub fn load() -> Self {
-        use log::*;
-        use std::fs;
-        use std::io::ErrorKind;
-
-        let data = fs::read_to_string(CONFIG_FILE)
-            .map_err(|e| {
-                match e.kind() {
-                    ErrorKind::NotFound => {
-                        Config::default().save();
-                        warn!("created a default config at `{}`", CONFIG_FILE);
-                    }
-                    ErrorKind::PermissionDenied => {
-                        error!("cannot create a config file at `{}`", CONFIG_FILE);
-                    }
-                    _ => error!("unknown error: {}", e),
-                };
-                ::std::process::exit(1);
-            })
-            .unwrap();
-
-        toml::from_str(&data)
-            .map_err(|e| {
-                error!("unable to parse config: {}", e);
-                ::std::process::exit(1);
-            })
-            .unwrap()
+    pub fn env(key: &str) -> Option<String> {
+        let map = DotEnvLoader::load(".env").ok()?;
+        map.get(key).cloned()
     }
 
-    #[cfg(test)]
-    pub fn load() -> Self {
-        Config::default()
+    pub fn expect_env(key: &str) -> String {
+        let mut map = DotEnvLoader::load(".env").expect("cannot load env vars");
+        map.remove(key)
+            .unwrap_or_else(|| abort(format!("env var '{}' not set", key)))
     }
 
-    #[cfg(test)]
-    #[allow(dead_code)]
-    pub fn save(&self) {}
+    pub fn load() -> Self {
+        if cfg!(test) {
+            return Config::default();
+        }
 
-    #[cfg(not(test))]
-    #[allow(dead_code)]
+        let config_file = get_config_file().unwrap_or_else(|| {
+            abort(
+                "The system does not have a standard directory for configuration files.\n\naborting",
+            );
+        });
+
+        let data = std::fs::read_to_string(&config_file).unwrap_or_else(|err| {
+            abort(format!(
+                "The config fileat \"{}\" must be readable.\n{}.\n\naborting",
+                config_file.to_string_lossy(),
+                err
+            ));
+        });
+
+        toml::from_str(&data).unwrap_or_else(|e| {
+            abort(format!(
+                "Unable to parse configuration file at \"{}\".\n{}\n\naborting",
+                config_file.to_string_lossy(),
+                e
+            ));
+        })
+    }
+
     pub fn save(&self) {
-        use log::*;
-        use std::{fs, io::Write};
+        if cfg!(test) {
+            return;
+        }
 
-        let s = toml::to_string_pretty(&self).expect("to generate correct config");
-        let mut f = fs::File::create(CONFIG_FILE)
-            .map_err(|e| {
-                error!("unable to create config at `{}` -- {}", CONFIG_FILE, e);
-                ::std::process::exit(1);
-            })
-            .unwrap();
-        writeln!(f, "{}", s).expect("to write config");
+        let config_file = get_config_file().unwrap_or_else(|| {
+            abort("system does not have a standard directory for configuration files. aborting");
+        });
+
+        let s = toml::to_string_pretty(&self).expect("generate correct config");
+        std::fs::write(&config_file, s).unwrap_or_else(|e| {
+            abort(format!(
+                "unable to create config at `{}` -- {}",
+                config_file.to_string_lossy(),
+                e
+            ));
+        });
     }
+}
+
+pub struct DotEnvLoader;
+impl DotEnvLoader {
+    /// This loads from the path, and overrides the environment with what was
+    /// found. this assumes KEY\s?=\s?"?VAL"?\s? and turns it into {KEY:VAL}
+    pub fn load(path: impl AsRef<Path>) -> Result<HashMap<String, String>, std::io::Error> {
+        fn default_from_env() -> HashMap<String, String> {
+            let mut map = HashMap::new();
+            for (k, v) in std::env::vars() {
+                map.insert(k, v);
+            }
+            map
+        }
+
+        if !check_newer(&path) {
+            return Ok(default_from_env());
+        }
+
+        let data = match std::fs::read_to_string(path) {
+            Ok(data) => data,
+            Err(_) => return Ok(default_from_env()),
+        };
+
+        let map =
+            data.lines()
+                .filter(|s| s.starts_with('#'))
+                .fold(HashMap::new(), |mut map, line| {
+                    let mut line = line.splitn(2, '=').map(|s| s.trim());
+                    if let (Some(key), Some(val)) = (line.next(), line.next()) {
+                        map.insert(key.into(), val.replace('"', ""));
+                    }
+                    map
+                });
+
+        for (k, v) in &map {
+            std::env::set_var(k, v)
+        }
+
+        Ok(map)
+    }
+}
+
+pub fn get_config_file() -> Option<PathBuf> {
+    use directories::ProjectDirs;
+    ProjectDirs::from("com.github", "museun", "shaken").and_then(|dir| {
+        let dir = dir.config_dir();
+        std::fs::create_dir_all(&dir)
+            .ok()
+            .and_then(|_| Some(dir.join("shaken.toml")))
+    })
+}
+
+fn check_newer(_f: impl AsRef<Path>) -> bool {
+    // TODO implement this garbage
+    true
+}
+
+fn abort<S>(msg: S) -> !
+where
+    S: AsRef<str>,
+{
+    error!("{}", msg.as_ref());
+    ::std::process::exit(1);
 }

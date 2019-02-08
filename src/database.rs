@@ -8,8 +8,16 @@ pub fn ensure_table(f: fn(&Connection)) -> Connection {
 
 #[cfg(not(test))]
 pub fn get_connection() -> Connection {
-    const DB_PATH: &str = "shaken.db";
-    Connection::open(DB_PATH).unwrap()
+    use directories::ProjectDirs;
+    let dir = ProjectDirs::from("com.github", "museun", "shaken")
+        .and_then(|dir| {
+            let dir = dir.data_dir();
+            std::fs::create_dir_all(&dir)
+                .ok()
+                .and_then(|_| Some(dir.join("shaken.db")))
+        })
+        .expect("data dir should be available to store bot data files");
+    Connection::open(dir).unwrap()
 }
 
 #[cfg(test)]

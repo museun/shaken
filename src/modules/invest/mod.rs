@@ -18,7 +18,7 @@ pub struct Invest {
 
 impl Module for Invest {
     fn command(&mut self, req: &Request) -> Option<Response> {
-        let map = self.map.shallow_clone();
+        let map = self.map.clone();
         map.dispatch(self, req)
     }
 
@@ -148,8 +148,7 @@ impl Invest {
             return reply!("what are you doing?");
         }
 
-        let me =
-            UserStore::get_bot(&conn, &Config::load().twitch.name).expect("to get bot user info");
+        let me = UserStore::get_bot(&conn).expect("get bot user info");
         if target.eq_ignore_ascii_case(&me.display) {
             return reply!("I don't want any credits.");
         }
@@ -192,22 +191,19 @@ impl Invest {
     }
 
     fn top5_command(&mut self, req: &Request) -> Option<Response> {
-        let mut n = req
+        let n = req
             .args_iter()
             .next()
             .and_then(|s| s.parse::<u16>().ok())
-            .or_else(|| Some(5))
-            .unwrap();
+            .unwrap_or_else(|| 5);
 
         // sanity checks because I'm sure someone will do it
         // clamp it between 5 and 10
-        if n > 10 {
-            n = 10
-        }
-
-        if n < 5 {
-            n = 5
-        }
+        let n = match n {
+            n if n > 10 => 10,
+            n if n < 5 => 5,
+            n => n,
+        };
 
         let conn = get_connection();
         let list = InvestGame::get_top_n(&conn, n as i16)
@@ -218,7 +214,7 @@ impl Invest {
                 format!("(#{}) {}: {}", i + 1, &user.display, iu.current.commas())
             });
 
-        reply!("{}", crate::util::join_with(list, ", "))
+        reply!("{}", list.collect::<Vec<_>>().join(", "))
     }
 
     fn stats_command(&mut self, req: &Request) -> Option<Response> {
@@ -237,7 +233,7 @@ impl Invest {
     }
 
     fn on_message(&self, msg: &irc::Message) -> Option<Response> {
-        if msg.data.starts_with('!') || msg.data.starts_with('@') {
+        if msg.expect_data().starts_with('!') || msg.expect_data().starts_with('@') {
             return None;
         }
 
@@ -245,16 +241,24 @@ impl Invest {
         InvestGame::give(id, self.config.line_value);
         InvestGame::set_active(id);
 
-        if let Some(kappas) = msg.tags.get_kappas() {
-            let len = kappas.len();
-            for a in &self.config.kappas {
-                if len <= a[1] {
-                    InvestGame::give(id, a[0]);
-                    return None;
-                }
-            }
+        fn parse_decay(s: &str) -> Vec<(usize, usize)> {
+            s.split(',').fold(vec![], |mut list, s| {
+                let mut s = s.split(':').filter_map(|s| s.parse::<usize>().ok());
+                if let (Some(l), Some(r)) = (s.next(), s.next()) {
+                    list.push((l, r))
+                };
+                list
+            })
         }
 
+        let kappas = msg.tags.get_kappas()?;
+        let len = kappas.len();
+        for (points, decay) in parse_decay(&self.config.kappas) {
+            if len <= decay {
+                InvestGame::give(id, points);
+                return None;
+            }
+        }
         None
     }
 
@@ -263,19 +267,16 @@ impl Invest {
         mut parts: impl Iterator<Item = &'a str>,
     ) -> Option<(NumType, Credit)> {
         let data = parts.next()?.trim();
-        Some(match parse_number_or_context(&data)? {
-            ty @ NumType::Num(_) => {
-                let n = match &ty {
-                    // TODO: why is this needed?
-                    NumType::Num(n) => *n,
-                    _ => unreachable!(),
-                };
-                (ty, n)
-            }
-            ty @ NumType::All => (ty, credits),
-            ty @ NumType::Half => (ty, credits / 2),
-            ty @ NumType::Random => (ty, thread_rng().gen_range(1, credits)),
-        })
+        let ty = parse_number_or_context(&data)?;
+        Some((
+            ty,
+            match ty {
+                NumType::Num(n) => n,
+                NumType::All => credits,
+                NumType::Half => credits / 2,
+                NumType::Random => thread_rng().gen_range(1, credits),
+            },
+        ))
     }
 
     fn rate_limit(&mut self, id: i64) {
@@ -292,6 +293,7 @@ impl Invest {
     }
 }
 
+#[derive(Copy, Clone)]
 enum NumType {
     Num(Credit),
     All,

@@ -16,7 +16,7 @@ pub struct TwitchPoll {
 
 impl Module for TwitchPoll {
     fn command(&mut self, req: &Request) -> Option<Response> {
-        let map = self.map.shallow_clone();
+        let map = self.map.clone();
         map.dispatch(self, req)
     }
 

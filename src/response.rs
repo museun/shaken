@@ -11,96 +11,89 @@ pub enum Response {
     Command { cmd: IrcCommand },
 }
 
-impl Response {
-    pub(crate) fn build(&self, context: Option<&irc::Message>) -> Option<Vec<String>> {
+pub enum FormattedResponse {
+    List(Vec<String>),
+    Single(String),
+}
+
+impl From<String> for FormattedResponse {
+    fn from(s: String) -> Self {
+        FormattedResponse::Single(s)
+    }
+}
+
+impl From<Vec<String>> for FormattedResponse {
+    fn from(list: Vec<String>) -> Self {
+        FormattedResponse::List(list)
+    }
+}
+
+impl IntoIterator for FormattedResponse {
+    type Item = String;
+    type IntoIter = std::vec::IntoIter<String>;
+
+    fn into_iter(self) -> Self::IntoIter {
         match self {
-            Response::Reply { data } => {
-                let context = context.or_else(|| {
-                    warn!("Reply requires a message context, ignoring");
-                    None
-                })?;
-                let nick = match context.prefix {
-                    Some(irc::Prefix::User { ref nick, .. }) => nick,
-                    _ => unreachable!(),
-                };
-                let user = UserStore::get_user_by_name(&get_connection(), &nick)?;
-                match context.command.as_str() {
-                    "PRIVMSG" => {
-                        return Some(vec![format!(
-                            "PRIVMSG {} :@{}: {}",
-                            context.target(),
-                            user.display,
-                            data
-                        )]);
-                    }
-                    "WHISPER" => {
-                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)]);
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            Response::Say { data } => {
-                let context = context.or_else(|| {
-                    warn!("Say requires a message context, ignoring");
-                    None
-                })?;
-                let nick = match context.prefix {
-                    Some(irc::Prefix::User { ref nick, .. }) => nick,
-                    _ => unreachable!(),
-                };
-                let user = UserStore::get_user_by_name(&get_connection(), &nick)?;
-                match context.command.as_str() {
-                    "PRIVMSG" => {
-                        return Some(vec![format!("PRIVMSG {} :{}", context.target(), data)]);
-                    }
-                    "WHISPER" => {
-                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)]);
-                    }
-                    _ => unreachable!(),
-                }
-            }
-            Response::Action { data } => {
-                let context = context.or_else(|| {
-                    warn!("Action requires a message context, ignoring");
-                    None
-                })?;
-                return Some(vec![format!(
-                    "PRIVMSG {} :\x01ACTION {}\x01",
-                    context.target(),
-                    data
-                )]);
-            }
-            Response::Whisper { data } => {
-                let context = context.or_else(|| {
-                    warn!("Whisper requires a message context, ignoring");
-                    None
-                })?;
-                if let Some(irc::Prefix::User { ref nick, .. }) = context.prefix {
-                    let conn = crate::database::get_connection();
-                    if let Some(user) = UserStore::get_user_by_name(&conn, &nick) {
-                        return Some(vec![format!("PRIVMSG jtv :/w {} {}", user.display, data)]);
-                    }
-                }
-            }
+            FormattedResponse::List(list) => list.into_iter(),
+            FormattedResponse::Single(item) => vec![item].into_iter(), // lame
+        }
+    }
+}
+
+impl Response {
+    pub(crate) fn build(&self, context: Option<&irc::Message>) -> Option<FormattedResponse> {
+        match self {
             Response::Multi { data } => {
-                return Some(
+                return Some(FormattedResponse::List(
                     data.iter()
                         .map(|s| s.build(context))
                         .flat_map(|s| s)
                         .flat_map(|s| s.into_iter())
                         .collect(),
-                );
+                ));
             }
+
             Response::Command { cmd } => match cmd {
-                IrcCommand::Join { channel } => return Some(vec![format!("JOIN {}", channel)]),
-                IrcCommand::Raw { data } => return Some(vec![data.clone()]),
+                IrcCommand::Join { channel } => return Some(format!("JOIN {}", channel).into()),
+                IrcCommand::Raw { data } => return Some(data.clone().into()),
                 IrcCommand::Privmsg { target, data } => {
-                    return Some(vec![format!("PRIVMSG {} :{}", target, data)]);
+                    return Some(format!("PRIVMSG {} :{}", target, data).into());
                 }
             },
+
+            _ => {}
+        };
+
+        let context = context.or_else(|| {
+            warn!("Reply requires a message context, ignoring");
+            None
+        })?;
+
+        if let Response::Action { data } = self {
+            return Some(format!("PRIVMSG {} :\x01ACTION {}\x01", context.target(), data).into());
         }
 
-        unreachable!()
+        let nick = match context.prefix {
+            Some(irc::Prefix::User { ref nick, .. }) => nick,
+            _ => unreachable!(),
+        };
+        let user = UserStore::get_user_by_name(&get_connection(), &nick)?;
+        match (self, context.command.as_str()) {
+            (Response::Reply { data }, "PRIVMSG") => {
+                Some(format!("PRIVMSG {} :@{}: {}", context.target(), user.display, data).into())
+            }
+
+            (Response::Say { data }, "PRIVMSG") => {
+                Some(format!("PRIVMSG {} :{}", context.target(), data).into())
+            }
+
+            (Response::Reply { data }, "WHISPER")
+            | (Response::Say { data }, "WHISPER")
+            | (Response::Whisper { data }, ..) => {
+                Some(format!("PRIVMSG jtv :/w {} {}", user.display, data).into())
+            }
+            _ => unreachable!(),
+        }
     }
 }
 

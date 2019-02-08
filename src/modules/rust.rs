@@ -7,7 +7,6 @@ use serde::Deserialize;
 enum Error {
     NoMatches,
     CratesGet,
-    Serde(serde_json::error::Error),
 }
 
 pub struct RustStuff {
@@ -16,7 +15,7 @@ pub struct RustStuff {
 
 impl Module for RustStuff {
     fn command(&mut self, req: &Request) -> Option<Response> {
-        let map = self.map.shallow_clone();
+        let map = self.map.clone();
         map.dispatch(self, req) // why isn't this automatically implemented?
     }
 }
@@ -58,45 +57,18 @@ impl RustStuff {
     }
 
     fn lookup_crate(query: &str) -> Result<Crate, Error> {
-        let mut resp = vec![];
-        let mut easy = curl::easy::Easy::new();
-
         let url = format!(
             "https://crates.io/api/v1/crates?page=1&per_page=1&q={}",
             query
         );
-        easy.url(&url).map_err(|e| {
-            warn!("invalid url: {}", e);
-            Error::CratesGet
-        })?;
-
-        {
-            let mut transfer = easy.transfer();
-            transfer
-                .write_function(|d| {
-                    resp.extend_from_slice(&d);
-                    Ok(d.len())
-                })
-                .map_err(|e| {
-                    warn!("write function failed: {}", e);
-                    Error::CratesGet
-                })?;
-
-            transfer.perform().map_err(|e| {
-                warn!("transfer failed: {}", e);
-                Error::CratesGet
-            })?;
-        }
 
         #[derive(Deserialize)]
         struct Resp {
             crates: Vec<Crate>,
         }
 
-        trace!("{}", String::from_utf8_lossy(&resp));
-
-        serde_json::from_slice::<Resp>(&resp)
-            .map_err(Error::Serde)
+        crate::util::http_get::<Resp>(&url)
+            .map_err(|_e| Error::CratesGet)
             .and_then(|mut s| s.crates.pop().ok_or_else(|| Error::NoMatches))
     }
 }

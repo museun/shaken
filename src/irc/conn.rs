@@ -29,7 +29,10 @@ pub struct TcpConn {
 }
 
 impl TcpConn {
-    pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self, ConnError> {
+    pub fn connect<A>(addr: A) -> Result<Self, ConnError>
+    where
+        A: ToSocketAddrs,
+    {
         let conn = TcpStream::connect(&addr).map_err(ConnError::CannotConnect)?;
         conn.set_read_timeout(Some(Duration::from_millis(50)))
             .expect("set read timeout");
@@ -52,7 +55,6 @@ impl TcpConn {
     pub fn write(&mut self, data: &str) {
         let writer = &mut self.writer;
 
-        // XXX: might want to rate limit here
         for part in split(data) {
             // don't log the password
             if &part[..4] != "PASS" {
@@ -96,8 +98,27 @@ impl TcpConn {
     }
 }
 
+use std::borrow::Cow;
+
+enum SplitLine<'a> {
+    List(Vec<Cow<'a, str>>),
+    Single(Cow<'a, str>),
+}
+
+// TODO make a custom iterator that does Vec<T> | std::iter::once<T>
+impl<'a> IntoIterator for SplitLine<'a> {
+    type Item = Cow<'a, str>;
+    type IntoIter = std::vec::IntoIter<Cow<'a, str>>;
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            SplitLine::List(list) => list.into_iter(),
+            SplitLine::Single(item) => vec![item].into_iter(),
+        }
+    }
+}
+
 #[inline]
-fn split(raw: &str) -> Vec<String> {
+fn split(raw: &str) -> SplitLine<'_> {
     if raw.len() > 510 - 2 && raw.contains(':') {
         let mut split = raw.splitn(2, ':').map(str::trim);
         let (head, tail) = (split.next().unwrap(), split.next().unwrap());
@@ -108,15 +129,16 @@ fn split(raw: &str) -> Vec<String> {
             .map(str::from_utf8)
         {
             match part {
-                Ok(part) => vec.push(format!("{} :{}\r\n", head, part)),
+                Ok(part) => vec.push(format!("{} :{}\r\n", head, part).into()),
                 Err(err) => {
                     warn!("dropping a slice: {}", err);
                     continue;
                 }
             }
         }
-        return vec;
+
+        return SplitLine::List(vec);
     }
 
-    vec![format!("{}\r\n", raw)]
+    SplitLine::Single([raw, "\r\n"].concat().into())
 }

@@ -68,7 +68,7 @@ pub struct InvestGame;
 impl InvestGame {
     pub fn ensure_table(conn: &Connection) {
         conn.execute_batch(INVEST_TABLE)
-            .expect("to create Invest table");
+            .expect("create Invest table");
     }
 
     pub fn get_top_n(conn: &Connection, bound: i16) -> Vec<InvestUser> {
@@ -93,7 +93,7 @@ impl InvestGame {
                 active: row.get(6),
             })
             .map_err(|_e| { /* log this */ })
-            .expect("to get rows");
+            .expect("get rows");
 
         iter.filter_map(|s| s.ok()).collect()
     }
@@ -106,7 +106,7 @@ impl InvestGame {
 
     pub fn stats_for(id: i64) -> (InvestUser, usize) {
         let conn = get_connection();
-        let user = Self::get_user_by_id(&conn, id).expect("to get user");
+        let user = Self::get_user_by_id(&conn, id).expect("get user");
         let total = Self::get_collected(&conn);
         (user, total)
     }
@@ -115,7 +115,7 @@ impl InvestGame {
         trace!("trying to give {}: {} credits", id, credits);
         let conn = get_connection();
         let mut user = Self::get_user_by_id(&conn, id).ok()?;
-        user.current += credits; // TODO check for overflow...
+        user.current += credits;
         user.total += credits;
 
         let _ = Self::update_user(&conn, &user);
@@ -229,14 +229,13 @@ impl InvestGame {
             .expect("valid sql");
         let mut iter = stmt
             .query_map(NO_PARAMS, |row| row.get::<_, i64>(0) as usize)
-            .expect("to get total");
-        iter.next().expect("to get total").expect("to get total")
+            .expect("get total");
+        iter.next().expect("get total").expect("get total")
     }
 
     pub fn increment_collected(conn: &Connection, amount: Credit) {
         const S: &str = "UPDATE InvestStats SET Total = Total + ? where ID = 0";
-        conn.execute(S, &[&(amount as i64)])
-            .expect("to update total");
+        conn.execute(S, &[&(amount as i64)]).expect("update total");
     }
 
     pub fn get_user_by_id(conn: &Connection, id: i64) -> InvestResult<InvestUser> {

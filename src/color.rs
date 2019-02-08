@@ -77,15 +77,10 @@ impl RGB {
         let HSL(_, _, l) = HSL::from_color(self);
         l > 80.0
     }
-
-    pub fn format(self, s: &str) -> String {
-        let RGB(r, g, b) = self;
-        format!("\x1B[38;2;{};{};{}m{}\x1B[m", r, g, b, s)
-    }
 }
 
 #[derive(PartialEq, Copy, Clone, Debug)]
-pub struct HSL(f64, f64, f64); // H S L
+pub struct HSL(pub f64, pub f64, pub f64); // H S L
 
 impl fmt::Display for HSL {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

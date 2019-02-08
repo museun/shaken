@@ -126,7 +126,7 @@ macro_rules! require_moderator {
 }
 
 #[macro_export]
-macro_rules! require_priviledges {
+macro_rules! require_privileges {
     ($req:expr) => {{
         if !$req.is_from_owner() && !$req.is_from_broadcaster() && !$req.is_from_moderator() {
             return None;

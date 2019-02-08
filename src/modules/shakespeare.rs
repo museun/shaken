@@ -20,7 +20,7 @@ pub struct BrainMarkov<'a>(pub Cow<'a, str>);
 
 impl<'a> Markov for BrainMarkov<'a> {
     fn get_next(&self) -> Option<String> {
-        util::http_get(&self.0)
+        util::http_get(&self.0).ok()
     }
 }
 
@@ -38,13 +38,13 @@ pub struct Shakespeare {
 
 impl Module for Shakespeare {
     fn command(&mut self, req: &Request) -> Option<Response> {
-        let map = self.map.shallow_clone();
+        let map = self.map.clone();
         map.dispatch(self, req)
     }
 
     fn passive(&mut self, msg: &irc::Message) -> Option<Response> {
         self.check_mentions(&msg).or_else(|| {
-            if !msg.data.starts_with('!') {
+            if !msg.expect_data().starts_with('!') {
                 self.auto_speak()
             } else {
                 None
@@ -83,7 +83,7 @@ impl Shakespeare {
     }
 
     fn configure_command(&mut self, req: &Request) -> Option<Response> {
-        require_priviledges!(&req);
+        require_privileges!(&req);
         let args = req.args_iter().collect::<Vec<_>>();
         if args.is_empty() {
             return reply!("what do you want to configure: interval, chance, bypass");
@@ -153,17 +153,14 @@ impl Shakespeare {
     }
 
     fn check_mentions(&mut self, msg: &irc::Message) -> Option<Response> {
-        let conn = get_connection();
-        // TODO why is this a thing
-        let user = UserStore::get_bot(&conn, &self.name)?;
+        let user = UserStore::get_bot(&get_connection())?;
 
-        // what is this
         fn trim_then_check(s: &str, nick: &str) -> bool {
             let s = s.trim_end_matches(|c: char| !c.is_ascii_alphanumeric());
             !s.is_empty() && s[1..].eq_ignore_ascii_case(nick)
         }
 
-        for part in msg.data.split_whitespace() {
+        for part in msg.expect_data().split_whitespace() {
             if part.starts_with('@') && trim_then_check(&part, &user.display) {
                 trace!("got a mention, trying to speak");
                 let resp = self.generate()?;

@@ -1,35 +1,20 @@
-use super::*;
-
-use std::iter::repeat;
-
-use curl::easy::{Easy, List};
 use log::*;
 use serde::Deserialize;
+use std::fmt;
+use std::iter::repeat;
 
 pub struct TwitchClient {
     client_id: String,
 }
 
-impl Default for TwitchClient {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl TwitchClient {
-    pub fn new() -> Self {
-        let client_id = match std::env::var("SHAKEN_TWITCH_CLIENT_ID") {
-            Ok(client_id) => client_id,
-            Err(_err) => {
-                error!("env variable must be set: SHAKEN_TWITCH_CLIENT_ID");
-                std::process::exit(1);
-            }
-        };
-
-        Self { client_id }
+    pub fn new(client_id: &str) -> Self {
+        Self {
+            client_id: client_id.to_string(),
+        }
     }
 
-    pub fn get_streams<A, I>(&self, user_logins: I) -> Option<Vec<Stream>>
+    pub fn get_streams<A, I>(&self, user_logins: I) -> Result<Vec<Stream>, Error>
     where
         I: IntoIterator<Item = A>,
         I::Item: AsRef<str>,
@@ -37,7 +22,7 @@ impl TwitchClient {
         self.get_response("streams", repeat("user_login").zip(user_logins))
     }
 
-    pub fn get_streams_from_ids<A, I>(&self, ids: I) -> Option<Vec<Stream>>
+    pub fn get_streams_from_ids<A, I>(&self, ids: I) -> Result<Vec<Stream>, Error>
     where
         I: IntoIterator<Item = A>,
         I::Item: AsRef<str>,
@@ -45,7 +30,7 @@ impl TwitchClient {
         self.get_response("streams", repeat("user_id ").zip(ids))
     }
 
-    pub fn get_users<A, I>(&self, user_logins: I) -> Option<Vec<User>>
+    pub fn get_users<A, I>(&self, user_logins: I) -> Result<Vec<User>, Error>
     where
         I: IntoIterator<Item = A>,
         I::Item: AsRef<str>,
@@ -53,7 +38,7 @@ impl TwitchClient {
         self.get_response("users", repeat("login").zip(user_logins))
     }
 
-    pub fn get_users_from_ids<A, I>(&self, ids: I) -> Option<Vec<User>>
+    pub fn get_users_from_ids<A, I>(&self, ids: I) -> Result<Vec<User>, Error>
     where
         I: IntoIterator,
         I::Item: AsRef<str>,
@@ -61,67 +46,89 @@ impl TwitchClient {
         self.get_response("users", repeat("id").zip(ids))
     }
 
-    pub(crate) fn get_response<'a, A, I, T>(&self, ep: &str, map: I) -> Option<Vec<T>>
+    pub(crate) fn get_response<'a, A, I, T>(&self, ep: &str, map: I) -> Result<Vec<T>, Error>
     where
         for<'de> T: serde::Deserialize<'de>,
         I: IntoIterator<Item = (&'a str, A)>,
         A: AsRef<str>,
     {
         const BASE_URL: &str = "https://api.twitch.tv/helix";
-
-        let query = std::iter::once("?".into()) // TODO use a fold here
-            .chain(
-                map.into_iter()
-                    .map(|(k, v)| format!("{}={}&", util::encode(k), util::encode(v.as_ref()))),
-            )
-            .collect::<String>();
-
-        let mut vec = Vec::new();
-        let mut easy = Easy::new();
-
-        let mut list = List::new();
-        list.append(&format!("Client-ID: {}", self.client_id))
-            .unwrap();
-        easy.http_headers(list).unwrap();
-
-        let url = format!("{}/{}{}", BASE_URL, ep, query);
-        trace!("getting: {}", &url);
-
-        easy.url(&url).ok()?;
-        {
-            let mut transfer = easy.transfer();
-            let _ = transfer.write_function(|data| {
-                vec.extend_from_slice(data);
-                Ok(data.len())
-            });
-            transfer
-                .perform()
-                .map_err(|e| error!("cannot perform transfer: {}", e))
-                .ok()?;
+        let mut req = ureq::get(&format!("{}/{}", BASE_URL, ep));
+        for (key, val) in map {
+            req = req.query(key, val.as_ref()).build(); // this is expensive
         }
 
-        let value = serde_json::from_slice::<serde_json::Value>(&vec)
-            .map_err(|err| error!("parse json: {}", err))
-            .ok()?;
+        let resp = req
+            .set("Client-ID", &self.client_id)
+            .timeout_connect(5 * 1000)
+            .timeout_read(5 * 1000)
+            .call();
 
-        let value = value
-            .get("data")
-            .or_else(|| {
-                error!("cannot get 'data' from json value");
-                None
-            })?
-            .clone(); // why is this being cloned?
+        if resp.ok() {
+            warn!("cannot get json for twitch req at {}", ep);
+            return Err(Error::HttpGet(ep.to_string()));
+        }
 
-        serde_json::from_value(value)
-            .map_err(|e| error!("cannot convert : {}", e))
-            .ok()
+        let value: serde_json::Value =
+            serde_json::from_reader::<_, serde_json::Value>(resp.into_reader())
+                .map_err(|err| Error::Deserialize(Some(err)))?
+                .get_mut("data")
+                .ok_or_else(|| {
+                    error!("cannot get 'data' from json value");
+                    Error::Deserialize(None)
+                })?
+                .take();
+
+        serde_json::from_value(value).map_err(|err| Error::Deserialize(Some(err)))
     }
 
-    pub fn get_names_for<S: AsRef<str>>(ch: S) -> Option<Names> {
+    pub fn get_names_for<S>(ch: S) -> Result<Names, Error>
+    where
+        S: AsRef<str>,
+    {
         let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch.as_ref());
-        serde_json::from_str::<Names>(&crate::util::http_get(&url)?)
-            .map_err(|e| error!("cannot parse json: {}", e))
-            .ok()
+        crate::util::http_get(&url).map_err(|e| e.into())
+    }
+}
+
+#[derive(Debug)]
+pub enum Error {
+    HttpError(crate::util::HttpError),
+    HttpGet(String),
+    Deserialize(Option<serde_json::Error>),
+}
+
+impl From<crate::util::HttpError> for Error {
+    fn from(err: crate::util::HttpError) -> Self {
+        Error::HttpError(err)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Error::Deserialize(Some(err))
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::HttpError(err) => write!(f, "http error: {}", err),
+            Error::HttpGet(ep) => write!(f, "cannot get twitch endpoint: {}", ep),
+            Error::Deserialize(Some(err)) => write!(f, "json deserialize error: {}", err),
+            Error::Deserialize(None) => write!(f, "missing data field"),
+        }
+    }
+}
+
+impl std::error::Error for Error {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            Error::HttpError(err) => Some(err as &dyn std::error::Error),
+            Error::HttpGet(..) => None,
+            Error::Deserialize(Some(err)) => Some(err as &dyn std::error::Error),
+            Error::Deserialize(None) => None,
+        }
     }
 }
 

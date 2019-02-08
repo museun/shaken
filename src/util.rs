@@ -1,5 +1,7 @@
-use curl::easy::Easy;
-use std::{fmt::Write, time::Duration};
+use log::warn;
+use serde::Deserialize;
+
+use std::{fmt, fmt::Write, time::Duration};
 
 pub trait CommaSeparated {
     fn commas(&self) -> String;
@@ -55,82 +57,105 @@ impl Timestamp for Duration {
             ("seconds", 1),  // this :(
         ];
 
+        // approx.
+        fn plural(s: &str, n: u64) -> String {
+            format!("{} { }", n, if n > 1 { s } else { &s[..s.len() - 1] })
+        }
+
         let mut time = vec![];
         let mut secs = self.as_secs();
         for (name, d) in &table {
             let div = secs / d;
             if div > 0 {
-                time.push((name, div));
+                time.push(plural(name, div));
                 secs -= d * div;
             }
         }
 
-        format_time_map(&time)
-    }
-}
-
-pub fn format_time_map<S, V>(list: V) -> String
-where
-    S: AsRef<str>,
-    V: AsRef<[(S, u64)]>,
-{
-    fn plural((s, n): (&str, u64)) -> String {
-        format!("{} {}", n, if n > 1 { s } else { &s[..s.len() - 1] })
-    }
-
-    let mut list = list
-        .as_ref()
-        .iter()
-        .map(|(s, n)| (s.as_ref(), *n))
-        .filter(|&(_, n)| n > 0)
-        .map(plural)
-        .collect::<Vec<_>>();
-
-    let len = list.len();
-    if len > 1 {
-        if len > 2 {
-            for e in &mut list.iter_mut().take(len - 2) {
-                e.push_str(",")
+        let len = time.len();
+        if len > 1 {
+            if len > 2 {
+                for e in &mut time.iter_mut().take(len - 2) {
+                    e.push_str(",")
+                }
             }
+            time.insert(len - 1, "and".into())
         }
-        list.insert(len - 1, "and".into())
-    }
 
-    join_with(list.iter(), " ")
+        time.join(" ")
+    }
 }
 
-pub fn http_get<S: AsRef<str>>(url: S) -> Option<String> {
-    let mut vec = Vec::new();
-    let mut easy = Easy::new();
-    easy.connect_timeout(::std::time::Duration::from_secs(5))
-        .expect("to set timeout");
-    easy.url(url.as_ref()).ok()?;
-    {
-        let mut transfer = easy.transfer();
-        let _ = transfer.write_function(|data| {
-            vec.extend_from_slice(data);
-            Ok(data.len())
-        });
-        transfer.perform().ok()?;
+pub fn http_get_body(url: &str) -> Result<String, HttpError> {
+    const FIVE_SECONDS: u64 = 5 * 1000;
+    let resp = ureq::get(url)
+        .timeout_connect(FIVE_SECONDS)
+        .timeout_read(FIVE_SECONDS)
+        .call();
+
+    if !resp.ok() {
+        warn!("cannot get body for: {}", url);
+        return Err(HttpError::HttpGet(url.to_string()));
     }
-    String::from_utf8(vec).ok()
+
+    resp.into_string().map_err(|e| e.into())
 }
 
-pub fn join_with<S, I, T>(mut iter: I, sep: S) -> String
+pub fn http_get<T>(url: &str) -> Result<T, HttpError>
 where
-    S: AsRef<str>,
-    T: AsRef<str>,
-    I: Iterator<Item = T>,
+    for<'de> T: Deserialize<'de>,
 {
-    let mut buf = String::new();
-    if let Some(s) = iter.next() {
-        buf.push_str(s.as_ref());
+    const FIVE_SECONDS: u64 = 5 * 1000;
+    let resp = ureq::get(url)
+        .timeout_connect(FIVE_SECONDS)
+        .timeout_read(FIVE_SECONDS)
+        .call();
+
+    if !resp.ok() {
+        warn!("cannot get body for: {}", url);
+        return Err(HttpError::HttpGet(url.to_string()));
     }
-    for i in iter {
-        buf.push_str(sep.as_ref());
-        buf.push_str(i.as_ref());
+
+    serde_json::from_reader(resp.into_reader()).map_err(|e| e.into())
+}
+
+#[derive(Debug)]
+pub enum HttpError {
+    HttpGet(String),
+    StdIo(std::io::Error),
+    Deserialize(serde_json::Error),
+}
+
+impl From<std::io::Error> for HttpError {
+    fn from(err: std::io::Error) -> Self {
+        HttpError::StdIo(err)
     }
-    buf
+}
+
+impl From<serde_json::Error> for HttpError {
+    fn from(err: serde_json::Error) -> Self {
+        HttpError::Deserialize(err)
+    }
+}
+
+impl fmt::Display for HttpError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            HttpError::HttpGet(url) => write!(f, "cannot get url: {}", url),
+            HttpError::StdIo(err) => write!(f, "io error: {}", err),
+            HttpError::Deserialize(err) => write!(f, "json deserialize error: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for HttpError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            HttpError::HttpGet(..) => None,
+            HttpError::StdIo(err) => Some(err),
+            HttpError::Deserialize(err) => Some(err),
+        }
+    }
 }
 
 pub fn get_timestamp() -> u64 {
@@ -140,15 +165,4 @@ pub fn get_timestamp() -> u64 {
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
     ts.as_secs() * 1000 + u64::from(ts.subsec_nanos()) / 1_000_000
-}
-
-pub fn encode(data: &str) -> String {
-    let mut res = String::new();
-    for ch in data.as_bytes().iter() {
-        match *ch as char {
-            'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => res.push(*ch as char),
-            ch => res.push_str(format!("%{:02X}", ch as u32).as_str()),
-        }
-    }
-    res
 }

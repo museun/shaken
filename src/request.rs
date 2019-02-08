@@ -11,32 +11,33 @@ pub struct Request {
     color: RGB,
 }
 
+// TODO: I don't like this. rework this whole thing
+// (args and args_iter being totally different is .. awkward)
+
 impl Request {
     pub fn try_from(msg: &irc::Message) -> Option<Self> {
-        match msg.command.as_str() {
-            "PRIVMSG" | "WHISPER" => {
+        match (msg.command.as_str(), msg.data.as_ref()) {
+            ("PRIVMSG", Some(data)) | ("WHISPER", Some(data))
+                if data.starts_with('!') && data.len() > 1 =>
+            {
                 let sender = User::from_msg(&msg)?;
-                let (target, data) = (msg.target(), &msg.data);
                 let (broadcaster, moderator) = (
-                    msg.tags.has_badge(&irc::Badge::Broadcaster),
-                    msg.tags.has_badge(&irc::Badge::Moderator),
+                    msg.tags.has_badge(irc::Badge::Broadcaster),
+                    msg.tags.has_badge(irc::Badge::Moderator),
                 );
 
-                if data.starts_with('!') && data.len() > 1 {
-                    return Some(Request {
-                        name: None,
-                        args: data.to_string(),
-                        sender,
-                        target: target.to_string(),
-                        broadcaster,
-                        moderator,
-                        color: msg.tags.get_color().unwrap(),
-                    });
-                }
+                Some(Request {
+                    name: None,
+                    args: data.to_string(),
+                    sender,
+                    target: msg.target().to_string(),
+                    broadcaster,
+                    moderator,
+                    color: msg.tags.get_color().unwrap(),
+                })
             }
-            _ => {}
+            _ => None,
         }
-        None
     }
 
     pub fn name(&self) -> Option<&String> {
@@ -60,11 +61,7 @@ impl Request {
     }
 
     pub fn is_from_owner(&self) -> bool {
-        Config::load()
-            .twitch
-            .owners
-            .iter()
-            .any(|&id| id == self.sender)
+        Config::load().twitch.owners.contains(&self.sender)
     }
 
     pub fn color(&self) -> RGB {
@@ -80,7 +77,6 @@ impl Request {
     }
 
     pub fn search(&self, query: &str) -> Option<Request> {
-        // TODO make this configurable (a prefix)
         if query == "!" {
             return None;
         }

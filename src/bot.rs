@@ -35,6 +35,13 @@ impl Bot {
                 match conn.try_read() {
                     Some(irc::ReadStatus::Data(msg)) => {
                         let msg = irc::Message::parse(&msg);
+                        if let "GLOBALUSERSTATE" = msg.command() {
+                            if let Some(user) = User::from_msg(&msg) {
+                                debug!("our user: {}", user);
+                            } else {
+                                warn!("cannot get our user")
+                            }
+                        }
                         let req = Request::try_from(&msg);
                         let _ = in_tx.send(Event::Message(msg, req.map(Box::new)));
                     }
@@ -85,19 +92,13 @@ impl Bot {
         self.send("CAP REQ :twitch.tv/membership");
         self.send("CAP REQ :twitch.tv/commands");
 
-        let password = match std::env::var("SHAKEN_TWITCH_PASSWORD") {
-            Ok(password) => password,
-            Err(_err) => {
-                error!("env variable must be set: SHAKEN_TWITCH_PASSWORD");
-                std::process::exit(1);
-            }
-        };
+        let password = Config::expect_env("SHAKEN_TWITCH_PASSWORD");
 
         self.send(format!("PASS {}", password));
         self.send(format!("NICK {}", &nick));
 
         // this would be needed for a real irc server
-        // self.send(&format!("USER {} * 8 :{}", "shaken", "shaken bot"));
+        // self.send(format!("USER {} * 8 :{}", &nick, &nick));
 
         trace!("registered");
     }

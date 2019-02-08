@@ -7,14 +7,14 @@ use std::time::Duration;
 use crate::module::CommandMap;
 
 #[derive(Default, Debug)]
-struct UserCommand {
-    command: String,
-    body: String,
-    description: String,
-    creator: i64,
-    created_at: i64,
-    uses: i64,
-    disabled: bool,
+pub struct UserCommand {
+    pub command: String,
+    pub body: String,
+    pub description: String,
+    pub creator: i64,
+    pub created_at: i64,
+    pub uses: i64,
+    pub disabled: bool,
 }
 
 pub struct Builtin {
@@ -25,7 +25,7 @@ pub struct Builtin {
 
 impl Module for Builtin {
     fn command(&mut self, req: &Request) -> Option<Response> {
-        let map = self.map.shallow_clone();
+        let map = self.map.clone();
         match map.dispatch(self, req) {
             Some(resp) => Some(resp),
             None => self.try_user_command(req),
@@ -35,7 +35,7 @@ impl Module for Builtin {
     fn event(&mut self, msg: &irc::Message) -> Option<Response> {
         match msg.command() {
             "001" => join(&format!("#{}", self.channel)),
-            "PING" => raw!("PONG :{}", &msg.data),
+            "PING" => raw!("PONG :{}", msg.expect_data()),
             _ => None,
         }
     }
@@ -45,19 +45,15 @@ impl Builtin {
     pub fn create() -> Result<Self, ModuleError> {
         Self::ensure_table(&database::get_connection());
 
-        Self::fetch_command_names()
-            .iter()
-            .filter(|s| !Self::is_available(&s))
-            .for_each(|cmd| {
-                warn!(
-                    "user command '{}' already exists as a system command, disabling it",
-                    cmd,
-                );
-                Self::disable_bad_command(cmd);
-            });
+        for cmd in Self::fetch_command_names() {
+            if !Self::is_available(&cmd) {
+                Self::disable_bad_command(&cmd);
+                warn!("command is already reserved: {}", cmd);
+            }
+        }
 
         Ok(Self {
-            twitch: TwitchClient::new(),
+            twitch: TwitchClient::new(&Config::expect_env("SHAKEN_TWITCH_CLIENT_ID")),
             map: CommandMap::create(
                 "Builtin",
                 &[
@@ -117,8 +113,9 @@ impl Builtin {
         }
     }
 
+    // TODO validate that this is a `!command` and not a `command`
     fn add_command(&mut self, req: &Request) -> Option<Response> {
-        require_priviledges!(&req, "you cannot do that");
+        require_privileges!(&req, "you cannot do that");
 
         let (command, body) = match Self::arg_parts(&req) {
             Some((head, tail)) => (head, tail),
@@ -172,7 +169,7 @@ impl Builtin {
     }
 
     fn edit_command(&mut self, req: &Request) -> Option<Response> {
-        require_priviledges!(&req, "you cannot do that");
+        require_privileges!(&req, "you cannot do that");
 
         let (command, description) = match Self::arg_parts(&req) {
             Some((head, tail)) => (head, tail),
@@ -198,7 +195,7 @@ impl Builtin {
     }
 
     fn info_command(&mut self, req: &Request) -> Option<Response> {
-        require_priviledges!(&req, "you cannot do that");
+        require_privileges!(&req, "you cannot do that");
 
         let command = match Self::try_get_command(req.args()) {
             None => return reply!("'{}' isn't a command", req.args()),
@@ -225,7 +222,7 @@ impl Builtin {
     }
 
     fn remove_command(&mut self, req: &Request) -> Option<Response> {
-        require_priviledges!(&req, "you cannot do that");
+        require_privileges!(&req, "you cannot do that");
 
         let (command, _) = match Self::arg_parts(&req) {
             Some((head, tail)) => (head, tail),
@@ -276,7 +273,7 @@ impl Builtin {
         )
     }
 
-    fn try_get_command(name: &str) -> Option<UserCommand> {
+    pub fn try_get_command(name: &str) -> Option<UserCommand> {
         let conn = database::get_connection();
         let command = conn
             .prepare(
@@ -299,7 +296,7 @@ impl Builtin {
         command?.ok()
     }
 
-    fn fetch_command_names() -> Vec<String> {
+    pub fn fetch_command_names() -> Vec<String> {
         let conn = database::get_connection();
         let mut commands = conn
             .prepare("SELECT command FROM UserCommands")
@@ -326,7 +323,7 @@ impl Builtin {
     }
 
     fn is_available(cmd: impl AsRef<str>) -> bool {
-        Registry::is_available(&cmd.as_ref())
+        Registry::is_available(cmd)
     }
 
     fn arg_parts(req: &Request) -> Option<(String, String)> {
@@ -357,7 +354,7 @@ impl Builtin {
     fn viewers_command(&mut self, _req: &Request) -> Option<Response> {
         let streams = self.twitch.get_streams(&[self.channel.as_str()]);
         let stream = match streams {
-            Some(ref s) if !s.is_empty() => &s[0],
+            Ok(ref s) if !s.is_empty() => &s[0],
             _ => return reply!("the stream doesn't seem to be live"),
         };
 
@@ -371,7 +368,7 @@ impl Builtin {
     fn uptime_command(&mut self, _req: &Request) -> Option<Response> {
         let streams = self.twitch.get_streams(&[self.channel.as_str()]);
         let stream = match streams {
-            Some(ref s) if !s.is_empty() => &s[0],
+            Ok(ref s) if !s.is_empty() => &s[0],
             _ => return reply!("the stream doesn't seem to be live"),
         };
 

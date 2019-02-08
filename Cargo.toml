@@ -19,4 +19,7 @@ hashbrown = "0.1.7"
 
 crossbeam-channel = "0.3.4" # is this used
 scoped_threadpool = "0.1.9" # is this used
-curl = "0.4.19" # get rid of this
+ureq = "0.9.0"
+directories = "1.0.2"
+
+termcolor = "1.0.4"

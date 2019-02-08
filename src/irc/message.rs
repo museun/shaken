@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use std::fmt;
 
 // TODO get rid of all of these string allocations
 #[derive(Debug, PartialEq, Clone, Default)]
@@ -8,17 +7,17 @@ pub struct Message {
     pub prefix: Option<irc::Prefix>,
     pub command: String,
     pub args: Vec<String>,
-    pub data: String,
+    pub data: Option<String>,
 }
 
 impl Message {
-    // TODO: should probably return a result
     pub fn parse(input: &str) -> Message {
-        // TODO tags parsing is wrong
-        // TODO is it still wrong?
         let (input, tags) =
             if !input.starts_with(':') && !input.starts_with("PING") && input.starts_with('@') {
-                Self::parse_tags(&input)
+                let pos = input.find(' ').unwrap();
+                let sub = &input[..pos];
+                let tags = irc::Tags::new(&sub);
+                (&input[pos + 1..], tags)
             } else {
                 (input, irc::Tags::default())
             };
@@ -30,41 +29,27 @@ impl Message {
             .split_whitespace()
             .skip(skip)
             .take_while(|s| !s.starts_with(':'))
-            .map(|s| s.into())
-            .collect::<Vec<_>>();
+            .map(|s| s.into());
 
-        let command = args.remove(0);
-
+        let command = args.next().unwrap();
         let data = if let Some(pos) = &input[1..].find(':') {
-            input[*pos + 2..].into()
+            Some(input[*pos + 2..].into())
         } else {
-            "".into()
+            None
         };
 
         Self {
             tags,
             prefix,
             command,
-            args,
+            args: args.collect(),
             data,
         }
     }
 
-    // TODO: make sure it has caps before sending to this function
-    fn parse_tags(input: &str) -> (&str, irc::Tags) {
-        let pos = input.find(' ').unwrap();
-        let sub = &input[..pos];
-        let tags = irc::Tags::new(&sub);
-        (&input[pos + 1..], tags)
-    }
-
-    /// this panics if the message state is bad
     pub fn target(&self) -> &str {
         let target = self.args.first().expect("should have a target");
-
-        let user = UserStore::get_bot(&get_connection(), &Config::load().twitch.name)
-            .expect("to get our name");
-
+        let user = UserStore::get_bot(&get_connection()).expect("get our name");
         if target.eq_ignore_ascii_case(&user.display) {
             match self.prefix {
                 Some(irc::Prefix::User { ref nick, .. }) => &nick,
@@ -75,27 +60,11 @@ impl Message {
         }
     }
 
+    pub fn expect_data(&self) -> &str {
+        self.data.as_ref().unwrap()
+    }
+
     pub fn command(&self) -> &str {
         &self.command
-    }
-}
-
-impl fmt::Display for Message {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let prefix = match &self.prefix {
-            Some(irc::Prefix::User { nick, .. }) => nick.trim(),
-            Some(irc::Prefix::Server { host, .. }) => host.trim(),
-            None => "??",
-        };
-
-        let data = self.data.trim();
-        match self.command.as_ref() {
-            "PRIVMSG" => write!(f, "< [{}] <{}> {}", self.args[0], prefix, data),
-            _ => write!(
-                f,
-                "({}) <{}> {:?}: {}",
-                &self.command, prefix, self.args, data
-            ),
-        }
     }
 }

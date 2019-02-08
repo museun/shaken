@@ -37,7 +37,7 @@ pub fn make_test_user(conn: &Connection, name: &str, id: i64) -> User {
         userid: id,
         color: crate::color::RGB::from("#ffffff"),
     };
-    let _ = UserStore::create_user(&conn, &user);
+    let _ = UserStore::create_user(&conn, &user, false);
     user
 }
 
@@ -56,7 +56,10 @@ pub struct Environment<'a> {
 }
 
 impl<'a> Environment<'a> {
-    pub fn new<M: Module + 'a>(db: &'a Connection, module: &'a mut M) -> Self {
+    pub fn new<M>(db: &'a Connection, module: &'a mut M) -> Self
+    where
+        M: Module + 'a,
+    {
         UserStore::create_user(
             &db,
             &User {
@@ -64,6 +67,7 @@ impl<'a> Environment<'a> {
                 color: RGB::from("#f0f0f0"),
                 userid: USER_ID,
             },
+            false,
         );
 
         UserStore::create_user(
@@ -73,6 +77,7 @@ impl<'a> Environment<'a> {
                 color: RGB::from("#f0f0f0"),
                 userid: 42,
             },
+            true,
         );
 
         let (in_tx, in_rx) = channel::unbounded();
@@ -186,6 +191,7 @@ impl<'a> Environment<'a> {
                 color: crate::color::RGB::from("#f0f0f0"),
                 userid: user.1,
             },
+            false,
         );
 
         self.push_raw(&format!(
@@ -232,7 +238,7 @@ impl<'a> Environment<'a> {
         let mut data = self.write.pop_front()?;
         data.insert_str(0, ":test!user@irc.test ");
         let msg = irc::Message::parse(&data);
-        Some(msg.data)
+        msg.data
     }
 
     pub fn get_user_id(&self) -> i64 {

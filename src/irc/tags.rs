@@ -12,8 +12,11 @@ pub struct Tags(HashMap<String, String>);
 
 impl Tags {
     pub fn new(input: &str) -> Self {
+        if !input.starts_with('@') {
+            return Self::default();
+        }
+
         let mut map = HashMap::new();
-        // TODO make sure the message starts with @
         let input = &input[1..];
         for part in input.split_terminator(';') {
             if let Some(index) = part.find('=') {
@@ -73,18 +76,10 @@ impl Tags {
         })
     }
 
-    pub fn has_badge(&self, badge: &Badge) -> bool {
-        match self.get("badges") {
-            Some(badges) => badges
-                .split(',')
-                .map(|s| {
-                    let mut t = s.split('/');
-                    (t.next(), t.next()) // badge, version
-                })
-                .filter_map(|(s, _)| s.and_then(|s| Badge::from_str(s).ok()))
-                .any(|b| b == *badge),
-            None => false,
-        }
+    pub fn has_badge(&self, badge: Badge) -> bool {
+        self.get_badges()
+            .and_then(|b| Some(b.contains(&badge)))
+            .unwrap_or_else(|| false)
     }
 
     pub fn get<S>(&self, s: S) -> Option<&str>
@@ -132,9 +127,7 @@ pub struct Kappa {
 }
 
 impl Kappa {
-    pub fn parse(s: &str) -> Vec<Self> {
-        // could count the commas to pre-size the vector
-        let mut kappas = vec![];
+    pub fn parse(input: &str) -> Vec<Self> {
         fn get_ranges(tail: &str) -> Option<Vec<Range<u16>>> {
             let mut vec = vec![];
             for s in tail.split_terminator(',') {
@@ -150,23 +143,21 @@ impl Kappa {
             Some(vec)
         }
 
-        fn get_parts(emote: &str) -> Option<(&str, &str)> {
-            let mut s = emote.split_terminator(':');
-            Some((s.next()?, s.next()?))
-        }
-
-        for emote in s.split_terminator('/') {
-            if let Some((head, tail)) = get_parts(emote) {
-                if let Some(ranges) = get_ranges(&tail) {
-                    kappas.push(Kappa {
-                        id: head.parse::<usize>().expect("twitch to be not-wrong"),
+        input
+            .split_terminator('/')
+            .filter_map(|emote| {
+                let mut s = emote.split_terminator(':');
+                Some((s.next()?, s.next()?))
+            })
+            .filter_map(|(head, tail)| {
+                get_ranges(&tail).and_then(|ranges| {
+                    Some(Kappa {
+                        id: head.parse::<usize>().ok()?,
                         ranges,
-                    });
-                }
-            }
-        }
-
-        kappas
+                    })
+                })
+            })
+            .collect()
     }
 }
 

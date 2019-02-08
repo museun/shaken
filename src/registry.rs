@@ -27,6 +27,10 @@ impl Command {
         self.help.as_str()
     }
 
+    pub fn has_help(&self) -> bool {
+        self.help != "no help provided" // TODO make this some sigil value (or an Option)
+    }
+
     pub fn namespace(&self) -> &str {
         self.namespace.as_str()
     }
