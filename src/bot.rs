@@ -30,10 +30,12 @@ impl Bot {
 
             loop {
                 if let Ok(data) = out_rx.try_recv() {
-                    conn.write(&data)
+                    conn.write(&data);
+                    trace!("done writing")
                 }
                 match conn.try_read() {
                     Some(irc::ReadStatus::Data(msg)) => {
+                        trace!("read line");
                         let msg = irc::Message::parse(&msg);
                         if let "GLOBALUSERSTATE" = msg.command() {
                             if let Some(user) = User::from_msg(&msg) {
@@ -44,9 +46,11 @@ impl Bot {
                         }
                         let req = Request::try_from(&msg);
                         let _ = in_tx.send(Event::Message(msg, req.map(Box::new)));
+                        trace!("done dispatching message");
                     }
                     Some(irc::ReadStatus::Nothing) => {}
                     _ => {
+                        trace!("dropping read channel");
                         drop(in_tx);
                         return;
                     }
@@ -71,6 +75,7 @@ impl Bot {
 
     pub fn process(&self, rx: channel::Receiver<(Option<irc::Message>, Response)>) {
         for (msg, resp) in rx {
+            trace!("processing message/response pair");
             let msg = msg.as_ref();
             if let Some(msg) = msg {
                 let _ = self.inspect_tx.send((msg.clone(), Box::new(resp.clone())));
@@ -81,6 +86,7 @@ impl Bot {
                     .inspect(|s| trace!("writing response: {}", s))
                     .for_each(|m| self.send(m));
             }
+            trace!("done processing message/response pair");
         }
     }
 

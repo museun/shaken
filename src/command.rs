@@ -29,7 +29,7 @@ where
     }
 
     pub fn call(&self, recv: &mut T, req: &Request) -> Option<Response> {
-        trace!("calling");
+        debug!("calling command: {}", self.name);
         (self.func)(recv, req)
     }
 }

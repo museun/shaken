@@ -374,9 +374,13 @@ impl Builtin {
 
     fn uptime_command(&mut self, _req: &Request) -> Option<Response> {
         let streams = self.twitch.get_streams(&[self.channel.as_str()]);
+
         let stream = match streams {
             Ok(ref s) if !s.is_empty() => &s[0],
-            _ => return reply!("the stream doesn't seem to be live"),
+            _ => {
+                debug!("cannot get stream");
+                return reply!("the stream doesn't seem to be live");
+            }
         };
 
         if stream.live.is_empty() || stream.live == "" {
