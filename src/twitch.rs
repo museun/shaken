@@ -60,11 +60,12 @@ impl TwitchClient {
 
         let resp = req
             .set("Client-ID", &self.client_id)
+            .set("Accept", "application/vnd.twitchtv.v5+json")
             .timeout_connect(5 * 1000)
             .timeout_read(5 * 1000)
             .call();
 
-        if resp.ok() {
+        if !resp.ok() {
             warn!("cannot get json for twitch req at {}", ep);
             return Err(Error::HttpGet(ep.to_string()));
         }
