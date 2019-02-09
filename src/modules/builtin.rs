@@ -17,6 +17,8 @@ pub struct UserCommand {
     pub disabled: bool,
 }
 
+pub const NAME: &str = "Builtin";
+
 pub struct Builtin {
     twitch: TwitchClient,
     channel: String,

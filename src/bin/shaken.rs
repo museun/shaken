@@ -22,8 +22,6 @@ fn main() {
     parse_args();
 
     let config = Config::load();
-    let address = format!("{}:{}", &config.twitch.address, &config.twitch.port);
-
     let (modules, disabled) = create_modules(&config);
 
     let printer = Printer::new(&disabled);
@@ -36,6 +34,7 @@ fn main() {
         printer.user_commands();
     }
 
+    let address = format!("{}:{}", &config.twitch.address, &config.twitch.port);
     let mut delay = 0;
     loop {
         if delay > 0 {

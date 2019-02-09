@@ -1,26 +1,21 @@
-mod builtin;
-pub use self::builtin::*;
+macro_rules! export {
+    ($($m:tt),*) => {
+        $(
+            mod $m;
+            pub use self::$m::*;
+        )*
 
-mod shakespeare;
-pub use self::shakespeare::*;
+        pub const MODULES: &[&str] = &[
+            $( $m::NAME, )*
+        ];
+    };
+}
 
-mod invest;
-pub use self::invest::*;
-
-mod twitchpoll;
-pub use self::twitchpoll::*;
-
-mod currentsong;
-pub use self::currentsong::*;
-
-mod rust;
-pub use self::rust::*;
-
-pub const MODULES: &[&str] = &[
-    "Builtin",
-    "CurrentSong",
-    "TwitchPoll",
-    "Invest",
-    "RustStuff",
-    "Shakespeare",
-];
+export!(
+    builtin,     //
+    shakespeare, //
+    invest,      //
+    twitchpoll,  //
+    currentsong, //
+    rust         //
+);

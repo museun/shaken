@@ -6,6 +6,8 @@ use std::{fmt, str};
 use hashbrown::HashSet;
 use log::*;
 
+pub const NAME: &str = "TwitchPoll";
+
 pub struct TwitchPoll {
     poll: Option<Poll>,
     start: Option<Instant>,

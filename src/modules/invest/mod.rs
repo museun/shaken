@@ -9,6 +9,8 @@ use std::time::{Duration, Instant};
 use hashbrown::HashMap;
 use rand::prelude::*;
 
+pub const NAME: &str = "Invest";
+
 pub struct Invest {
     config: config::Invest,
     limit: HashMap<i64, Instant>,

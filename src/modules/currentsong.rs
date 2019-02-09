@@ -4,6 +4,8 @@ use chrono::prelude::*;
 use log::*;
 use serde::Deserialize;
 
+pub const NAME: &str = "CurrentSong";
+
 pub struct CurrentSong {
     map: CommandMap<CurrentSong>,
 }

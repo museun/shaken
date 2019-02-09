@@ -9,6 +9,8 @@ enum Error {
     CratesGet,
 }
 
+pub const NAME: &str = "RustStuff";
+
 pub struct RustStuff {
     map: CommandMap<RustStuff>,
 }

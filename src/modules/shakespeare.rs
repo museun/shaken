@@ -24,6 +24,8 @@ impl<'a> Markov for BrainMarkov<'a> {
     }
 }
 
+pub const NAME: &str = "Shakespeare";
+
 pub struct Shakespeare {
     map: CommandMap<Shakespeare>,
     markovs: Vec<Box<dyn Markov>>,
