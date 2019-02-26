@@ -56,7 +56,7 @@ impl Bot {
                     }
                 };
 
-                if let Ok(tick) = tick.try_recv() {
+                if let Ok(tick) = tick.recv() {
                     let _ = in_tx.send(Event::Tick(tick));
                 }
 

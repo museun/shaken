@@ -1,6 +1,6 @@
 use crossbeam_channel as channel;
 use hashbrown::HashMap;
-use log::{debug, error, info, warn};
+use log::{error, info, warn};
 use scoped_threadpool::Pool;
 use simplelog::{Config as LogConfig, LevelFilter, TermLogger};
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};

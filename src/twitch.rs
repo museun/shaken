@@ -88,7 +88,8 @@ impl TwitchClient {
         S: AsRef<str>,
     {
         let url = format!("https://tmi.twitch.tv/group/user/{}/chatters", ch.as_ref());
-        crate::util::http_get(&url).map_err(|e| e.into())
+        let names = crate::util::http_get(&url)?;
+        Ok(names)
     }
 }
 

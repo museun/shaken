@@ -1,12 +1,7 @@
 /target
 **/*.rs.bk
-shaken.toml
 *.json
 *.txt
-web/node_modules/**
-web/dist/**
-web/.cache/**
-run.ps1
 *.db
 *.sql
 *.log

@@ -59,7 +59,7 @@ impl Timestamp for Duration {
 
         // approx.
         fn plural(s: &str, n: u64) -> String {
-            format!("{} { }", n, if n > 1 { s } else { &s[..s.len() - 1] })
+            format!("{} {}", n, if n > 1 { s } else { &s[..s.len() - 1] })
         }
 
         let mut time = vec![];
@@ -98,7 +98,8 @@ pub fn http_get_body(url: &str) -> Result<String, HttpError> {
         return Err(HttpError::HttpGet(url.to_string()));
     }
 
-    resp.into_string().map_err(|e| e.into())
+    let res = resp.into_string()?;
+    Ok(res)
 }
 
 pub fn http_get<T>(url: &str) -> Result<T, HttpError>
@@ -116,7 +117,8 @@ where
         return Err(HttpError::HttpGet(url.to_string()));
     }
 
-    serde_json::from_reader(resp.into_reader()).map_err(|e| e.into())
+    let res = serde_json::from_reader(resp.into_reader())?;
+    Ok(res)
 }
 
 #[derive(Debug)]
