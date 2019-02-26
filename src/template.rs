@@ -123,10 +123,10 @@ impl Default for ResponseFinder {
     fn default() -> Self {
         let map = include_str!("../data/responses")
             .lines()
+            .filter(|s| !s.starts_with('#') || s.is_empty())
             .map(|s| s.split("=>"))
             .filter_map(|mut s| Some((s.next()?, s.next()?)))
-            .map(|(k, v)| (k.trim().trim_matches('"'), v.trim().trim_matches('"')))
-            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
             .collect();
 
         ResponseFinder { map }
@@ -161,9 +161,14 @@ impl ResponseFinder {
     }
 
     pub fn save(&self) {
+        let map = self
+            .map
+            .iter()
+            .collect::<std::collections::BTreeMap<_, _>>();
+
         if get_data_file()
             .and_then(|f| std::fs::File::create(f).ok())
-            .and_then(|fi| serde_json::to_writer_pretty(fi, &self.map).ok())
+            .and_then(|fi| serde_json::to_writer_pretty(fi, &map).ok())
             .is_none()
         {
             error!("cannot save the responses to the json file");
@@ -239,5 +244,11 @@ mod tests {
         assert_eq!(template.inner(), "this has nothing in it");
         let s = template.apply(&[]).unwrap();
         assert_eq!(s, "this has nothing in it");
+    }
+
+    #[test]
+    fn parse_responses() {
+        let resp = ResponseFinder::load();
+        eprintln!("{:#?}", resp.map);
     }
 }

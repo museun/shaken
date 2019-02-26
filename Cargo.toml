@@ -12,7 +12,6 @@ chrono = "0.4.6"
 ureq = "0.9.0"
 directories = "1.0.2"
 termcolor = "1.0.4"
-serde_json = "1.0.38"
 crossbeam-channel = "0.3.8"
 scoped_threadpool = "0.1.9"
 
@@ -33,3 +32,7 @@ features = ["bundled", "chrono"]
 [dependencies.serde]
 version = "1.0.88"
 features = ["derive"]
+
+[dependencies.serde_json]
+version = "1.0.38"
+features = ["preserve_order"]

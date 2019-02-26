@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
+use std::str;
 use std::time::{Duration, Instant};
-use std::{fmt, str};
 
 use hashbrown::HashSet;
 use log::*;
@@ -53,7 +53,8 @@ impl TwitchPoll {
 
         let poll = match Self::parse_poll(req.target(), req.args()) {
             Ok(poll) => poll,
-            Err(err) => return reply!("{}", err),
+            Err(ParseError::Title) => return reply!("{}", "asdf"),
+            Err(ParseError::Options) => return reply!("{}", "asdf"),
         };
 
         if self.running {
@@ -202,20 +203,6 @@ impl TwitchPoll {
 enum ParseError {
     Title,
     Options,
-}
-
-impl fmt::Display for ParseError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ParseError::Title => {
-                write!(f, "no title was provided. use !poll title | options | ...")
-            }
-            ParseError::Options => write!(
-                f,
-                "no options were provided. use !poll title | options | ..."
-            ),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
