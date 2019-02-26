@@ -421,6 +421,7 @@ mod tests {
         let db = database::get_connection();
         let mut builtin = Builtin::create().unwrap();
         let mut env = Environment::new(&db, &mut builtin);
+
         env.push_raw("PING :foobar");
         env.step();
         assert_eq!(env.pop_raw(), Some("PONG :foobar".into()));

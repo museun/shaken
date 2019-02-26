@@ -190,5 +190,8 @@ where
     S: AsRef<str>,
 {
     error!("{}", msg.as_ref());
+    if cfg!(test) {
+        panic!("{}", msg.as_ref());
+    }
     ::std::process::exit(1);
 }
