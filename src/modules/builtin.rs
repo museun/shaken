@@ -310,8 +310,9 @@ impl Builtin {
             .expect("valid sql")
             .query_map(NO_PARAMS, |row| row.get(0))
             .expect("valid sql")
-            .filter_map(|s| s.ok())
+            .filter_map(Result::ok)
             .collect::<Vec<_>>(); // TODO do this in sql
+
         commands.sort_unstable(); // TODO do this in sql
         commands
     }

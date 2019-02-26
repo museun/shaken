@@ -43,7 +43,8 @@ impl Default for Config {
         Self {
             enabled: crate::modules::MODULES
                 .iter()
-                .map(|s| s.to_string())
+                .cloned() // why
+                .map(ToOwned::to_owned)
                 .collect::<Vec<_>>(),
             twitch: Twitch {
                 address: "irc.chat.twitch.tv".into(),
@@ -94,7 +95,7 @@ impl Config {
 
         let data = std::fs::read_to_string(&config_file).unwrap_or_else(|err| {
             abort(format!(
-                "The config fileat \"{}\" must be readable.\n{}.\n\naborting",
+                "The config file at \"{}\" must be readable.\n{}.\n\naborting",
                 config_file.to_string_lossy(),
                 err
             ));
