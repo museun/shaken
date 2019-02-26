@@ -95,7 +95,7 @@ impl InvestGame {
             .map_err(|_e| { /* log this */ })
             .expect("get rows");
 
-        iter.filter_map(|s| s.ok()).collect()
+        iter.filter_map(Result::ok).collect()
     }
 
     pub fn find(id: i64) -> Option<InvestUser> {

@@ -22,52 +22,82 @@ macro_rules! multi {
 
 #[macro_export]
 macro_rules! reply {
-    ($($arg:tt)*) => {{
+    ($f:expr, $($arg:tt)*) => {{
         use crate::prelude::Response;
-        Some(Response::Reply{data: format!($($arg)*)})
+        Some(Response::Reply{data: format!($f, $($arg)*)})
     }};
+    ($e:expr) => {{
+        use crate::prelude::Response;
+        Some(Response::Reply{data: $e.to_string()})
+    }}
 }
 
 #[macro_export]
 macro_rules! say {
-    ($($arg:tt)*) => {{
+    ($f:expr, $($arg:tt)*) => {{
         use crate::prelude::Response;
-        Some(Response::Say{data: format!($($arg)*)})
+        Some(Response::Say{data: format!($f, $($arg)*)})
+    }};
+    ($e:expr) => {{
+        use crate::prelude::Response;
+        Some(Response::Say{data: $e.to_string()})
     }}
 }
 
 #[macro_export]
 macro_rules! action {
-    ($($arg:tt)*) => {{
+    ($f:expr, $($arg:tt)*) => {{
         use crate::prelude::Response;
-        Some(Response::Action{data: format!($($arg)*)})
+        Some(Response::Action{data: format!($f, $($arg)*)})
+    }};
+    ($e:expr) => {{
+        use crate::prelude::Response;
+        Some(Response::Action{data: $e.to_string()})
     }};
 }
 
 #[macro_export]
 macro_rules! whisper {
-    ($($arg:tt)*) => {{
+    ($f:expr, $($arg:tt)*) => {{
         use crate::prelude::Response;
-        Some(Response::Whisper{data: format!($($arg)*)})
+        Some(Response::Whisper{data: format!($f, $($arg)*)})
+    }};
+    ($e:expr) => {{
+        use crate::prelude::Response;
+        Some(Response::Whisper{data: $e.to_string()})
     }};
 }
 
 #[macro_export]
 macro_rules! raw {
-    ($($arg:tt)*) => {{
-        use crate::prelude::{Response, IrcCommand};
-       Some(Response::Command{cmd: IrcCommand::Raw{ data: format!($($arg)*) }})
+    ($f:expr, $($arg:tt)*) => {{
+        use crate::prelude::Response;
+        Some(Response::Command{cmd: IrcCommand::Raw{ data: format!($f, $($arg)*)}})
+    }};
+    ($e:expr) => {{
+        use crate::prelude::Response;
+        Some(Response::Command{cmd: IrcCommand::Raw{ data: $e.to_string()}})
     }};
 }
 
 #[macro_export]
 macro_rules! privmsg {
-    ($target:expr, $($arg:tt)*) => {{
+    ($target:expr, $f:expr, $($arg:tt)*) => {{
         use crate::prelude::{Response, IrcCommand};
         Some(Response::Command {
             cmd: IrcCommand::Privmsg{
                 target: $target.to_string(),
-                data: format!($($arg)*)
+                data: format!($f, $($arg)*)
+            }
+        })
+    }};
+
+    ($target:expr, $f:expr) => {{
+        use crate::prelude::{Response, IrcCommand};
+        Some(Response::Command {
+            cmd: IrcCommand::Privmsg{
+                target: $target.to_string(),
+                data: $f.to_string(),
             }
         })
     }};

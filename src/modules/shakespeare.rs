@@ -9,7 +9,6 @@ pub trait Markov: Send {
 }
 
 pub struct NullMarkov;
-
 impl Markov for NullMarkov {
     fn get_next(&self) -> Option<String> {
         None
@@ -17,7 +16,6 @@ impl Markov for NullMarkov {
 }
 
 pub struct BrainMarkov<'a>(pub Cow<'a, str>);
-
 impl<'a> Markov for BrainMarkov<'a> {
     fn get_next(&self) -> Option<String> {
         util::http_get(&self.0).ok()
@@ -25,6 +23,13 @@ impl<'a> Markov for BrainMarkov<'a> {
 }
 
 pub const NAME: &str = "Shakespeare";
+
+submit! {
+    template::Response("shakespeare_config", "what do you want to configure: ${options}");
+    template::Response("shakespeare_chance", "chance has to be ${min} <= chance <= ${max}");
+    template::Response("shakespeare_unknown_config", "I don't know how to configure that");
+    template::Response("shakespeare_required_value", "provide a value, please");
+}
 
 pub struct Shakespeare {
     map: CommandMap<Shakespeare>,
@@ -78,47 +83,53 @@ impl Shakespeare {
     }
 
     fn speak_command(&mut self, _: &Request) -> Option<Response> {
-        let resp = self.generate()?;
-        say!("{}", resp)
+        say!(self.generate()?)
     }
 
     fn configure_command(&mut self, req: &Request) -> Option<Response> {
         require_privileges!(&req);
         let args = req.args_iter().collect::<Vec<_>>();
         if args.is_empty() {
-            return reply!("what do you want to configure: interval, chance, bypass");
+            return reply_template!(
+                "shakespeare_config",
+                ("options", &["interval, chance", "bypass"].join(", "))
+            );
         }
 
         let res = match args.as_slice() {
             ["interval", n] => {
                 if let Ok(n) = n.parse::<f64>() {
                     self.interval = n;
-                    reply!("done")
+                    reply_template!("misc_done")
                 } else {
-                    reply!("that is not a number")
+                    reply_template!("misc_invalid_number")
                 }
             }
             ["chance", n] => {
                 if let Ok(n) = n.parse::<f64>() {
                     if n > 1.0 || n < 0.0 {
-                        return reply!("chance has to be 0.0 <= chance <= 1.0");
+                        return reply_template!(
+                            "shakespeare_chance",
+                            ("min", &"0.0"),
+                            ("max", &"1.0")
+                        );
                     }
                     self.chance = n;
-                    reply!("done")
+                    reply_template!("misc_done")
                 } else {
-                    reply!("that is not a number")
+                    reply_template!("misc_invalid_number")
                 }
             }
             ["bypass", n] => {
                 if let Ok(n) = n.parse::<usize>() {
                     self.bypass = n;
-                    reply!("done")
+                    reply_template!("misc_done")
                 } else {
-                    reply!("that is not a number")
+                    reply_template!("misc_invalid_number")
                 }
             }
-            ["interval"] | ["chance"] | ["bypass"] => reply!("provide a value, please"),
-            _ => reply!("I don't know how to configure that"),
+            ["interval"] | ["chance"] | ["bypass"] => reply_template!("shakespeare_required_value"),
+            _ => reply_template!("shakespeare_unknown_config"),
         };
 
         let mut config = Config::load();
@@ -147,7 +158,7 @@ impl Shakespeare {
             trace!("automatically trying to speak");
             let resp = self.generate()?;
             std::thread::sleep(Duration::from_millis(thread_rng().gen_range(150, 750)));
-            return say!("{}", resp);
+            return say!(resp);
         }
         None
     }
@@ -163,8 +174,7 @@ impl Shakespeare {
         for part in msg.expect_data().split_whitespace() {
             if part.starts_with('@') && trim_then_check(&part, &user.display) {
                 trace!("got a mention, trying to speak");
-                let resp = self.generate()?;
-                return say!("{}", resp);
+                return say!(self.generate()?);
             }
         }
         None
@@ -271,7 +281,7 @@ mod tests {
 
             env.push_broadcaster("!speak configure interval one");
             env.step();
-            assert_eq!(env.pop().unwrap(), "@test: that is not a number");
+            assert_eq!(env.pop().unwrap(), "@test: thats not a number I understand");
 
             env.push_broadcaster("!speak configure interval 1");
             env.step();

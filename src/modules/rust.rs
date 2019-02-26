@@ -11,6 +11,11 @@ enum Error {
 
 pub const NAME: &str = "RustStuff";
 
+submit! {
+    template::Response("rust_no_crate", "I couldn't find a crate matching \"${crate}\"");
+    template::Response("rust_crate", "${name} = ${max_version} @ ${repo} \"${description}\"");
+}
+
 pub struct RustStuff {
     map: CommandMap<RustStuff>,
 }
@@ -39,22 +44,23 @@ impl RustStuff {
 impl RustStuff {
     pub fn crates_command(&mut self, req: &Request) -> Option<Response> {
         let query = req.args();
-
         let c = match Self::lookup_crate(&query) {
             Ok(c) => c,
-            Err(Error::NoMatches) => return reply!("I couldn't find a crate matching '{}'", query),
+            Err(Error::NoMatches) => {
+                return reply_template!("rust_no_crate", ("crate", &query));
+            }
             Err(err) => {
                 warn!("cannot look up crate: {} -> {:?}", query, err);
                 return None;
             }
         };
 
-        say!(
-            "{} = {} @ {} \"{}\"",
-            c.name,
-            c.max_version,
-            c.repository,
-            c.description.replace("\n", " ").trim_end()
+        say_template!(
+            "rust_crate",
+            ("name", &c.name),                                             //
+            ("max_version", &c.max_version),                               //
+            ("repo", &c.repository),                                       //
+            ("description", &c.description.replace("\n", " ").trim_end()), //
         )
     }
 

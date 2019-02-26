@@ -2,7 +2,6 @@ use crate::prelude::*;
 use chrono::prelude::*;
 use log::*;
 use rusqlite::{types::ToSql, Connection, NO_PARAMS};
-use std::time::Duration;
 
 use crate::module::CommandMap;
 
@@ -18,6 +17,23 @@ pub struct UserCommand {
 }
 
 pub const NAME: &str = "Builtin";
+
+submit! {
+    template::Response("builtin_reserved_name", "\"${command}\" is a reserved name");
+    template::Response("builtin_already_exists", "\"${command}\" already exists as a command");
+    template::Response("builtin_added_command", "added \"${command}\" as a command");
+    template::Response("builtin_add_failed", "couldn't add \"${command}\" as a command");
+    template::Response("builtin_edited", "edited \"${command}\"");
+    template::Response("builtin_edited_failed", "couldn't edit \"${command}\"");
+    template::Response("builtin_invalid_command", "\"${command}\" isn't a command");
+    template::Response("builtin_command_description", "${command} -- ${description}");
+    template::Response("builtin_command_created_at", "created by ${user}. used ${uses} times");
+    template::Response("builtin_command_deleted", "if that was a command, its no longer one");
+    template::Response("builtin_github_repo", "https://github.com/museun/shaken (${rev} on '${branch}' branch)");
+    template::Response("builtin_stream_offline", "the stream doesn't seem to be live");
+    template::Response("builtin_viewers", "viewers: ${viewers}");
+    template::Response("builtin_uptime", "uptime: ${uptime}");
+}
 
 pub struct Builtin {
     twitch: TwitchClient,
@@ -57,7 +73,7 @@ impl Builtin {
         Ok(Self {
             twitch: TwitchClient::new(&Config::expect_env("SHAKEN_TWITCH_CLIENT_ID")),
             map: CommandMap::create(
-                "Builtin",
+                NAME,
                 &[
                     ("!version", Builtin::version_command),
                     ("!viewers", Builtin::viewers_command),
@@ -110,7 +126,7 @@ impl Builtin {
             .expect("valid sql");
 
         match result.next() {
-            Some(Ok(ref command)) if !command.disabled => say!("{}", command.body),
+            Some(Ok(ref command)) if !command.disabled => say!(command.body),
             _ => None,
         }
     }
@@ -120,7 +136,7 @@ impl Builtin {
 
         let (command, body) = match Self::arg_parts(&req) {
             Some((head, tail)) => (head, tail),
-            None => return reply!("invalid arguments"),
+            None => return reply_template!("misc_invalid_args"),
         };
 
         let command = if !command.starts_with('!') {
@@ -130,7 +146,7 @@ impl Builtin {
         };
 
         if !Self::is_available(&command) {
-            return reply!("'{}' is a reserved name", &command);
+            return reply_template!("builtin_reserved_name", ("command", &command));
         }
 
         let command = UserCommand {
@@ -160,8 +176,10 @@ impl Builtin {
                 &command.disabled,
             ],
         ) {
-            Ok(row) if row == 0 => reply!("'{}' already exists as a command", command.command),
-            Ok(_row) => reply!("added '{}' as a command", command.command),
+            Ok(row) if row == 0 => {
+                reply_template!("builtin_already_exists", ("command", &command.command))
+            }
+            Ok(_row) => reply_template!("builtin_added_command", ("command", &command.command)),
             Err(err) => {
                 // this isn't really reachable, but unsafe code is unsafe
                 warn!(
@@ -170,7 +188,7 @@ impl Builtin {
                     command.command,
                     err
                 );
-                reply!("couldn't add '{}' as a command", command.command)
+                reply_template!("builtin_add_failed", ("command", &command.command))
             }
         }
     }
@@ -180,7 +198,7 @@ impl Builtin {
 
         let (command, description) = match Self::arg_parts(&req) {
             Some((head, tail)) => (head, tail),
-            None => return reply!("invalid arguments"),
+            None => return reply_template!("misc_invalid_args"),
         };
 
         let conn = database::get_connection();
@@ -188,7 +206,7 @@ impl Builtin {
             "UPDATE UserCommands SET description = ? WHERE command = ?",
             &[&description as &dyn ToSql, &command],
         ) {
-            Ok(_row) => reply!("edited '{}'", command),
+            Ok(_row) => reply_template!("builtin_edited", ("command", &command)),
             Err(err) => {
                 warn!(
                     "{} tried to edit '{}', sql error: {}",
@@ -196,7 +214,7 @@ impl Builtin {
                     command,
                     err
                 );
-                reply!("couldn't edit '{}'", command)
+                reply_template!("builtin_edited_failed", ("command", &command))
             }
         }
     }
@@ -205,7 +223,7 @@ impl Builtin {
         require_privileges!(&req, "you cannot do that");
 
         let command = match Self::try_get_command(req.args()) {
-            None => return reply!("'{}' isn't a command", req.args()),
+            None => return reply_template!("builtin_invalid_command", ("command", &req.args())),
             Some(command) => command,
         };
 
@@ -216,15 +234,22 @@ impl Builtin {
             None => "unknown".to_string(),
         };
 
+        let end = reply_template!(
+            "builtin_command_created_at",
+            ("user", &user),
+            ("uses", &command.uses.commas()),
+        );
+
+        eprintln!("{:?}", end);
+
         multi!(
-            reply!("{} -- {}", command.command, command.description),
-            reply!("{}", command.body),
-            reply!(
-                "created by {}, at {}. used {} times",
-                user,
-                Duration::from_secs(command.created_at as u64).as_readable_time(),
-                command.uses.commas(),
-            )
+            reply_template!(
+                "builtin_command_description",
+                ("command", &command.command),
+                ("description", &command.description)
+            ),
+            reply!(command.body),
+            end
         )
     }
 
@@ -233,14 +258,14 @@ impl Builtin {
 
         let (command, _) = match Self::arg_parts(&req) {
             Some((head, tail)) => (head, tail),
-            None => return reply!("invalid arguments"),
+            None => return reply_template!("misc_invalid_args"),
         };
 
         let conn = database::get_connection();
         conn.execute("DELETE FROM UserCommands WHERE command = ?", &[&command])
             .expect("valid sql");
 
-        reply!("if that was a command, its no longer one")
+        reply_template!("builtin_command_deleted")
     }
 
     fn help_command(&mut self, _req: &Request) -> Option<Response> {
@@ -274,9 +299,9 @@ impl Builtin {
 
         multi!(
             whisper!("system commands:"),
-            multi(system.iter().map(|s| whisper!("{}", s))),
+            multi(system.iter().map(|s| whisper!(s))),
             whisper!("user commands:"),
-            multi(user.iter().map(|s| whisper!("{}", s))),
+            multi(user.iter().map(|s| whisper!(s))),
         )
     }
 
@@ -351,26 +376,24 @@ impl Builtin {
     fn version_command(&mut self, _req: &Request) -> Option<Response> {
         let rev = option_env!("SHAKEN_GIT_REV").expect("get rev");
         let branch = option_env!("SHAKEN_GIT_BRANCH").expect("get branch");
-
-        reply!(
-            "https://github.com/museun/shaken ({} on '{}' branch)",
-            rev,
-            branch
-        )
+        reply_template!("builtin_github_repo", ("rev", &rev), ("branch", &branch))
     }
 
     fn viewers_command(&mut self, _req: &Request) -> Option<Response> {
         let streams = self.twitch.get_streams(&[self.channel.as_str()]);
         let stream = match streams {
             Ok(ref s) if !s.is_empty() => &s[0],
-            _ => return reply!("the stream doesn't seem to be live"),
+            _ => return reply_template!("builtin_stream_offline"),
         };
 
         if stream.live.is_empty() || stream.live == "" {
-            return reply!("the stream doesn't seem to be live");
+            return reply_template!("builtin_stream_offline");
         }
 
-        reply!("viewers: {}", stream.viewer_count.commas())
+        say_template!(
+            "builtin_viewers",
+            ("viewers", &stream.viewer_count.commas())
+        )
     }
 
     fn uptime_command(&mut self, _req: &Request) -> Option<Response> {
@@ -380,12 +403,12 @@ impl Builtin {
             Ok(ref s) if !s.is_empty() => &s[0],
             _ => {
                 debug!("cannot get stream");
-                return reply!("the stream doesn't seem to be live");
+                return reply_template!("builtin_stream_offline");
             }
         };
 
         if stream.live.is_empty() || stream.live == "" {
-            return reply!("the stream doesn't seem to be live");
+            return reply_template!("builtin_stream_offline");
         }
 
         let start = stream
@@ -397,7 +420,7 @@ impl Builtin {
             .to_std()
             .expect("convert to std duration");
 
-        say!("uptime: {}", dur.as_readable_time())
+        say_template!("builtin_uptime", ("uptime", &dur.as_readable_time()))
     }
 }
 
@@ -451,13 +474,13 @@ mod tests {
 
         env.push_owner("!add !test this is a test");
         env.step();
-        assert_eq!(env.pop().unwrap(), "@test: added '!test' as a command");
+        assert_eq!(env.pop().unwrap(), "@test: added \"!test\" as a command");
 
         env.push_owner("!add !test this is a test");
         env.step();
         assert_eq!(
             env.pop().unwrap(),
-            "@test: '!test' already exists as a command"
+            "@test: \"!test\" already exists as a command"
         );
 
         Registry::register(&CommandBuilder::command("!foo").namespace("bar").build())
@@ -465,7 +488,7 @@ mod tests {
 
         env.push_owner("!add !foo this is a test");
         env.step();
-        assert_eq!(env.pop().unwrap(), "@test: '!foo' is a reserved name");
+        assert_eq!(env.pop().unwrap(), "@test: \"!foo\" is a reserved name");
     }
 
     #[test]
@@ -480,7 +503,7 @@ mod tests {
 
         env.push_owner("!edit !test with different flavor text");
         env.step();
-        assert_eq!(env.pop().unwrap(), "@test: edited '!test'");
+        assert_eq!(env.pop().unwrap(), "@test: edited \"!test\"");
 
         let cmd = Builtin::try_get_command("!test").unwrap();
         assert_eq!(cmd.command, "!test".to_string());
@@ -495,7 +518,7 @@ mod tests {
 
         env.push_owner("!info !test");
         env.step();
-        assert_eq!(env.pop().unwrap(), "@test: '!test' isn't a command");
+        assert_eq!(env.pop().unwrap(), "@test: \"!test\" isn't a command");
 
         env.push_owner("!add !test this is a test");
         env.step();
@@ -508,7 +531,8 @@ mod tests {
             "@test: !test -- no description provided"
         );
         assert_eq!(env.pop().unwrap(), "@test: this is a test");
-        assert!(env.pop().unwrap().starts_with("@test: created by test"));
+        let res = env.pop().unwrap();
+        assert!(res.starts_with("@test: created by test"));
     }
 
     #[test]

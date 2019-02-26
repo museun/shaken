@@ -14,9 +14,11 @@ pub mod config;
 pub mod database;
 pub mod irc;
 pub mod module;
-pub mod template;
 pub mod twitch;
 pub mod util;
+
+#[macro_use]
+pub mod template;
 
 // actual bot modules
 pub mod modules;
@@ -38,6 +40,8 @@ pub mod prelude {
     pub use crate::twitch::{self, TwitchClient};
     pub use crate::user::{User, UserStore};
     pub use crate::util::{self, CommaSeparated, HttpError, Timestamp};
+
+    pub use crate::template;
 
     pub use crate::registry::{
         Command as RegistryCommand,

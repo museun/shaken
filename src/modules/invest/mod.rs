@@ -11,6 +11,24 @@ use rand::prelude::*;
 
 pub const NAME: &str = "Invest";
 
+submit! {
+    template::Response("invest_no_credits", "you don't have any credits.");
+    template::Response("invest_zero_number", "zero what?");
+    template::Response("invest_success", "success! you went from ${old} to ${new}");
+    template::Response("invest_success_delta", "success! you went from ${old} to ${new} (+${delta})");
+    template::Response("invest_failure", "failure! you went from ${old} to ${new} (-${delta}). try again in a minute");
+    template::Response("invest_requires_credits", "you don't have enough. you have ${have} but you want to invest ${want}.");
+    template::Response("invest_no_target", "who do you want to give credits to?");
+    template::Response("invest_send_to_self", "what are you doing?");
+    template::Response("invest_send_to_bot", "I don't want any credits.");
+    template::Response("invest_unknown_target", "I don't know who that is.");
+    template::Response("invest_not_enough_credits", "you only have ${current} credits.");
+    template::Response("invest_send_success", "they now have ${them} credits and you're down to ${you} credits.");
+    template::Response("invest_check_credits", "you have ${credits} credits.");
+    template::Response("invest_leaderboard", "(#${n}) ${display}: ${credits}");
+    template::Response("invest_stats", "you've reached a max of ${max} credits, out of ${total} total credits with ${success} successes and ${failure} failures. and I've 'collected' ${overall_total} credits from all of the failures.");
+}
+
 pub struct Invest {
     config: config::Invest,
     limit: HashMap<i64, Instant>,
@@ -45,7 +63,7 @@ impl Invest {
         ensure_table(InvestGame::ensure_table);
 
         let map = CommandMap::create(
-            "Invest",
+            NAME,
             &[
                 ("!invest", Self::invest_command),
                 ("!give", Self::give_command),
@@ -72,50 +90,44 @@ impl Invest {
             return None;
         }
 
-        let user = match InvestGame::find(id) {
-            // could use some guard patterns, but the borrowck isn't there yet
-            Some(user) => {
-                if user.current > 0 {
-                    user
-                } else {
-                    return reply!("you don't have any credits.");
-                }
-            }
-            None => return reply!("you don't have any credits."),
+        let user = InvestGame::find(id);
+        let user = match user.as_ref() {
+            Some(user) if user.current > 0 => user,
+            None | _ => return reply_template!("invest_no_credits"),
         };
         let (ty, num) = match Self::get_credits_from_args(user.current, req.args_iter()) {
-            Some((_, num)) if num == 0 => return reply!("zero what?"),
+            Some((_, num)) if num == 0 => return reply_template!("invest_zero_number"),
             Some((ty, num)) => (ty, num),
-            None => return reply!("thats not a number I understand"),
+            None => return reply_template!("misc_invalid_number"),
         };
 
         match InvestGame::invest(self.config.chance, id, num) {
             Ok(Investment::Success { old, new }) => match ty {
-                NumType::Random => reply!(
-                    "success! you went from {} to {} (+{})",
-                    old.commas(),
-                    new.commas(),
-                    (new - old).commas()
+                NumType::Random => reply_template!(
+                    "invest_success_delta",
+                    ("old", &old.commas()),            //
+                    ("new", &new.commas()),            //
+                    ("deltra", &(new - old).commas()), //
                 ),
-                _ => reply!(
-                    "success! you went from {} to {}",
-                    old.commas(),
-                    new.commas(),
+                _ => reply_template!(
+                    "invest_success",
+                    ("old", &old.commas()),
+                    ("new", &new.commas())
                 ),
             },
             Ok(Investment::Failure { old, new }) => {
                 self.rate_limit(id);
-                reply!(
-                    "failure! you went from {} to {} (-{}). try again in a minute",
-                    old.commas(),
-                    new.commas(),
-                    (old - new).commas(),
+                reply_template!(
+                    "invest_failure",
+                    ("old", &old.commas()),           //
+                    ("new", &new.commas()),           //
+                    ("delta", &(old - new).commas()), //
                 )
             }
-            Err(InvestError::NotEnoughCredits { have, want }) => reply!(
-                "you don't have enough. you have {} but you want to invest {}.",
-                have.commas(),
-                want.commas()
+            Err(InvestError::NotEnoughCredits { have, want }) => reply_template!(
+                "invest_requires_credits",
+                ("have", &have.commas()), //
+                ("want", &want.commas()), //
             ),
             Err(_) => {
                 // what to do here?
@@ -131,15 +143,13 @@ impl Invest {
         let sender = UserStore::get_user_by_id(&conn, id)?;
         let user = InvestGame::find(id)?;
         if user.current == 0 {
-            return reply!("you don't have any credits");
+            return reply_template!("invest_no_credits");
         }
 
         let mut args = req.args_iter();
         let mut target = match args.next() {
             Some(target) => target,
-            None => {
-                return reply!("who do you want to give credits to?");
-            }
+            None => return reply_template!("invest_no_target"),
         };
 
         if target.starts_with('@') {
@@ -147,48 +157,51 @@ impl Invest {
         }
 
         if target.eq_ignore_ascii_case(&sender.display) {
-            return reply!("what are you doing?");
+            return reply_template!("invest_send_to_self");
         }
 
         let me = UserStore::get_bot(&conn).expect("get bot user info");
         if target.eq_ignore_ascii_case(&me.display) {
-            return reply!("I don't want any credits.");
+            return reply_template!("invest_send_to_bot");
         }
 
         let tid = match UserStore::get_user_by_name(&conn, &target) {
             Some(user) => user,
-            None => {
-                return reply!("I don't know who that is.");
-            }
+            None => return reply_template!("invest_unknown_target"),
         };
 
         let (_ty, num) = match Self::get_credits_from_args(user.current, args) {
-            Some((_, num)) if num == 0 => return reply!("zero what?"),
+            Some((_, num)) if num == 0 => return reply_template!("invest_zero_number"),
             Some((ty, num)) => (ty, num),
-            None => return reply!("thats not a number I understand"),
+            None => return reply_template!("misc_invalid_number"),
         };
 
         if num > user.current {
-            return reply!("you only have {} credits", user.current.commas());
+            return reply_template!(
+                "invest_not_enough_credits",
+                ("current", &user.current.commas())
+            );
         }
 
-        let (c, d) = {
+        let (them, you) = {
             let c = InvestGame::give(tid.userid, num).expect("give credits");
             let d = InvestGame::take(user.id, num).expect("take credits");
             (c, d)
         };
 
-        reply!(
-            "they now have {} credits and you're down to {} credits",
-            c.commas(),
-            d.commas()
+        reply_template!(
+            "invest_send_success",
+            ("them", &them.commas()), //
+            ("you", &you.commas()),   //
         )
     }
 
     fn check_command(&mut self, req: &Request) -> Option<Response> {
         match InvestGame::find(req.sender()).unwrap().current {
-            credits if credits > 0 => reply!("you have {} credits", credits.commas()),
-            _ => reply!("you don't have any credits"),
+            credits if credits > 0 => {
+                reply_template!("invest_check_credits", ("credits", &credits.commas()))
+            }
+            _ => reply_template!("invest_no_credits"),
         }
     }
 
@@ -207,30 +220,38 @@ impl Invest {
             n => n,
         };
 
+        let rf = template::finder();
+        let board = rf.get("invest_leaderboard").unwrap();
+
         let conn = get_connection();
         let list = InvestGame::get_top_n(&conn, n as i16)
             .into_iter()
             .enumerate()
             .map(|(i, iu)| {
                 let user = UserStore::get_user_by_id(&conn, iu.id).expect("user to exist");
-                format!("(#{}) {}: {}", i + 1, &user.display, iu.current.commas())
+                board
+                    .apply(&[
+                        ("n", &(i + 1)),                   //
+                        ("display", &user.display),        //
+                        ("credits", &iu.current.commas()), //
+                    ])
+                    .unwrap()
             });
 
-        reply!("{}", list.collect::<Vec<_>>().join(", "))
+        reply!(list.collect::<Vec<_>>().join(", "))
     }
 
     fn stats_command(&mut self, req: &Request) -> Option<Response> {
         let id = req.sender();
         let (user, total) = InvestGame::stats_for(id);
 
-        reply!(
-            "you've reached a max of {} credits, out of {} total credits with {} successes and {} \
-             failures. and I've 'collected' {} credits from all of the failures.",
-            user.max.commas(),
-            user.total.commas(),
-            user.invest.0.commas(),
-            user.invest.1.commas(),
-            total.commas()
+        reply_template!(
+            "invest_stats",
+            ("max", &user.max.commas()),          //
+            ("total", &user.total.commas()),      //
+            ("success", &user.invest.0.commas()), //
+            ("failure", &user.invest.1.commas()), //
+            ("overall_total", &total.commas()),   //
         )
     }
 
@@ -386,7 +407,7 @@ mod tests {
 
         env.push("!give foo 10");
         env.step();
-        assert_eq!(env.pop().unwrap(), "@test: you don't have any credits");
+        assert_eq!(env.pop().unwrap(), "@test: you don't have any credits.");
 
         InvestGame::give(env.get_user_id(), 100);
         env.push("!give");
@@ -416,13 +437,13 @@ mod tests {
 
         env.push("!give foo 101");
         env.step();
-        assert_eq!(env.pop().unwrap(), "@test: you only have 100 credits");
+        assert_eq!(env.pop().unwrap(), "@test: you only have 100 credits.");
 
         env.push("!give foo 50");
         env.step();
         assert_eq!(
             env.pop().unwrap(),
-            "@test: they now have 50 credits and you're down to 50 credits"
+            "@test: they now have 50 credits and you're down to 50 credits."
         );
     }
 
@@ -434,13 +455,13 @@ mod tests {
 
         env.push("!check");
         env.step();
-        assert_eq!(env.pop().unwrap(), "@test: you don't have any credits");
+        assert_eq!(env.pop().unwrap(), "@test: you don't have any credits.");
 
         InvestGame::give(env.get_user_id(), 100);
 
         env.push("!check");
         env.step();
-        assert_eq!(env.pop().unwrap(), "@test: you have 100 credits");
+        assert_eq!(env.pop().unwrap(), "@test: you have 100 credits.");
     }
 
     #[test]

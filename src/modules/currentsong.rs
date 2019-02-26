@@ -6,6 +6,14 @@ use serde::Deserialize;
 
 pub const NAME: &str = "CurrentSong";
 
+submit! {
+    template::Response("currentsong_no_song", "no song is currently playing");
+    template::Response("currentsong_youtube_song_delta", "\"${title}\" youtu.be/${vid}?t=${delta}");
+    template::Response("currentsong_youtube_song", "\"${title}\" youtu.be/${vid}");
+    template::Response("currentsong_unknown_song", "I don't remember a song playing then");
+    template::Response("currentsong_previous_song", "previous song: (started at ${start}) \"${title}\" youtu.be/${vid}");
+}
+
 pub struct CurrentSong {
     map: CommandMap<CurrentSong>,
 }
@@ -35,7 +43,7 @@ impl CurrentSong {
 
         let song = match Self::single_song(Req::Current) {
             Some(song) => song,
-            None => return reply!("no song is currently playing"),
+            None => return reply_template!("currentsong_no_song"),
         };
 
         use chrono::Duration as CDur;
@@ -48,31 +56,31 @@ impl CurrentSong {
         let delta = (dur - time).num_seconds();
 
         if delta > 0 {
-            say!(
-                "\"{}\" youtu.be/{}?t={}s",
-                song.title.trim(),
-                song.vid,
-                delta
+            say_template!(
+                "currentsong_youtube_song_delta",
+                ("title", &song.title.trim()), //
+                ("vid", &song.vid),            //
+                ("delta", &delta),             //
             )
         } else {
             info!("not currently playing");
             // TODO maybe note that this isn't actually playing
-            say!("\"{}\" youtu.be/{}", song.title.trim(), song.vid)
+            say_template!("currentsong_youtube_song", ("vid", &song.vid))
         }
     }
 
     fn prev_command(&mut self, _: &Request) -> Option<Response> {
         let song = match Self::single_song(Req::Previous) {
             Some(song) => song,
-            None => return reply!("I don't remember a song playing then"),
+            None => return reply_template!("currentsong_unknown_song"),
         };
 
         let start = Utc.timestamp(song.timestamp as i64, 0);
-        say!(
-            "previous song: (started at {}) \"{}\" youtu.be/{}",
-            start,
-            song.title.trim(),
-            song.vid
+        say_template!(
+            "currentsong_previous_song",
+            ("start", &start),             //
+            ("title", &song.title.trim()), //
+            ("vid", &song.vid),            //
         )
     }
 }

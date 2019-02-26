@@ -1,13 +1,27 @@
 use hashbrown::HashMap;
 use log::*;
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::ops::Range;
 use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct Template<'a> {
-    data: &'a str,
-    map: Vec<(&'a str, Range<usize>)>,
+    data: Cow<'a, str>,
+    map: Vec<(Cow<'a, str>, Range<usize>)>,
+}
+
+impl<'a> Clone for Template<'a> {
+    fn clone(&self) -> Self {
+        Self {
+            data: self.data.clone(),
+            map: self
+                .map
+                .iter()
+                .map(|(c, r)| (c.clone(), r.clone()))
+                .collect(),
+        }
+    }
 }
 
 impl<'a> Template<'a> {
@@ -34,44 +48,47 @@ impl<'a> Template<'a> {
         }
 
         Ok(Self {
-            data: input,
+            data: input.into(),
             map: parts
                 .into_iter()
                 .rev()
-                .map(|(start, end)| (&input[start + 2..end - 1], Range { start, end }))
+                .map(|(start, end)| (input[start + 2..end - 1].into(), Range { start, end }))
                 .collect::<Vec<_>>(),
         })
     }
 
-    pub fn apply(
-        mut self,
-        parts: &[(&'static str, &dyn ToString)],
-    ) -> Result<String, TemplateError<'a>> {
+    pub fn apply(&self, parts: Parts) -> Result<String, TemplateError> {
         if parts.len() != self.map.len() {
             return Err(TemplateError::Mismatch(parts.len(), self.map.len()));
         }
+
         let mut buf = self.data.to_string();
         let mut offset: Option<usize> = None;
 
+        let mut clone = self.map.clone();
         for (key, repr) in parts.iter() {
-            let (binding, range) = self.map.pop().unwrap();
+            let (binding, range) = clone.pop().unwrap();
             if binding != *key {
-                return Err(TemplateError::Unexpected(binding, key));
+                return Err(TemplateError::Unexpected(
+                    binding.to_string(),
+                    key.to_string(),
+                ));
             }
 
             let range = match offset {
                 Some(off) => Range {
-                    start: range.start - off, // why 2
+                    start: range.start - off,
                     end: range.end - off,
                 },
                 None => range,
             };
 
             let repr = repr.to_string();
+            buf.replace_range(range.clone(), &repr);
+
             let (a, b) = (repr.len(), range.end - range.start);
             let diff = if a > b { a - b } else { b - a };
 
-            buf.replace_range(range.clone(), &repr);
             if let Some(off) = offset.as_mut() {
                 *off += diff
             } else {
@@ -82,20 +99,20 @@ impl<'a> Template<'a> {
         Ok(buf)
     }
 
-    pub fn inner(&self) -> &str {
-        self.data
+    pub fn inner(&self) -> Cow<'_, str> {
+        self.data.clone()
     }
 }
 
 #[derive(Debug, PartialEq)]
-pub enum TemplateError<'a> {
+pub enum TemplateError {
     Unbalanced(usize),
-    Unexpected(&'a str, &'a str),
+    Unexpected(String, String),
     Mismatch(usize, usize),
-    Missing(&'a str),
+    Missing(String),
 }
 
-impl<'a> std::fmt::Display for TemplateError<'a> {
+impl std::fmt::Display for TemplateError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             TemplateError::Unbalanced(start) => {
@@ -112,7 +129,72 @@ impl<'a> std::fmt::Display for TemplateError<'a> {
     }
 }
 
-impl<'a> std::error::Error for TemplateError<'a> {}
+impl std::error::Error for TemplateError {}
+
+use once_cell::{sync::Lazy, sync_lazy};
+use std::sync::RwLock;
+
+static GLOBAL_RESPONSE_FINDER: Lazy<RwLock<ResponseFinder>> = sync_lazy! {
+    RwLock::new(ResponseFinder::load())
+};
+
+pub type Parts<'a> = &'a [(&'a str, &'a dyn ToString)];
+
+pub struct Response(pub &'static str, pub &'static str);
+
+impl std::fmt::Display for Response {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use heck::SnekCase;
+        write!(f, "{} => {}", self.0.to_snek_case(), self.1)
+    }
+}
+
+#[macro_export]
+macro_rules! submit {
+    ($($e:expr);* $(;)?) => {
+        $( inventory::submit!{ $e } )*
+    };
+}
+
+#[macro_export]
+macro_rules! reply_template {
+    ($e:expr) => {
+        reply!(template::lookup($e, &[]).unwrap())
+    };
+
+    ($e:expr, $($args:expr),* $(,)?) => {
+        reply!(template::lookup($e, &[$($args),*]).unwrap())
+    };
+}
+
+#[macro_export]
+macro_rules! say_template {
+    ($e:expr) => {
+        say!(template::lookup($e, &[]).unwrap())
+    };
+
+    ($e:expr, $($args:expr),* $(,)?) => {
+        say!(template::lookup($e, &[$($args),*]).unwrap())
+    };
+}
+
+submit!(
+    Response("misc_done", "done");
+    Response("misc_invalid_args", "invalid arguments");
+    Response("misc_invalid_number", "thats not a number I understand");
+    Response("misc_requires_priv", "you cannot do that");
+);
+
+inventory::collect!(Response);
+
+pub fn lookup(key: &str, parts: Parts) -> Result<String, TemplateError> {
+    let rf = GLOBAL_RESPONSE_FINDER.read().unwrap();
+    rf.get(key)?.apply(parts)
+}
+
+pub fn finder<'a>() -> std::sync::RwLockReadGuard<'a, ResponseFinder> {
+    GLOBAL_RESPONSE_FINDER.read().unwrap()
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ResponseFinder {
@@ -121,32 +203,29 @@ pub struct ResponseFinder {
 
 impl Default for ResponseFinder {
     fn default() -> Self {
-        let map = include_str!("../data/responses")
-            .lines()
-            .filter(|s| !s.starts_with('#') || s.is_empty())
-            .map(|s| s.split("=>"))
-            .filter_map(|mut s| Some((s.next()?, s.next()?)))
-            .map(|(k, v)| (k.trim().to_string(), v.trim().to_string()))
-            .collect();
-
+        let mut map = HashMap::new();
+        for el in inventory::iter::<Response> {
+            use heck::SnekCase;
+            map.insert(el.0.to_snek_case(), el.1.to_string());
+        }
         ResponseFinder { map }
     }
 }
 
 impl ResponseFinder {
-    pub fn get<'a, K>(&'a self, k: &'a K) -> Result<Template<'a>, TemplateError>
-    where
-        K: ?Sized + std::hash::Hash + Eq + AsRef<str>,
-        String: std::borrow::Borrow<K>,
-    {
+    pub fn get(&self, k: impl AsRef<str>) -> Result<Template<'_>, TemplateError> {
         self.map
-            .get(k)
+            .get(k.as_ref())
             .map(String::as_str)
-            .ok_or_else(|| TemplateError::Missing(k.as_ref()))
+            .ok_or_else(|| TemplateError::Missing(k.as_ref().to_string()))
             .and_then(Template::parse)
     }
 
     pub fn load() -> Self {
+        if cfg!(test) {
+            return Self::default();
+        }
+
         let map: Option<HashMap<String, String>> = get_data_file()
             .and_then(|path| std::fs::File::open(path).ok())
             .and_then(|fi| serde_json::from_reader(fi).ok());
@@ -161,6 +240,10 @@ impl ResponseFinder {
     }
 
     pub fn save(&self) {
+        if cfg!(test) {
+            return;
+        }
+
         let map = self
             .map
             .iter()
@@ -238,7 +321,7 @@ mod tests {
 
         let template = Template::parse("${test}").unwrap();
         let err = template.apply(&[("a", &0)]).unwrap_err();
-        assert_eq!(err, TemplateError::Unexpected("test", "a"));
+        assert_eq!(err, TemplateError::Unexpected("test".into(), "a".into()));
 
         let template = Template::parse("this has nothing in it").unwrap();
         assert_eq!(template.inner(), "this has nothing in it");
