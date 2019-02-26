@@ -12,10 +12,24 @@ chrono = "0.4.6"
 ureq = "0.9.0"
 directories = "1.0.2"
 termcolor = "1.0.4"
-hashbrown = "0.1.8"
-serde = { version = "1.0.88", features = ["derive"] }
 serde_json = "1.0.38"
-toml = "0.4.10"
-rusqlite = { version = "0.16.0", features = ["bundled", "chrono"] }
 crossbeam-channel = "0.3.8"
 scoped_threadpool = "0.1.9"
+
+[dependencies.toml]
+version = "0.5"
+# until 0.5 is pushed to crates.io
+git = "https://github.com/alexcrichton/toml-rs.git"
+features = ["preserve_order"]
+
+[dependencies.hashbrown]
+version = "0.1.8"
+features = ["serde"]
+
+[dependencies.rusqlite]
+version = "0.16.0"
+features = ["bundled", "chrono"]
+
+[dependencies.serde]
+version = "1.0.88"
+features = ["derive"]
