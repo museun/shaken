@@ -48,7 +48,7 @@ impl Response {
                     data.iter()
                         .map(|s| s.build(context))
                         .flat_map(|s| s)
-                        .flat_map(|s| s.into_iter())
+                        .flat_map(IntoIterator::into_iter)
                         .collect(),
                 ));
             }

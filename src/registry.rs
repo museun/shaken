@@ -100,7 +100,7 @@ impl Registry {
             namespace: row.get(2),
         })
         .expect("valid sql")
-        .filter_map(|s| s.ok())
+        .filter_map(Result::ok)
         .collect()
     }
 
@@ -129,7 +129,7 @@ impl Registry {
                 namespace: row.get(1),
             })
             .expect("valid sql")
-            .filter_map(|s| s.ok());
+            .filter_map(Result::ok);
 
         for command in commands {
             if command.name == cmd.name {

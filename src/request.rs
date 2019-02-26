@@ -49,7 +49,7 @@ impl Request {
     }
 
     pub fn args_iter(&self) -> impl Iterator<Item = &str> {
-        self.args.split_whitespace().map(|s| s.trim())
+        self.args.split_whitespace().map(str::trim)
     }
 
     pub fn target(&self) -> &str {

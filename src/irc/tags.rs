@@ -85,7 +85,7 @@ impl Tags {
     where
         S: AsRef<str>, // this should be a borrow
     {
-        self.0.get(s.as_ref()).map(|n| n.as_ref())
+        self.0.get(s.as_ref()).map(AsRef::as_ref)
     }
 }
 

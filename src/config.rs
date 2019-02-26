@@ -156,7 +156,7 @@ impl DotEnvLoader {
             data.lines()
                 .filter(|s| s.starts_with('#'))
                 .fold(HashMap::new(), |mut map, line| {
-                    let mut line = line.splitn(2, '=').map(|s| s.trim());
+                    let mut line = line.splitn(2, '=').map(str::trim);
                     if let (Some(key), Some(val)) = (line.next(), line.next()) {
                         map.insert(key.into(), val.replace('"', ""));
                     }
