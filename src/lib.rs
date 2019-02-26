@@ -14,6 +14,7 @@ pub mod config;
 pub mod database;
 pub mod irc;
 pub mod module;
+pub mod template;
 pub mod twitch;
 pub mod util;
 
