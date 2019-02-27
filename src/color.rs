@@ -25,56 +25,45 @@ impl From<(u8, u8, u8)> for RGB {
 
 impl From<&str> for RGB {
     fn from(s: &str) -> Self {
-        RGB::from(Self::hex_to_rgb(&s))
+        let s = s.trim();
+        let s = match (s.chars().next(), s.len()) {
+            (Some('#'), 7) => &s[1..],
+            (.., 6) => s,
+            _ => return Self::default(),
+        };
+
+        u32::from_str_radix(&s, 16)
+            .and_then(|s| {
+                Ok(RGB(
+                    ((s >> 16) & 0xFF) as u8,
+                    ((s >> 8) & 0xFF) as u8,
+                    (s & 0xFF) as u8,
+                ))
+            })
+            .unwrap_or_default()
     }
 }
 
 impl From<&String> for RGB {
     fn from(s: &String) -> Self {
-        RGB::from(Self::hex_to_rgb(&s))
+        s.as_str().into()
     }
 }
 
 impl From<Option<&String>> for RGB {
     fn from(s: Option<&String>) -> Self {
-        match s {
-            Some(s) => RGB::from(s),
-            None => RGB(255, 255, 255),
-        }
+        s.map(|s| s.into()).unwrap_or_default()
     }
 }
 
 impl RGB {
-    fn hex_to_rgb(s: &str) -> (u8, u8, u8) {
-        // should be a #RRGGBB or a RRGGBB
-        if (s.len() != 7 && s.len() != 6) || (s.len() == 7 && !s.starts_with('#')) {
-            return (255, 255, 255);
-        }
-
-        let s = if s.len() == 7 {
-            // skip the '#'
-            &s[1..]
-        } else {
-            s
-        };
-
-        if let Ok(s) = u32::from_str_radix(&s, 16) {
-            let r = ((s >> 16) & 0xFF) as u8;
-            let g = ((s >> 8) & 0xFF) as u8;
-            let b = (s & 0xFF) as u8;
-            (r, g, b)
-        } else {
-            (255, 255, 255)
-        }
-    }
-
     pub fn is_dark(self) -> bool {
-        let HSL(_, _, l) = HSL::from_color(self);
+        let HSL(_, _, l) = self.into();
         l < 30.0
     }
 
     pub fn is_light(self) -> bool {
-        let HSL(_, _, l) = HSL::from_color(self);
+        let HSL(_, _, l) = self.into();
         l > 80.0
     }
 }
@@ -89,12 +78,11 @@ impl fmt::Display for HSL {
     }
 }
 
-impl HSL {
-    pub fn from_color(color: RGB) -> Self {
+impl From<RGB> for HSL {
+    fn from(RGB(r, g, b): RGB) -> Self {
         #![allow(clippy::unknown_clippy_lints, clippy::many_single_char_names)]
         use std::cmp::{max, min};
 
-        let (r, g, b) = (color.0, color.1, color.2);
         let max = max(max(r, g), b);
         let min = min(min(r, g), b);
         let (r, g, b) = (
@@ -164,7 +152,7 @@ mod tests {
         ];
 
         for &(rgb, hsl, name) in colors.iter() {
-            assert_eq!(hsl, HSL::from_color(rgb), "{}", name)
+            assert_eq!(hsl, HSL::from(rgb), "{}", name)
         }
     }
 
