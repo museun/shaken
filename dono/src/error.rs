@@ -8,7 +8,6 @@ pub enum Error {
     Sql(rusqlite::Error),
     Deserialize(serde_json::Error),
     Serialize(serde_json::Error),
-    //HttpClient(http_req::error::Error),
     HttpResponse(u16, String),
     BindHttp(String),
 
@@ -23,7 +22,6 @@ impl fmt::Display for Error {
             Error::Sql(err) => write!(f, "sql error: {}", err),
             Error::Deserialize(err) => write!(f, "deserialization error: {}", err),
             Error::Serialize(err) => write!(f, "serialization error: {}", err),
-            // Error::HttpClient(err) => write!(f, "http client error: {}", err),
             Error::HttpResponse(code, reason) => {
                 write!(f, "http get failed: ({}) {}", code, reason)
             }

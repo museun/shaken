@@ -25,5 +25,3 @@ pub trait FromRow {
     fn from_row(row: &rusqlite::Row<'_, '_>) -> Self;
     fn timestamp(&self) -> i64;
 }
-
-pub(crate) type Result<T> = std::result::Result<T, Error>;

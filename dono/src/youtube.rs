@@ -1,6 +1,5 @@
 use log::*;
-use once_cell::sync::Lazy;
-use once_cell::sync_lazy;
+use once_cell::{sync::Lazy, sync_lazy};
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 

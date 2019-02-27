@@ -1,5 +1,7 @@
-use serde::{Deserialize, Serialize};
-use std::io::{self, prelude::*}; // why both
+use serde::Deserialize;
+use std::io::Read;
+
+use dono::server::{Item, ItemKind};
 
 fn main() {
     #[allow(dead_code)]
@@ -10,21 +12,7 @@ fn main() {
         title: &'a str,
     }
 
-    #[derive(Debug, Serialize)]
-    #[serde(rename_all = "lowercase")]
-    pub enum ItemKind {
-        Youtube(String),
-    }
-
-    #[derive(Debug, Serialize)]
-    #[serde(rename_all = "lowercase")]
-    pub struct Item {
-        pub kind: ItemKind,
-        pub ts: i64,
-        pub version: u32,
-    }
-
-    let mut stdin = io::stdin();
+    let mut stdin = std::io::stdin();
 
     let mut size = [0u8; 4];
     stdin.read_exact(&mut size).unwrap();

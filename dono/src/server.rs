@@ -195,7 +195,14 @@ impl HttpServer {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Serialize)]
+#[serde(rename_all = "lowercase")]
+enum Kind {
+    Youtube,
+    Local,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ItemKind {
     Youtube(String),
@@ -206,14 +213,7 @@ pub enum ItemKind {
     },
 }
 
-#[derive(Serialize)]
-#[serde(rename_all = "lowercase")]
-enum Kind {
-    Youtube,
-    Local,
-}
-
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub struct Item {
     pub kind: ItemKind,
