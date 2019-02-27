@@ -14,7 +14,7 @@ use shaken::prelude::*;
 
 fn main() {
     TermLogger::init(
-        get_log_level(),      // log level
+        get_log_level(),
         LogConfig::default(), // some config
     )
     .expect("initialize logger");

@@ -13,7 +13,7 @@ pub const NAME: &str = "RustStuff";
 
 submit! {
     template::Response("rust_no_crate", "I couldn't find a crate matching \"${crate}\"");
-    template::Response("rust_crate", "${name} = ${max_version} @ ${repo} \"${description}\"");
+    template::Response("rust_crate", "${name} = ${max_version} @ ${repo}");
 }
 
 pub struct RustStuff {
@@ -57,10 +57,9 @@ impl RustStuff {
 
         say_template!(
             "rust_crate",
-            ("name", &c.name),                                             //
-            ("max_version", &c.max_version),                               //
-            ("repo", &c.repository),                                       //
-            ("description", &c.description.replace("\n", " ").trim_end()), //
+            ("name", &c.name),               //
+            ("max_version", &c.max_version), //
+            ("repo", &c.repository),         //
         )
     }
 
