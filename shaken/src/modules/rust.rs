@@ -74,7 +74,7 @@ impl RustStuff {
             crates: Vec<Crate>,
         }
 
-        crate::util::http_get::<Resp>(&url)
+        util::http_get_json::<Resp>(&url)
             .map_err(|_e| Error::CratesGet)
             .and_then(|mut s| s.crates.pop().ok_or_else(|| Error::NoMatches))
     }

@@ -126,7 +126,7 @@ impl CurrentSong {
         #[derive(Deserialize)]
         struct Resp(Vec<Song>);
 
-        crate::util::http_get::<Resp>(&url)
+        util::http_get_json::<Resp>(&url)
             .map_err(|_e| Error::YoutubeGet)
             .map(|s| s.0)
     }

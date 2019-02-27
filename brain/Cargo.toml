@@ -1,13 +1,17 @@
 [package]
 name = "brain"
 version = "0.1.0"
-edition = "2018"
 authors = ["museun <museun@outlook.com>"]
+edition = "2018"
 
 [dependencies]
+shaken = { path = "../shaken" }
+
+log = "0.4.6"
+simplelog = "0.5.3"
 rand = "0.6.5"
-getopts = "0.2.18"
+directories = "1.0.2"
 tiny_http = "0.6.2"
-serde = { version = "1.0.88", features = ["derive"] }
-bincode = "1.1.2"
 hashbrown = { version = "0.1.8", features = ["serde"] }
+bincode = "1.1.2"
+serde = { version = "1.0.88", features = ["derive"] }

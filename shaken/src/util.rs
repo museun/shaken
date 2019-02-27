@@ -1,4 +1,4 @@
-use log::warn;
+use log::*;
 use serde::Deserialize;
 
 use std::{fmt, fmt::Write, time::Duration};
@@ -102,7 +102,7 @@ pub fn http_get_body(url: &str) -> Result<String, HttpError> {
     Ok(res)
 }
 
-pub fn http_get<T>(url: &str) -> Result<T, HttpError>
+pub fn http_get_json<T>(url: &str) -> Result<T, HttpError>
 where
     for<'de> T: Deserialize<'de>,
 {
@@ -167,4 +167,49 @@ pub fn get_timestamp() -> u64 {
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap();
     ts.as_secs() * 1000 + u64::from(ts.subsec_nanos()) / 1_000_000
+}
+
+pub fn get_log_level(var: &str) -> simplelog::LevelFilter {
+    use simplelog::LevelFilter;
+    match std::env::var(var)
+        .map(|s| s.to_ascii_uppercase())
+        .unwrap_or_default()
+        .as_str()
+    {
+        "TRACE" => LevelFilter::Trace,
+        "DEBUG" => LevelFilter::Debug,
+        "WARN" => LevelFilter::Warn,
+        "ERROR" => LevelFilter::Error,
+
+        // default
+        "INFO" | _ => LevelFilter::Info,
+    }
+}
+
+pub fn get_file_size<P>(path: P) -> Option<u64>
+where
+    P: AsRef<std::path::Path>,
+{
+    std::fs::metadata(path.as_ref())
+        .ok()
+        .and_then(|s| Some(s.len() / 1024))
+}
+
+#[macro_export]
+macro_rules! abort {
+    ($f:expr, $($args:expr),* $(,)?) => {{
+        let msg = format!($f, $($args),*);
+        error!("{}", msg);
+        if cfg!(test) {
+            panic!("{}", msg);
+        }
+        ::std::process::exit(1);
+    }};
+    ($e:expr) => {{
+        error!("{}", $e);
+        if cfg!(test) {
+            panic!("{}", $e);
+        }
+        ::std::process::exit(1);
+    }};
 }

@@ -18,7 +18,7 @@ impl Markov for NullMarkov {
 pub struct BrainMarkov<'a>(pub Cow<'a, str>);
 impl<'a> Markov for BrainMarkov<'a> {
     fn get_next(&self) -> Option<String> {
-        util::http_get(&self.0).ok()
+        util::http_get_body(&self.0).ok()
     }
 }
 

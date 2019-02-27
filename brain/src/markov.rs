@@ -5,44 +5,38 @@ use serde::{Deserialize, Serialize};
 use std::cmp::{min, Ordering};
 use std::ops::{Deref, DerefMut};
 
-//148671087
-
 #[derive(Default, Serialize, Deserialize)]
 pub struct Markov<'a> {
     #[serde(borrow)]
     chain: HashMap<Vec<&'a str>, LinkSet<'a>>,
     entries: Vec<&'a str>,
     depth: usize,
-    brain: &'a str,
 }
 
 impl<'a> Markov<'a> {
-    pub fn with_depth(depth: usize, brain: &'a str) -> Self {
+    pub fn with_depth(depth: usize) -> Self {
         Markov {
             depth,
-            brain,
             ..Default::default()
         }
     }
 
-    pub fn train_text(&mut self, text: &'a str) {
-        let data = text
+    pub fn train_text(&mut self, input: &'a str) {
+        input
             .split_terminator(|c| ".?!\n".contains(c))
             .map(str::trim)
             .map(|s| s.split_whitespace().collect::<Vec<_>>())
-            .filter(|s| !s.is_empty());
-
-        data.for_each(|s| self.train_words(&s));
+            .filter(|s| !s.is_empty())
+            .for_each(|set| self.train_words(&set));
     }
 
     fn train_words(&mut self, words: &[&'a str]) {
         let depth = min(self.depth, words.len() - 1);
         if !self.entries.iter().any(|s| *s == words[0]) {
-            let start = &words[0].trim_start_matches(|c: char| !c.is_alphabetic());
+            let start = words[0].trim_start_matches(|c: char| !c.is_alphabetic());
             if start.is_empty() {
                 return;
             }
-
             self.entries.push(start);
         }
 
@@ -70,7 +64,7 @@ impl<'a> Markov<'a> {
 
     pub fn generate(&self, rng: &mut impl Rng) -> String {
         let mut words: Vec<&'a str> = vec![];
-        let start = &self.entries.choose(rng).expect("push start seed");
+        let start = self.entries.choose(rng).expect("push start seed");
         words.push(*start);
 
         fn context<'a, 'b>(words: &'a [&'b str], depth: usize) -> &'a [&'b str] {
@@ -93,6 +87,7 @@ impl<'a> Markov<'a> {
             self.chain.get(&s).map(|link_set| (width, link_set))
         });
 
+        // why
         let mut pooled_links: Vec<Link<'a>> = {
             if let Some((_, link_set)) = link_sets.clone().next() {
                 let num_links = link_set.len();
@@ -194,14 +189,12 @@ impl<'a> Deref for LinkSet<'a> {
     type Target = Vec<Link<'a>>;
 
     fn deref(&self) -> &Self::Target {
-        let LinkSet(vector) = self;
-        vector
+        &self.0
     }
 }
 
 impl<'a> DerefMut for LinkSet<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        let LinkSet(vector) = self;
-        vector
+        &mut self.0
     }
 }

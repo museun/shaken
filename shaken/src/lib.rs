@@ -1,6 +1,12 @@
 #[macro_use]
 pub mod macros;
 
+#[macro_use]
+pub mod util;
+
+#[macro_use]
+pub mod template;
+
 mod bot;
 mod command;
 mod registry;
@@ -15,10 +21,6 @@ pub mod database;
 pub mod irc;
 pub mod module;
 pub mod twitch;
-pub mod util;
-
-#[macro_use]
-pub mod template;
 
 // actual bot modules
 pub mod modules;

@@ -2,19 +2,19 @@ use crossbeam_channel as channel;
 use hashbrown::HashMap;
 use log::{error, info, warn};
 use scoped_threadpool::Pool;
-use simplelog::{Config as LogConfig, LevelFilter, TermLogger};
+use simplelog::{Config as LogConfig, TermLogger};
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
 use std::io::Write;
 use std::sync::{Arc, Mutex};
-use std::{env, thread::sleep, time};
+use std::{thread::sleep, time};
 
 use shaken::modules::*;
 use shaken::prelude::*;
 
 fn main() {
     TermLogger::init(
-        get_log_level(),
+        util::get_log_level("SHAKEN_LOG"),
         LogConfig::default(), // some config
     )
     .expect("initialize logger");
@@ -326,21 +326,5 @@ impl<'a> Printer<'a> {
             writeln!(&mut buffer).unwrap()
         }
         self.writer.print(&buffer).unwrap();
-    }
-}
-
-fn get_log_level() -> LevelFilter {
-    match env::var("SHAKEN_LOG")
-        .map(|s| s.to_ascii_uppercase())
-        .unwrap_or_default()
-        .as_str()
-    {
-        "TRACE" => LevelFilter::Trace,
-        "DEBUG" => LevelFilter::Debug,
-        "WARN" => LevelFilter::Warn,
-        "ERROR" => LevelFilter::Error,
-
-        // default
-        "INFO" | _ => LevelFilter::Info,
     }
 }

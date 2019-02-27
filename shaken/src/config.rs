@@ -79,7 +79,7 @@ impl Config {
     pub fn expect_env(key: &str) -> String {
         let mut map = DotEnvLoader::load(".env").expect("cannot load env vars");
         map.remove(key)
-            .unwrap_or_else(|| abort(format!("env var '{}' not set", key)))
+            .unwrap_or_else(|| abort!("env var '{}' not set", key))
     }
 
     pub fn load() -> Self {
@@ -88,25 +88,25 @@ impl Config {
         }
 
         let config_file = get_config_file().unwrap_or_else(|| {
-            abort(
+            abort!(
                 "The system does not have a standard directory for configuration files.\n\naborting",
             );
         });
 
         let data = std::fs::read_to_string(&config_file).unwrap_or_else(|err| {
-            abort(format!(
+            abort!(
                 "The config file at \"{}\" must be readable.\n{}.\n\naborting",
                 config_file.to_string_lossy(),
                 err
-            ));
+            );
         });
 
         toml::from_str(&data).unwrap_or_else(|e| {
-            abort(format!(
+            abort!(
                 "Unable to parse configuration file at \"{}\".\n{}\n\naborting",
                 config_file.to_string_lossy(),
                 e
-            ));
+            );
         })
     }
 
@@ -116,16 +116,16 @@ impl Config {
         }
 
         let config_file = get_config_file().unwrap_or_else(|| {
-            abort("system does not have a standard directory for configuration files. aborting");
+            abort!("system does not have a standard directory for configuration files. aborting");
         });
 
         let s = toml::to_string_pretty(&self).expect("generate correct config");
         std::fs::write(&config_file, s).unwrap_or_else(|e| {
-            abort(format!(
+            abort!(
                 "unable to create config at `{}` -- {}",
                 config_file.to_string_lossy(),
                 e
-            ));
+            );
         });
     }
 }
@@ -184,15 +184,4 @@ pub fn get_config_file() -> Option<PathBuf> {
 fn check_newer(_f: impl AsRef<Path>) -> bool {
     // TODO implement this garbage
     true
-}
-
-fn abort<S>(msg: S) -> !
-where
-    S: AsRef<str>,
-{
-    error!("{}", msg.as_ref());
-    if cfg!(test) {
-        panic!("{}", msg.as_ref());
-    }
-    ::std::process::exit(1);
 }

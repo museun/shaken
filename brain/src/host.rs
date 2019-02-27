@@ -1,3 +1,4 @@
+use log::*;
 use rand::thread_rng;
 use tiny_http::{Method, Response, Server as HttpServer};
 
@@ -11,7 +12,7 @@ pub struct Server<'a> {
 impl<'a> Server<'a> {
     pub fn new(addr: &str, markov: Markov<'a>) -> Self {
         let server = HttpServer::http(addr).unwrap();
-        println!("hosting at http://{}", addr);
+        info!("hosting at http://{}", addr);
         Self { server, markov }
     }
 
@@ -22,14 +23,12 @@ impl<'a> Server<'a> {
         for req in self.server.incoming_requests() {
             match (req.method(), req.url()) {
                 (&Method::Get, "/markov/next") => {
-                    timeit!("generate response");
                     let data = self.markov.generate(&mut rng);
                     let resp = Response::from_string(data);
                     let _ = req.respond(resp);
                 }
                 (_, _) => {
-                    let resp = Response::from_string("404 not found");
-                    let resp = resp.with_status_code(404);
+                    let resp = Response::from_string("404 not found").with_status_code(404);
                     let _ = req.respond(resp);
                 }
             }
