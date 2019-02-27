@@ -44,20 +44,29 @@ pub struct CommandBuilder {
 }
 
 impl CommandBuilder {
-    pub fn command(name: impl Into<String>) -> Self {
+    pub fn command<S>(name: S) -> Self
+    where
+        S: ToString,
+    {
         Self {
-            name: name.into(),
+            name: name.to_string(),
             ..Self::default()
         }
     }
 
-    pub fn help(mut self, help: impl Into<String>) -> Self {
-        std::mem::replace(&mut self.help, Some(help.into()));
+    pub fn help<S>(mut self, help: S) -> Self
+    where
+        S: ToString,
+    {
+        std::mem::replace(&mut self.help, Some(help.to_string()));
         self
     }
 
-    pub fn namespace(mut self, namespace: impl Into<String>) -> Self {
-        std::mem::replace(&mut self.namespace, Some(namespace.into()));
+    pub fn namespace<S>(mut self, namespace: S) -> Self
+    where
+        S: ToString,
+    {
+        std::mem::replace(&mut self.namespace, Some(namespace.to_string()));
         self
     }
 

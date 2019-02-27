@@ -69,8 +69,11 @@ impl Bot {
         (Bot { out_tx, inspect_tx }, in_rx)
     }
 
-    pub fn send(&self, data: impl Into<String>) {
-        let _ = self.out_tx.send(data.into());
+    pub fn send<S>(&self, data: S)
+    where
+        S: ToString,
+    {
+        let _ = self.out_tx.send(data.to_string());
     }
 
     pub fn process(&self, rx: channel::Receiver<(Option<irc::Message>, Response)>) {

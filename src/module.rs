@@ -17,12 +17,15 @@ impl<T> Clone for CommandMap<T> {
 }
 
 impl<T> CommandMap<T> {
-    pub fn create(
-        namespace: impl Into<String>,
+    pub fn create<S>(
+        namespace: S,
         commands: &[(&'static str, Func<T>)],
-    ) -> Result<CommandMap<T>, ModuleError> {
+    ) -> Result<CommandMap<T>, ModuleError>
+    where
+        S: ToString,
+    {
         let mut map = HashMap::new();
-        let namespace = namespace.into();
+        let namespace = namespace.to_string();
         for (k, v) in commands.iter() {
             let cmd = CommandBuilder::command(*k)
                 .namespace(namespace.clone())

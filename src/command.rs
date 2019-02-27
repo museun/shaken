@@ -16,10 +16,10 @@ where
 {
     pub fn new<S>(name: S, func: fn(&mut T, &Request) -> Option<Response>) -> Self
     where
-        S: Into<String>,
+        S: ToString,
     {
         Self {
-            name: name.into(),
+            name: name.to_string(),
             func,
         }
     }
