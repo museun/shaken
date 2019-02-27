@@ -79,7 +79,7 @@ impl RustStuff {
             .and_then(|mut s| s.crates.pop().ok_or_else(|| Error::NoMatches))
     }
 }
-
+#[allow(dead_code)]
 #[derive(Deserialize)]
 struct Crate {
     name: String,
