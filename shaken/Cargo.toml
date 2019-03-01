@@ -32,9 +32,9 @@ version = "0.16.0"
 features = ["bundled", "chrono"]
 
 [dependencies.serde]
-version = "1.0.88"
+version = "1.0.89"
 features = ["derive"]
 
 [dependencies.serde_json]
-version = "1.0.38"
+version = "1.0.39"
 features = ["preserve_order"]

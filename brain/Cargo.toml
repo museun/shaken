@@ -14,4 +14,4 @@ directories = "1.0.2"
 tiny_http = "0.6.2"
 hashbrown = { version = "0.1.8", features = ["serde"] }
 bincode = "1.1.2"
-serde = { version = "1.0.88", features = ["derive"] }
+serde = { version = "1.0.89", features = ["derive"] }
