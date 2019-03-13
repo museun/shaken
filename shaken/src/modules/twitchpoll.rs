@@ -75,17 +75,16 @@ impl TwitchPoll {
             return reply_template!("twitchpoll_already_running");
         }
 
-        let pos = template::finder();
-        let pos = pos.get("twitchpoll_option_map").unwrap();
-
         // ask for verification that the poll is right
         let res = multi!(
             say_template!("twitchpoll_is_poll_correct"),
             say!(&poll.title),
             multi(poll.choices.iter().enumerate().map(|(i, s)| {
-                say!(pos
-                    .apply(&[("index", &(i + 1)), ("option", &s.option)])
-                    .unwrap())
+                let args = template::TemplateArgs::new()
+                    .with("index", &(i + 1))
+                    .with("option", &s.option)
+                    .build();
+                say!(template::lookup("twitchpoll_option_map", &args).unwrap())
             }))
         );
 
@@ -156,12 +155,8 @@ impl TwitchPoll {
                 .parse::<usize>()
                 .ok()
         }) {
-            Some(n) if n == 0 || n > max => {
-                return reply_template!("twitchpoll_unknown_option");
-            }
-            None => {
-                return reply_template!("twitchpoll_unknown_option");
-            }
+            Some(n) if n == 0 || n > max => return reply_template!("twitchpoll_unknown_option"),
+            None => return reply_template!("twitchpoll_unknown_option"),
             Some(n) => n,
         };
 
@@ -194,20 +189,15 @@ impl TwitchPoll {
             self.poll.take().expect("poll should have been running")
         };
 
-        let rf = template::finder();
-        let res = rf.get("twitchpoll_result").unwrap();
-
         let target = poll.target.clone(); // this is dumb
         let res = poll.tally().iter().take(3).map(|opt| {
-            privmsg!(
-                &target,
-                res.apply(&[
-                    ("count", &opt.count),   //
-                    ("pos", &(opt.pos + 1)), //
-                    ("option", &opt.option), //
-                ])
-                .unwrap()
-            )
+            let args = template::TemplateArgs::new()
+                .with("count", &opt.count)
+                .with("pos", &(opt.pos + 1))
+                .with("option", &opt.option)
+                .build();
+            let out = template::lookup("twitchpoll_result", &args).unwrap();
+            privmsg!(&target, out)
         });
 
         multi(res)

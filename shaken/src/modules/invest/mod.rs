@@ -220,22 +220,18 @@ impl Invest {
             n => n,
         };
 
-        let rf = template::finder();
-        let board = rf.get("invest_leaderboard").unwrap();
-
         let conn = get_connection();
         let list = InvestGame::get_top_n(&conn, n as i16)
             .into_iter()
             .enumerate()
             .map(|(i, iu)| {
                 let user = UserStore::get_user_by_id(&conn, iu.id).expect("user to exist");
-                board
-                    .apply(&[
-                        ("n", &(i + 1)),                   //
-                        ("display", &user.display),        //
-                        ("credits", &iu.current.commas()), //
-                    ])
-                    .unwrap()
+                let args = template::TemplateArgs::new()
+                    .with("n", &(i + 1))
+                    .with("display", &user.display)
+                    .with("credits", &iu.current.commas())
+                    .build();
+                template::lookup("invest_leaderboard", &args).unwrap()
             });
 
         reply!(list.collect::<Vec<_>>().join(", "))

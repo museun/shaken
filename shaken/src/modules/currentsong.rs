@@ -56,12 +56,13 @@ impl CurrentSong {
         let delta = (dur - time).num_seconds();
 
         if delta > 0 {
-            say_template!(
-                "currentsong_youtube_song_delta",
-                ("title", &song.title.trim()), //
-                ("vid", &song.vid),            //
-                ("delta", &delta),             //
-            )
+            let args = template::TemplateArgs::new()
+                .with("title", &song.title.trim())
+                .with("vid", &song.vid)
+                .with("delta", &delta)
+                .build();
+            let out = template::lookup("currentsong_youtube_song_delta", &args).unwrap();
+            say!(out)
         } else {
             info!("not currently playing");
             // TODO maybe note that this isn't actually playing
@@ -76,12 +77,13 @@ impl CurrentSong {
         };
 
         let start = Utc.timestamp(song.timestamp as i64, 0);
-        say_template!(
-            "currentsong_previous_song",
-            ("start", &start),             //
-            ("title", &song.title.trim()), //
-            ("vid", &song.vid),            //
-        )
+        let args = template::TemplateArgs::new()
+            .with("start", &start)
+            .with("title", &song.title.trim())
+            .with("vid", &song.vid)
+            .build();
+        let out = template::lookup("currentsong_previous_song", &args).unwrap();
+        say!(out)
     }
 }
 
