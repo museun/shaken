@@ -309,7 +309,7 @@ mod tests {
 
         env.push("!poll");
         env.step_wait(false);
-        assert_eq!(env.pop(), None);
+        assert_eq!(env.pop(), Some("@test: You cannot do that.".into()));
 
         env.push_broadcaster("!poll");
         env.step();
@@ -411,7 +411,7 @@ mod tests {
 
         env.push("!poll vote");
         env.step_wait(false);
-        assert_eq!(env.pop(), None);
+        assert_eq!(env.pop(), Some("@test: You cannot do that.".into()));
 
         env.push_broadcaster("!poll test poll | option a | option b");
         env.step_wait(false);
