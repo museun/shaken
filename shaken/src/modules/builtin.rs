@@ -23,7 +23,8 @@ submit! {
     template::Response("builtin_already_exists", "\"${command}\" already exists as a command");
     template::Response("builtin_added_command", "added \"${command}\" as a command");
     template::Response("builtin_add_failed", "couldn't add \"${command}\" as a command");
-    template::Response("builtin_edited", "edited \"${command}\"");
+    template::Response("builtin_edited_body", "edited body for \"${command}\"");
+    template::Response("builtin_edited_desc", "edited description for \"${command}\"");
     template::Response("builtin_edited_failed", "couldn't edit \"${command}\"");
     template::Response("builtin_invalid_command", "\"${command}\" isn't a command");
     template::Response("builtin_command_description", "${command} -- ${description}");
@@ -79,7 +80,8 @@ impl Builtin {
                     ("!viewers", Builtin::viewers_command),
                     ("!uptime", Builtin::uptime_command),
                     ("!add", Builtin::add_command),
-                    ("!edit", Builtin::edit_command),
+                    ("!edit-body", Builtin::edit_command),
+                    ("!edit-desc", Builtin::edit_command),
                     ("!info", Builtin::info_command),
                     ("!remove", Builtin::remove_command),
                     ("!help", Builtin::help_command),
@@ -196,17 +198,34 @@ impl Builtin {
     fn edit_command(&mut self, req: &Request) -> Option<Response> {
         require_privileges!(&req, "you cannot do that");
 
-        let (command, description) = match Self::arg_parts(&req) {
+        let (command, data) = match Self::arg_parts(&req) {
             Some((head, tail)) => (head, tail),
             None => return reply_template!("misc_invalid_args"),
         };
 
         let conn = database::get_connection();
-        match conn.execute(
-            "UPDATE UserCommands SET description = ? WHERE command = ?",
-            &[&description as &dyn ToSql, &command],
-        ) {
-            Ok(_row) => reply_template!("builtin_edited", ("command", &command)),
+
+        let head = req.name().unwrap();
+        let (sql, template) = match head.as_str() {
+            "!edit-body" => (
+                conn.execute(
+                    "UPDATE UserCommands SET body = ? WHERE command = ?",
+                    &[&data as &dyn ToSql, &command],
+                ),
+                "builtin_edited_body",
+            ),
+            "!edit-desc" => (
+                conn.execute(
+                    "UPDATE UserCommands SET description = ? WHERE command = ?",
+                    &[&data as &dyn ToSql, &command],
+                ),
+                "builtin_edited_desc",
+            ),
+            _ => unreachable!(),
+        };
+
+        match sql {
+            Ok(_row) => reply_template!(template, ("command", &command)),
             Err(err) => {
                 warn!(
                     "{} tried to edit '{}', sql error: {}",
@@ -239,8 +258,6 @@ impl Builtin {
             ("user", &user),
             ("uses", &command.uses.commas()),
         );
-
-        eprintln!("{:?}", end);
 
         multi!(
             reply_template!(
@@ -501,13 +518,24 @@ mod tests {
         env.step();
         env.drain();
 
-        env.push_owner("!edit !test with different flavor text");
+        env.push_owner("!edit-desc !test with different flavor text");
         env.step();
-        assert_eq!(env.pop().unwrap(), "@test: edited \"!test\"");
+        assert_eq!(
+            env.pop().unwrap(),
+            "@test: edited description for \"!test\""
+        );
 
         let cmd = Builtin::try_get_command("!test").unwrap();
         assert_eq!(cmd.command, "!test".to_string());
         assert_eq!(cmd.description, "with different flavor text".to_string());
+
+        env.push_owner("!edit-body !test another test");
+        env.step();
+        assert_eq!(env.pop().unwrap(), "@test: edited body for \"!test\"");
+
+        let cmd = Builtin::try_get_command("!test").unwrap();
+        assert_eq!(cmd.command, "!test".to_string());
+        assert_eq!(cmd.body, "another test".to_string());
     }
 
     #[test]
