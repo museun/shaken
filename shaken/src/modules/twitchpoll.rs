@@ -63,7 +63,7 @@ impl TwitchPoll {
     }
 
     fn poll_command(&mut self, req: &Request) -> Option<Response> {
-        require_broadcaster!(&req);
+        require_broadcaster!(&req, "You cannot do that.");
 
         let poll = match Self::parse_poll(req.target(), req.args()) {
             Ok(poll) => poll,
