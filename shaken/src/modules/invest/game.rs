@@ -74,7 +74,7 @@ impl InvestGame {
     pub fn get_top_n(conn: &Connection, bound: i16) -> Vec<InvestUser> {
         macro_rules! un {
             ($e:expr, $n:expr) => {
-                $e.get::<_, i64>($n) as usize
+                $e.get::<_, i64>($n)? as usize
             };
         }
 
@@ -84,13 +84,15 @@ impl InvestGame {
             .expect("valid sql");
 
         let iter = stmt
-            .query_map(&[&bound], |row| InvestUser {
-                id: row.get(0),
-                max: un!(row, 1),
-                current: un!(row, 2),
-                total: un!(row, 3),
-                invest: (un!(row, 4), un!(row, 5)),
-                active: row.get(6),
+            .query_map(&[&bound], |row| {
+                Ok(InvestUser {
+                    id: row.get(0)?,
+                    max: un!(row, 1),
+                    current: un!(row, 2),
+                    total: un!(row, 3),
+                    invest: (un!(row, 4), un!(row, 5)),
+                    active: row.get(6)?,
+                })
             })
             .map_err(|_e| { /* log this */ })
             .expect("get rows");
@@ -228,7 +230,7 @@ impl InvestGame {
             .prepare("SELECT Total FROM InvestStats WHERE ID = 0 LIMIT 1")
             .expect("valid sql");
         let mut iter = stmt
-            .query_map(NO_PARAMS, |row| row.get::<_, i64>(0) as usize)
+            .query_map(NO_PARAMS, |row| Ok(row.get::<_, i64>(0)? as usize))
             .expect("get total");
         iter.next().expect("get total").expect("get total")
     }
@@ -245,18 +247,20 @@ impl InvestGame {
 
         macro_rules! un {
             ($e:expr, $n:expr) => {
-                $e.get::<_, i64>($n) as usize
+                $e.get::<_, i64>($n)? as usize
             };
         }
 
         let mut iter = stmt
-            .query_map(&[&id], |row| InvestUser {
-                id: row.get(0),
-                max: un!(row, 1),
-                current: un!(row, 2),
-                total: un!(row, 3),
-                invest: (un!(row, 4), un!(row, 5)),
-                active: row.get(6),
+            .query_map(&[&id], |row| {
+                Ok(InvestUser {
+                    id: row.get(0)?,
+                    max: un!(row, 1),
+                    current: un!(row, 2),
+                    total: un!(row, 3),
+                    invest: (un!(row, 4), un!(row, 5)),
+                    active: row.get(6)?,
+                })
             })
             .map_err(|_err| InvestError::UserNotFound { id })?;
 

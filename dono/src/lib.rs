@@ -22,6 +22,8 @@ where
 }
 
 pub trait FromRow {
-    fn from_row(row: &rusqlite::Row<'_, '_>) -> Self;
+    fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self>
+    where
+        Self: Sized;
     fn timestamp(&self) -> i64;
 }

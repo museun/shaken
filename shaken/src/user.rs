@@ -76,10 +76,12 @@ impl UserStore {
         T: ::std::fmt::Display + rusqlite::types::ToSql,
     {
         let mut iter = stmt
-            .query_map(&[q], |row| User {
-                userid: row.get(0),
-                display: row.get(1),
-                color: RGB::from(&row.get::<_, String>(2)),
+            .query_map(&[q], |row| {
+                Ok(User {
+                    userid: row.get(0)?,
+                    display: row.get(1)?,
+                    color: RGB::from(&row.get::<_, String>(2)?),
+                })
             })
             .map_err(|e| error!("cannot get user for '{}': {}", q, e))
             .ok()?;

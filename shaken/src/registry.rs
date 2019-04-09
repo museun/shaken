@@ -103,10 +103,12 @@ impl Registry {
             .prepare("SELECT command, description, namespace FROM CommandRegistry")
             .expect("valid sql");
 
-        s.query_map(NO_PARAMS, |row| Command {
-            name: row.get(0),
-            help: row.get(1),
-            namespace: row.get(2),
+        s.query_map(NO_PARAMS, |row| {
+            Ok(Command {
+                name: row.get(0)?,
+                help: row.get(1)?,
+                namespace: row.get(2)?,
+            })
         })
         .expect("valid sql")
         .filter_map(Result::ok)
@@ -133,9 +135,11 @@ impl Registry {
             .expect("valid sql");
 
         let commands = s
-            .query_map(NO_PARAMS, |row| Command {
-                name: row.get(0),
-                namespace: row.get(1),
+            .query_map(NO_PARAMS, |row| {
+                Ok(Command {
+                    name: row.get(0)?,
+                    namespace: row.get(1)?,
+                })
             })
             .expect("valid sql")
             .filter_map(Result::ok);

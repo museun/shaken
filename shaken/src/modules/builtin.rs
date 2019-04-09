@@ -121,9 +121,11 @@ impl Builtin {
             .expect("valid sql");
 
         let mut result = statement
-            .query_map(&[&req.args()], |row| Command {
-                body: row.get(0),
-                disabled: row.get(1),
+            .query_map(&[&req.args()], |row| {
+                Ok(Command {
+                    body: row.get(0)?,
+                    disabled: row.get(1)?,
+                })
             })
             .expect("valid sql");
 
@@ -330,15 +332,15 @@ impl Builtin {
                     FROM UserCommands WHERE command = ?"#,
             )
             .expect("valid sql")
-            .query_map(&[&name], |row| UserCommand {
-                command: row.get(0),
-                body: row.get(1),
-                description: row.get(2),
-                creator: row.get(3),
-                created_at: row.get(4),
-                uses: row.get(5),
-                disabled: row.get(6)
-            })
+            .query_map(&[&name], |row| Ok(UserCommand {
+                command: row.get(0)?,
+                body: row.get(1)?,
+                description: row.get(2)?,
+                creator: row.get(3)?,
+                created_at: row.get(4)?,
+                uses: row.get(5)?,
+                disabled: row.get(6)?
+            }))
             .expect("valid sql")
             .next();
 
@@ -624,32 +626,5 @@ mod tests {
         }
 
         assert_eq!(max, expected);
-    }
-
-    #[allow(dead_code)]
-    fn dump() {
-        use rusqlite::{types::ValueRef, NO_PARAMS};
-
-        let conn = database::get_connection();
-        let mut statement = conn
-            .prepare("select * from usercommands")
-            .expect("valid sql");
-        let mut rows = statement.query(NO_PARAMS).expect("valid sql");
-        while let Some(Ok(row)) = rows.next() {
-            let mut s = String::new();
-            for n in 0..row.column_count() {
-                if !s.is_empty() {
-                    s.push(' ');
-                }
-                s.push_str(&match row.get_raw(n) {
-                    ValueRef::Null => "null".into(),
-                    ValueRef::Integer(n) => format!("{}", n),
-                    ValueRef::Real(n) => format!("{}", n),
-                    ValueRef::Text(s) => s.into(),
-                    ValueRef::Blob(b) => format!("{:?}", b),
-                });
-            }
-            debug!("{}", s)
-        }
     }
 }

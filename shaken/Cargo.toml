@@ -9,7 +9,7 @@ log = "0.4.6"
 simplelog = "0.5.3"
 rand = "0.6.5"
 chrono = "0.4.6"
-ureq = "0.9.0"
+ureq = "0.9.1"
 directories = "1.0.2"
 termcolor = "1.0.4"
 crossbeam-channel = "0.3.8"
@@ -23,15 +23,15 @@ version = "0.5.0"
 features = ["preserve_order"]
 
 [dependencies.hashbrown]
-version = "0.1.8"
+version = "0.2.0"
 features = ["serde"]
 
 [dependencies.rusqlite]
-version = "0.16.0"
+version = "0.17.0"
 features = ["bundled", "chrono"]
 
 [dependencies.serde]
-version = "1.0.89"
+version = "1.0.90"
 features = ["derive"]
 
 [dependencies.serde_json]

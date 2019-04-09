@@ -32,14 +32,14 @@ pub struct Song {
 }
 
 impl FromRow for Song {
-    fn from_row(row: &rusqlite::Row<'_, '_>) -> Self {
-        Self {
-            id: row.get(0),
-            vid: row.get(1),
-            timestamp: row.get(2),
-            duration: row.get(3),
-            title: row.get(4),
-        }
+    fn from_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<Self> {
+        Ok(Self {
+            id: row.get(0)?,
+            vid: row.get(1)?,
+            timestamp: row.get(2)?,
+            duration: row.get(3)?,
+            title: row.get(4)?,
+        })
     }
 
     fn timestamp(&self) -> i64 {
