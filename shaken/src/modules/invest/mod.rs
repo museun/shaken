@@ -105,9 +105,9 @@ impl Invest {
             Ok(Investment::Success { old, new }) => match ty {
                 NumType::Random => reply_template!(
                     "invest_success_delta",
-                    ("old", &old.commas()),            //
-                    ("new", &new.commas()),            //
-                    ("deltra", &(new - old).commas()), //
+                    ("old", &old.commas()),           //
+                    ("new", &new.commas()),           //
+                    ("delta", &(new - old).commas()), //
                 ),
                 _ => reply_template!(
                     "invest_success",
